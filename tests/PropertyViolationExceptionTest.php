@@ -1,0 +1,112 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Rasuvaeff\PropertyTesting\Tests;
+
+use Rasuvaeff\PropertyTesting\CounterExample;
+use Rasuvaeff\PropertyTesting\PropertyViolationException;
+use Testo\Assert;
+use Testo\Codecov\Covers;
+use Testo\Test;
+
+#[Test]
+#[Covers(PropertyViolationException::class)]
+final class PropertyViolationExceptionTest
+{
+    public function rendersSeedOriginalAndShrunkArguments(): void
+    {
+        $exception = new PropertyViolationException(new CounterExample(
+            seed: 7382910,
+            runsBeforeFailure: 246,
+            originalArguments: ['x' => 23],
+            shrunkArguments: ['x' => 1],
+            shrinkSteps: 12,
+        ));
+
+        Assert::string($exception->getMessage())->contains('seed=7382910');
+        Assert::string($exception->getMessage())->contains('246 successful run(s)');
+        Assert::string($exception->getMessage())->contains('Original: x=23');
+        Assert::string($exception->getMessage())->contains('Shrunk:   x=1 (12 shrink step(s))');
+    }
+
+    public function rendersTheUnderlyingFailureMessage(): void
+    {
+        $exception = new PropertyViolationException(new CounterExample(
+            seed: 1,
+            runsBeforeFailure: 0,
+            originalArguments: ['x' => 51],
+            shrunkArguments: ['x' => 51],
+            failure: new \RuntimeException('cap exceeded'),
+        ));
+
+        Assert::string($exception->getMessage())->contains('Failure:  cap exceeded');
+    }
+
+    public function omitsTheFailureLineWhenNoUnderlyingFailureIsCaptured(): void
+    {
+        $exception = new PropertyViolationException(new CounterExample(
+            seed: 1,
+            runsBeforeFailure: 0,
+            originalArguments: ['x' => 51],
+            shrunkArguments: ['x' => 51],
+        ));
+
+        Assert::false(str_contains($exception->getMessage(), 'Failure:'));
+    }
+
+    public function chainsTheUnderlyingFailureAsPrevious(): void
+    {
+        $failure = new \RuntimeException('boom');
+        $exception = new PropertyViolationException(new CounterExample(
+            seed: 1,
+            runsBeforeFailure: 0,
+            originalArguments: [],
+            shrunkArguments: [],
+            failure: $failure,
+        ));
+
+        Assert::same($exception->getPrevious(), $failure);
+    }
+
+    public function rendersEachArgumentTypeReadably(): void
+    {
+        $exception = new PropertyViolationException(new CounterExample(
+            seed: 1,
+            runsBeforeFailure: 0,
+            originalArguments: [
+                'i' => 7,
+                's' => 'hi',
+                'list' => [1, 2, 3],
+                'yes' => true,
+                'no' => false,
+                'nothing' => null,
+                'obj' => new \stdClass(),
+            ],
+            shrunkArguments: ['i' => 0],
+        ));
+
+        $message = $exception->getMessage();
+
+        Assert::string($message)->contains('i=7');
+        Assert::string($message)->contains('s="hi"');
+        Assert::string($message)->contains('list=[3 element(s)]');
+        Assert::string($message)->contains('yes=true');
+        Assert::string($message)->contains('no=false');
+        Assert::string($message)->contains('nothing=null');
+        Assert::string($message)->contains('obj=stdClass');
+    }
+
+    public function exposesTheCounterExample(): void
+    {
+        $counterExample = new CounterExample(
+            seed: 42,
+            runsBeforeFailure: 3,
+            originalArguments: ['x' => 9],
+            shrunkArguments: ['x' => 1],
+        );
+        $exception = new PropertyViolationException($counterExample);
+
+        Assert::same($exception->getCounterExample(), $counterExample);
+    }
+}

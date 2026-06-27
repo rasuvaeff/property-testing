@@ -1,0 +1,124 @@
+# rasuvaeff/property-testing
+
+Property-based testing plugin for the Testo testing framework (PHP 8.3+).
+Generate random inputs, find falsifying cases, shrink them to a minimal counterexample.
+
+## Install
+
+```
+composer require --dev rasuvaeff/property-testing
+```
+
+Runtime deps: `ext-mbstring`, `ext-random`, `testo/testo ^0.10.25 || ^1.0`.
+
+## Rules
+
+- Attribute args are constant expressions in PHP, so generators CANNOT be passed
+  inline to `#[Property]`. Always name a method returning
+  `array<string, ArbitraryInterface>` keyed by parameter name.
+- The plugin self-registers via `#[FallbackInterceptor]` on the `#[Property]`
+  attribute — no registration in `testo.php` is needed.
+- `Random` uses an object-scoped MT19937 engine (`\Random\Randomizer`), independent
+  of PHP's global `mt_rand` state, so seeded runs are reproducible regardless of
+  other random calls in the process.
+- Do NOT use generated values for cryptography (MT19937 is a PRNG, not a CSPRNG).
+- Shrinking is greedy per-parameter; it is best-effort minimal, not provably minimal.
+
+## Public API
+
+### Attribute: `#[Property]`
+
+```php
+use Rasuvaeff\PropertyTesting\Property;
+
+#[Property(runs: 100, seed: null, generators: null)]
+```
+
+- `runs` (int, default 100): number of random inputs to try. Must be >= 1.
+- `seed` (?int, default null): fixed seed for reproducibility. Omit for a random
+  seed (reported in the failure message).
+- `generators` (?string, default null): method name returning
+  `array<string, ArbitraryInterface>`. Defaults to `<testMethod>Generators`.
+
+The runner generates `runs` random argument sets, invokes the test through
+Testo's pipeline, and on the first failure shrinks the counterexample to a
+minimal one. Failure carries a `PropertyViolationException` whose message shows
+the seed, the original counterexample, and the shrunk one.
+
+### Static facade: `Gen`
+
+```php
+use Rasuvaeff\PropertyTesting\Gen;
+
+Gen::int()                              // IntArbitrary, PHP_INT_MIN..PHP_INT_MAX, shrinks to 0
+Gen::intBetween(int $min, int $max)     // IntArbitrary, [$min, $max], shrinks to 0 (clamped)
+Gen::intPositive()                      // IntArbitrary, 1..PHP_INT_MAX
+Gen::float()                            // FloatArbitrary, [0.0, 1.0), shrinks to 0.0
+Gen::floatBetween(float $min, float $max)     // FloatArbitrary, [$min, $max], shrinks to 0.0 (clamped)
+Gen::bool()                             // BoolArbitrary, true -> false on shrink
+Gen::string()                           // StringArbitrary, Unicode, len 0..100, shrinks to '' then chars->a
+Gen::stringAscii()                      // StringArbitrary, printable ASCII, len 0..100
+Gen::stringOf(int $minLen, int $maxLen) // StringArbitrary, Unicode, bounded length
+Gen::arrayOf(ArbitraryInterface $el)    // ArrayArbitrary, lists size 0..100
+Gen::nonEmptyArrayOf(ArbitraryInterface $el)  // ArrayArbitrary, size 1..100
+Gen::oneOf(mixed ...$values)           // OneOfArbitrary, one value; shrinks to distinct others
+Gen::nullable(ArbitraryInterface $inner)      // NullableArbitrary, null or inner value
+Gen::map(ArbitraryInterface $inner, Closure $fn)   // MappedArbitrary, transform; NO shrinking
+Gen::filter(ArbitraryInterface $inner, Closure $predicate) // FilteredArbitrary, max 100 retries
+Gen::tuple(ArbitraryInterface ...$elements)        // TupleArbitrary, fixed-arity tuple (list), shrinks each position
+Gen::frequency(iterable $pairs)                    // FrequencyArbitrary, weighted [int $weight, ArbitraryInterface] pairs
+```
+
+### Discarding runs: `Assume::that(bool $condition): void`
+
+```php
+use Rasuvaeff\PropertyTesting\Assume;
+
+Assume::that($cap >= $baseSeconds);
+```
+
+Throws `AssumptionSkipped` when false; the runner treats the run as discarded
+(neither failure nor success). Warns when >90% of runs are discarded.
+
+### Inspecting failures
+
+The failing `TestResult` carries a `Rasuvaeff\PropertyTesting\PropertyViolationException`
+with `getCounterExample(): CounterExample` exposing:
+`seed`, `runsBeforeFailure`, `originalArguments`, `shrunkArguments`, `shrinkSteps`, `failure`, `skips`.
+The Testo fallback interceptor is `PropertyInterceptor`.
+
+## Example
+
+```php
+use Rasuvaeff\PropertyTesting\Gen;
+use Rasuvaeff\PropertyTesting\Property;
+use Testo\Assert;
+use Testo\Test;
+
+#[Test]
+final class SortPropertyTest
+{
+    #[Property(runs: 200)]
+    public function sortedThenSortedIsIdempotent(array $xs): void
+    {
+        $once = $this->sort($xs);
+        $twice = $this->sort($once);
+
+        Assert::same($twice, $once);
+    }
+
+    /** @return array<string, \Rasuvaeff\PropertyTesting\ArbitraryInterface> */
+    private function sortedThenSortedIsIdempotentGenerators(): array
+    {
+        return ['xs' => Gen::arrayOf(Gen::intBetween(-100, 100))];
+    }
+
+    private function sort(array $xs): array
+    {
+        $copy = $xs;
+        sort($copy);
+
+        return $copy;
+    }
+}
+```
