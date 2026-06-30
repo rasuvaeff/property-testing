@@ -6,6 +6,7 @@ Runnable scripts demonstrating `rasuvaeff/property-testing`.
 |---|---|---|
 | `basic.php` | A property that holds, one that is falsified, and how the counterexample is shrunk (uses generators directly, no runner) | No |
 | `property_test.php` | Canonical `#[Property]` usage as a real Testo test case (run through `vendor/bin/testo`) | No |
+| `generators.php` | The 1.1.0 generators: `sample`, boundary bias, `uuid`, `datetime`, `dictOf`, `record` (uses generators directly, no runner) | No |
 
 ## Running
 

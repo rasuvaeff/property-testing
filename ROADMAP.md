@@ -18,20 +18,27 @@ unrecoverable. `filter` is NOT affected — it delegates to the inner type.
 
 Additive only; no consumer migration required.
 
-| Item | What | Effort | Notes |
-|---|---|---|---|
-| #3 | `Gen::dictOf($keyGen, $valGen)`, `Gen::record(['k' => $gen, ...])` | S | string-keyed arrays / DTO shapes; lists-only today |
-| #6 | env override for `runs`/`seed` (`PROPERTY_RUNS`, `PROPERTY_SEED`) | S | dial up runs in CI / replay a seed suite-wide; defaults preserved |
-| — | `maxShrinks` parameter on `#[Property]` | S | cap the shrink loop on expensive properties; default keeps current behaviour |
-| — | combinators: `constant`, `elements(array)`, `char`, `uuid`, `datetime` | S–M | new `Gen` factories |
-| #4 | README section "writing your own `ArbitraryInterface`" | S | docs only (could ship as `1.0.1` patch) |
-| #7 | `classify`/`collect`/`sample` (distribution observability) | M | new public helper + stats collection in the interceptor; optional this wave |
-| #5 | boundary-biased generation (0/±1/min/max, NaN/±INF for floats) | M | minor*; changes the seed sequence across versions. Prefer opt-in flag to stay fully safe |
+All of Wave 1 shipped together in `1.1.0` (status: **done**, on PR #4).
 
-\* #5 keeps the type contract intact (not a BC break), but seed reproducibility
-*across versions* shifts. Sequence stability is not part of the public contract.
-Document "seed reproducible within a version, not across versions", or gate
-behind an opt-in generator flag.
+| Item | What | Status |
+|---|---|---|
+| #3 | `Gen::dictOf($keyGen, $valGen)`, `Gen::record(['k' => $gen, ...])` | done |
+| #6 | env override for `runs`/`seed` (`PROPERTY_RUNS`, `PROPERTY_SEED`) | done |
+| — | `maxShrinks` parameter on `#[Property]` | done |
+| — | combinators: `constant`, `elements(array)`, `char`, `uuid`, `datetime` | done |
+| #4 | README section "writing your own `ArbitraryInterface`" | done |
+| #7 | `classify`/`sample` (distribution observability) | done |
+| #5 | boundary-biased numeric generation (0/±1/min/max for ints, 0.0/min for floats) | done |
+
+#5 ships **on by default** (no external consumers; the only consumers are this
+author's own packages, whose property tests are under the same control). It keeps
+the type contract intact (not a BC break) but shifts the generated sequence for a
+given seed — seed reproducibility holds *within* a version, not across versions.
+NaN/±INF are intentionally NOT part of the default bias (they break the in-range
+contract of `floatBetween`/`float`); a `floatSpecial()` opt-in could add them
+later. `classify`/`collect` introduce a process-local mutable static (`Classify`),
+an accepted exception to the "only `Random` is mutable" invariant (see
+`AGENTS.md`).
 
 ## Wave 2 — `2.0.0` (major, core rework)
 
@@ -51,8 +58,7 @@ Ship with a migration guide. Keep this major free of unrelated additive work so
 - Attribute-only API (no functional `forAll(...)`).
 - No stateful / model-based (command-sequence) testing.
 
-## Suggested order
+## Status
 
-1. `1.1.0`: cheapest, safest first — #3 + #4 + `maxShrinks`.
-2. Follow-up `1.x`: #6, combinators, then #7 / #5.
-3. `2.0.0`: integrated shrinking + `flatMap`, planned as a separate effort.
+- `1.1.0` — entire Wave 1 (done, PR #4).
+- `2.0.0` — integrated shrinking + `flatMap`, planned as a separate effort.

@@ -109,6 +109,16 @@ argument is omitted the runner falls back to a method named `<testMethod>Generat
 | `Gen::nonEmptyArrayOf($element)` | `ArrayArbitrary`, non-empty lists | by length (never below 1), then each element |
 | `Gen::dictOf($key, $value)` | `DictionaryArbitrary`, maps with keys from `$key` (int/string) and values from `$value`, size 0..100 | toward `[]`, then by size, then each value (keys fixed) |
 | `Gen::record($shape)` | `RecordArbitrary`, fixed-shape map `['field' => $arb, ...]` | each field via its arbitrary, key set fixed |
+| `Gen::elements($array)` | `OneOfArbitrary`, one value from an array (array form of `oneOf`) | each distinct other value |
+| `Gen::constant($value)` | `ConstantArbitrary`, always `$value` | does not shrink |
+| `Gen::char()` | `StringArbitrary`, a single printable ASCII character | toward `a` |
+| `Gen::uuid()` | `UuidArbitrary`, RFC 4122 v4 UUID strings | does not shrink |
+| `Gen::datetime($min, $max)` | `DateTimeArbitrary`, UTC `DateTimeImmutable`, timestamp in `[$min, $max]` | toward the Unix epoch, clamped |
+
+Numeric generators (`int*`, `float*`) are **boundary-biased**: roughly one draw in
+five returns an in-range edge value (`0`, `±1`, `min`, `max` for ints; `0.0` or
+`min` for floats), where bugs cluster, instead of a uniform one. Shrinking is
+unaffected.
 | `Gen::oneOf(...$values)` | `OneOfArbitrary`, one of the given values | each distinct other value |
 | `Gen::nullable($inner)` | `NullableArbitrary`, `null` or an `$inner` value | prefers `null` |
 | `Gen::map($inner, $fn)` | `MappedArbitrary`, `$inner` transformed by `$fn` | no shrinking (mapping may not be invertible) |
@@ -187,6 +197,45 @@ final readonly class EvenArbitrary implements ArbitraryInterface
 A custom arbitrary is used like any built-in: return it from the generators
 method keyed by parameter name. Keep `shrink()` terminating — never yield a
 candidate equal to the input.
+
+### Environment overrides
+
+Two environment variables tune runs without touching the attributes — useful in
+CI:
+
+| Variable | Effect |
+|---|---|
+| `PROPERTY_RUNS` | Positive integer that overrides every property's run count (dial runs up in CI). |
+| `PROPERTY_SEED` | Integer seed used for any property whose attribute omits `seed` (replay a whole suite). An explicit attribute `seed` still wins. |
+
+### Checking the distribution
+
+A property can pass vacuously if its generators never reach the interesting
+inputs. `Classify` records labels per run; after a fully passing property the
+runner prints the share of runs that hit each label.
+
+```php
+#[Property(runs: 500)]
+public function holds(int $n): void
+{
+    Classify::when($n === 0, 'zero');
+    Classify::label($n % 2 === 0 ? 'even' : 'odd');
+    // ... assertions ...
+}
+// Property "holds" distribution: odd 51% (255/500), even 49% (245/500), zero 1% (3/500)
+```
+
+A label recorded several times within one run still counts once for that run.
+
+### Sampling a generator
+
+`Gen::sample()` eagerly generates values from any arbitrary for a fixed seed — a
+quick way to eyeball what a generator produces (it returns values, not an
+arbitrary).
+
+```php
+Gen::sample(Gen::intBetween(1, 6), count: 5, seed: 42); // [3, 1, 6, 6, 2]
+```
 
 ## Security
 

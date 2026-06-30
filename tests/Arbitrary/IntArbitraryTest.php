@@ -100,6 +100,25 @@ final class IntArbitraryTest
         Assert::same($candidates, [0, 4, 2, 1]);
     }
 
+    public function generateBiasesTowardBoundaryValues(): void
+    {
+        // Under pure uniform sampling these edge values would essentially never
+        // appear (~3 in a million draws); the bias makes them frequent.
+        $arbitrary = new IntArbitrary(0, 1_000_000);
+        $random = new Random(1);
+        $boundaryHits = 0;
+
+        for ($i = 0; $i < 1000; ++$i) {
+            if (in_array($arbitrary->generate($random), [0, 1, 1_000_000], true)) {
+                ++$boundaryHits;
+            }
+        }
+
+        // ~1 draw in 5 is a boundary (~200 of 1000); the band also rules out an
+        // inverted condition that would bias ~4 in 5.
+        Assert::true($boundaryHits > 100 && $boundaryHits < 400);
+    }
+
     #[ExpectException(\InvalidArgumentException::class)]
     public function rejectsInvertedRange(): void
     {

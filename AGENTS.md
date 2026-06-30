@@ -65,8 +65,12 @@ make release-check
   global `mt_srand`/`mt_rand`. Two `Random` instances with the same seed produce
   identical sequences regardless of intervening random calls — this is what makes
   reported seeds reproducible inside a busy test runner.
-- Generators are value objects (`final readonly`); `Random` is the only mutable
-  type (it advances its engine on each draw).
+- Generators are value objects (`final readonly`). Two types hold mutable state:
+  `Random` (advances its engine on each draw) and `Classify` (a process-local
+  static buffer of the current run's distribution labels). `Classify` is the
+  body↔runner channel for `classify`/`collect`; the interceptor clears it via
+  `beginRun()` and drains it via `flushRun()` each run, so it is never shared
+  concurrently (property runs are sequential).
 - `Gen::filter()` retries up to 100 times then yields the last value; prefer
   `Assume::that()` in the property body when the rejection rate is high.
 - `yield from` inside a generator that already `yield`ed causes integer-key

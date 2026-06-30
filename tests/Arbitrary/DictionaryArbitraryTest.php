@@ -44,9 +44,10 @@ final class DictionaryArbitraryTest
 
     public function generateProducesExactlySizeEntriesWithUniqueKeys(): void
     {
-        // Wide integer keys make collisions vanishingly unlikely, so a fixed
-        // min == max size yields exactly that many entries.
-        $arbitrary = new DictionaryArbitrary(new IntArbitrary(1, PHP_INT_MAX), new IntArbitrary(), 5, 5);
+        // Long random string keys make collisions vanishingly unlikely, so a
+        // fixed min == max size yields exactly that many entries. (String keys
+        // avoid IntArbitrary's boundary bias, which would inflate collisions.)
+        $arbitrary = new DictionaryArbitrary(new StringArbitrary(20, 20), new IntArbitrary(), 5, 5);
 
         Assert::same(count($arbitrary->generate(new Random(1))), 5);
     }
@@ -54,7 +55,7 @@ final class DictionaryArbitraryTest
     public function acceptsMaximumSizeOfOne(): void
     {
         // maxSize === 1 is valid (the boundary of the "at least 1" rule).
-        $arbitrary = new DictionaryArbitrary(new IntArbitrary(1, PHP_INT_MAX), new IntArbitrary(7, 7), 1, 1);
+        $arbitrary = new DictionaryArbitrary(new StringArbitrary(20, 20), new IntArbitrary(7, 7), 1, 1);
 
         Assert::same(count($arbitrary->generate(new Random(1))), 1);
     }

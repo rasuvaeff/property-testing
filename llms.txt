@@ -69,12 +69,41 @@ Gen::nonEmptyArrayOf(ArbitraryInterface $el)  // ArrayArbitrary, size 1..100
 Gen::dictOf(ArbitraryInterface $key, ArbitraryInterface $value) // DictionaryArbitrary, maps size 0..100, keys int|string, colliding keys overwrite
 Gen::record(array $shape)               // RecordArbitrary, fixed-shape map ['field' => ArbitraryInterface, ...]
 Gen::oneOf(mixed ...$values)           // OneOfArbitrary, one value; shrinks to distinct others
+Gen::elements(array $values)           // OneOfArbitrary, one value from an array (array form of oneOf)
+Gen::constant(mixed $value)            // ConstantArbitrary, always $value; does NOT shrink
+Gen::char()                            // StringArbitrary, one printable ASCII char
+Gen::uuid()                            // UuidArbitrary, RFC 4122 v4 UUID strings; does NOT shrink
+Gen::datetime(?DateTimeImmutable $min, ?DateTimeImmutable $max)  // DateTimeArbitrary, UTC, shrinks toward epoch
 Gen::nullable(ArbitraryInterface $inner)      // NullableArbitrary, null or inner value
 Gen::map(ArbitraryInterface $inner, Closure $fn)   // MappedArbitrary, transform; NO shrinking
 Gen::filter(ArbitraryInterface $inner, Closure $predicate) // FilteredArbitrary, max 100 retries
 Gen::tuple(ArbitraryInterface ...$elements)        // TupleArbitrary, fixed-arity tuple (list), shrinks each position
 Gen::frequency(iterable $pairs)                    // FrequencyArbitrary, weighted [int $weight, ArbitraryInterface] pairs
+Gen::sample(ArbitraryInterface $arb, int $count = 10, int $seed = 0)  // list<mixed>: eager debug helper, returns values not an arbitrary
 ```
+
+Numeric generators are boundary-biased: ~1 draw in 5 returns an in-range edge
+value (0/±1/min/max for ints, 0.0/min for floats) instead of a uniform one.
+Shrinking is unaffected.
+
+### Distribution: `Classify` (static, @api)
+
+```php
+use Rasuvaeff\PropertyTesting\Classify;
+
+Classify::label(string $label): void              // tally $label for the current run
+Classify::when(bool $condition, string $label): void  // tally only when $condition
+```
+
+Call inside a property body. After a fully passing property the runner prints the
+share of runs that hit each label (a label counts once per run). Confirms a
+property is not passing vacuously.
+
+### Environment overrides
+
+- `PROPERTY_RUNS` (positive int): overrides every property's run count.
+- `PROPERTY_SEED` (int): seed for any property whose attribute omits `seed`; an
+  explicit attribute `seed` still wins.
 
 ### Discarding runs: `Assume::that(bool $condition): void`
 

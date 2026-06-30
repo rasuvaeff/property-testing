@@ -5,10 +5,15 @@ declare(strict_types=1);
 namespace Rasuvaeff\PropertyTesting\Arbitrary;
 
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
+use Rasuvaeff\PropertyTesting\Internal\Boundary;
 use Rasuvaeff\PropertyTesting\Random;
 
 /**
- * Generates floats within an inclusive range.
+ * Generates floats in the half-open range [min, max).
+ *
+ * Generation is biased: roughly one draw in {@see BIAS_DENOMINATOR} returns an
+ * in-range boundary value (0.0 or min) instead of a uniform one, because bugs
+ * cluster at edges. The exclusive upper bound is never emitted.
  *
  * Shrinking floats reliably is hard (no natural "smallest" value), so this
  * arbitrary shrinks to a single candidate: zero, clamped into the configured
@@ -22,6 +27,8 @@ use Rasuvaeff\PropertyTesting\Random;
  */
 final readonly class FloatArbitrary implements ArbitraryInterface
 {
+    private const int BIAS_DENOMINATOR = 5;
+
     public function __construct(
         private float $min = 0.0,
         private float $max = 1.0,
@@ -34,6 +41,12 @@ final readonly class FloatArbitrary implements ArbitraryInterface
     #[\Override]
     public function generate(Random $random): float
     {
+        $boundaries = Boundary::floats($this->min, $this->max);
+
+        if ($boundaries !== [] && $random->int(1, self::BIAS_DENOMINATOR) === 1) {
+            return $boundaries[$random->int(0, count($boundaries) - 1)];
+        }
+
         return $this->min + $random->float() * ($this->max - $this->min);
     }
 

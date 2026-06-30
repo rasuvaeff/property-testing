@@ -107,3 +107,15 @@ final class MaxShrinksDisabledStub
         return ['a' => Gen::intBetween(10, 100)];
     }
 }
+
+final class NoSeedFalsifyingStub
+{
+    #[Property(runs: 1, generators: 'provide')]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(51, 100)];
+    }
+}
