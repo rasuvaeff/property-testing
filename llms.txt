@@ -23,6 +23,9 @@ Runtime deps: `ext-mbstring`, `ext-random`, `testo/testo ^0.10.25 || ^1.0`.
   other random calls in the process.
 - Do NOT use generated values for cryptography (MT19937 is a PRNG, not a CSPRNG).
 - Shrinking is greedy per-parameter; it is best-effort minimal, not provably minimal.
+- For value spaces `Gen` does not cover, implement `ArbitraryInterface` directly:
+  `generate(Random)` draws via the injected `Random`; `shrink(mixed)` yields
+  smaller candidates (most aggressive first) and must never yield the input.
 
 ## Public API
 
@@ -31,7 +34,7 @@ Runtime deps: `ext-mbstring`, `ext-random`, `testo/testo ^0.10.25 || ^1.0`.
 ```php
 use Rasuvaeff\PropertyTesting\Property;
 
-#[Property(runs: 100, seed: null, generators: null)]
+#[Property(runs: 100, seed: null, generators: null, maxShrinks: null)]
 ```
 
 - `runs` (int, default 100): number of random inputs to try. Must be >= 1.
@@ -39,6 +42,8 @@ use Rasuvaeff\PropertyTesting\Property;
   seed (reported in the failure message).
 - `generators` (?string, default null): method name returning
   `array<string, ArbitraryInterface>`. Defaults to `<testMethod>Generators`.
+- `maxShrinks` (?int, default null): cap on accepted shrink steps. Null = no cap.
+  0 = disable shrinking (report the original counterexample). Must be >= 0.
 
 The runner generates `runs` random argument sets, invokes the test through
 Testo's pipeline, and on the first failure shrinks the counterexample to a
@@ -61,6 +66,8 @@ Gen::stringAscii()                      // StringArbitrary, printable ASCII, len
 Gen::stringOf(int $minLen, int $maxLen) // StringArbitrary, Unicode, bounded length
 Gen::arrayOf(ArbitraryInterface $el)    // ArrayArbitrary, lists size 0..100
 Gen::nonEmptyArrayOf(ArbitraryInterface $el)  // ArrayArbitrary, size 1..100
+Gen::dictOf(ArbitraryInterface $key, ArbitraryInterface $value) // DictionaryArbitrary, maps size 0..100, keys int|string, colliding keys overwrite
+Gen::record(array $shape)               // RecordArbitrary, fixed-shape map ['field' => ArbitraryInterface, ...]
 Gen::oneOf(mixed ...$values)           // OneOfArbitrary, one value; shrinks to distinct others
 Gen::nullable(ArbitraryInterface $inner)      // NullableArbitrary, null or inner value
 Gen::map(ArbitraryInterface $inner, Closure $fn)   // MappedArbitrary, transform; NO shrinking

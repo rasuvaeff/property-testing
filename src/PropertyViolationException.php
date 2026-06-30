@@ -41,7 +41,7 @@ final class PropertyViolationException extends RuntimeException
             $c->shrinkSteps,
         );
 
-        if ($c->failure !== null) {
+        if ($c->failure instanceof \Throwable) {
             $message .= sprintf("\n  Failure:  %s", $c->failure->getMessage());
         }
 

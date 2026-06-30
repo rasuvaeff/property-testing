@@ -7,6 +7,7 @@ namespace Rasuvaeff\PropertyTesting;
 use Closure;
 use Rasuvaeff\PropertyTesting\Arbitrary\ArrayArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\BoolArbitrary;
+use Rasuvaeff\PropertyTesting\Arbitrary\DictionaryArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\FilteredArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\FloatArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\FrequencyArbitrary;
@@ -14,6 +15,7 @@ use Rasuvaeff\PropertyTesting\Arbitrary\IntArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\MappedArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\NullableArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\OneOfArbitrary;
+use Rasuvaeff\PropertyTesting\Arbitrary\RecordArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\StringArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\TupleArbitrary;
 
@@ -115,6 +117,29 @@ final class Gen
     public static function nonEmptyArrayOf(ArbitraryInterface $element): ArrayArbitrary
     {
         return new ArrayArbitrary($element, 1, 100);
+    }
+
+    /**
+     * Associative arrays (maps) of size 0..100 with keys from $key and values
+     * from $value. Keys must be int or string; colliding keys overwrite, so the
+     * result may be smaller than the drawn size.
+     */
+    public static function dictOf(ArbitraryInterface $key, ArbitraryInterface $value): DictionaryArbitrary
+    {
+        return new DictionaryArbitrary($key, $value, 0, 100);
+    }
+
+    /**
+     * Fixed-shape associative array: each field is generated from its own
+     * arbitrary, keyed by field name. The property receives a single string-keyed
+     * array; shrinking reduces each field through its arbitrary while keeping the
+     * key set fixed.
+     *
+     * @param array<string, ArbitraryInterface> $shape Field name => arbitrary.
+     */
+    public static function record(array $shape): RecordArbitrary
+    {
+        return new RecordArbitrary($shape);
     }
 
     /**

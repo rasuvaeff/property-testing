@@ -6,6 +6,7 @@ namespace Rasuvaeff\PropertyTesting\Tests;
 
 use Rasuvaeff\PropertyTesting\Arbitrary\ArrayArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\BoolArbitrary;
+use Rasuvaeff\PropertyTesting\Arbitrary\DictionaryArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\FilteredArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\FloatArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\FrequencyArbitrary;
@@ -13,6 +14,7 @@ use Rasuvaeff\PropertyTesting\Arbitrary\IntArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\MappedArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\NullableArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\OneOfArbitrary;
+use Rasuvaeff\PropertyTesting\Arbitrary\RecordArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\StringArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\TupleArbitrary;
 use Rasuvaeff\PropertyTesting\Gen;
@@ -65,6 +67,34 @@ final class GenTest
     {
         Assert::instanceOf(Gen::arrayOf(Gen::int()), ArrayArbitrary::class);
         Assert::instanceOf(Gen::nonEmptyArrayOf(Gen::int()), ArrayArbitrary::class);
+    }
+
+    public function dictOfReturnsDictionaryArbitrary(): void
+    {
+        Assert::instanceOf(Gen::dictOf(Gen::stringOf(1, 5), Gen::int()), DictionaryArbitrary::class);
+    }
+
+    public function dictOfReachesTheEmptyMap(): void
+    {
+        // The factory must configure minSize 0 so an empty map is reachable.
+        $arbitrary = Gen::dictOf(Gen::stringOf(1, 5), Gen::int());
+        $random = new Random(1);
+        $sawEmpty = false;
+
+        for ($i = 0; $i < 200; ++$i) {
+            if ($arbitrary->generate($random) === []) {
+                $sawEmpty = true;
+
+                break;
+            }
+        }
+
+        Assert::true($sawEmpty);
+    }
+
+    public function recordReturnsRecordArbitrary(): void
+    {
+        Assert::instanceOf(Gen::record(['x' => Gen::int(), 'y' => Gen::bool()]), RecordArbitrary::class);
     }
 
     public function oneOfReturnsOneOfArbitrary(): void

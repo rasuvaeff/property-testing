@@ -213,6 +213,52 @@ final class PropertyInterceptorTest
         $interceptor->runTest($this->info(MissingParameterGeneratorStub::class, 'check'), $next);
     }
 
+    public function maxShrinksCapsTheNumberOfAcceptedShrinkSteps(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        // The property fails for every input, so without a cap shrinking would
+        // accept one step per parameter (two). maxShrinks=1 stops after the first.
+        $next = static fn(TestInfo $info): TestResult => new TestResult(
+            info: $info,
+            status: Status::Failed,
+            failure: new \RuntimeException('always fails'),
+        );
+
+        $result = $interceptor->runTest($this->info(MaxShrinksCapStub::class, 'check'), $next);
+
+        Assert::instanceOf($result->failure, PropertyViolationException::class);
+
+        $counterExample = $result->failure->getCounterExample();
+        Assert::same($counterExample->shrinkSteps, 1);
+
+        // Exactly one accepted step changes exactly one parameter.
+        $changed = 0;
+        foreach ($counterExample->originalArguments as $name => $original) {
+            if ($counterExample->shrunkArguments[$name] !== $original) {
+                ++$changed;
+            }
+        }
+        Assert::same($changed, 1);
+    }
+
+    public function maxShrinksZeroDisablesShrinking(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => new TestResult(
+            info: $info,
+            status: Status::Failed,
+            failure: new \RuntimeException('always fails'),
+        );
+
+        $result = $interceptor->runTest($this->info(MaxShrinksDisabledStub::class, 'check'), $next);
+
+        Assert::instanceOf($result->failure, PropertyViolationException::class);
+
+        $counterExample = $result->failure->getCounterExample();
+        Assert::same($counterExample->shrinkSteps, 0);
+        Assert::same($counterExample->shrunkArguments, $counterExample->originalArguments);
+    }
+
     private function info(string $class, string $method): TestInfo
     {
         $reflection = new \ReflectionMethod($class, $method);

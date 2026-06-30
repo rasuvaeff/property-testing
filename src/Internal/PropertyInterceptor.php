@@ -94,7 +94,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             }
 
             if ($result->status->isFailure()) {
-                [$shrunk, $shrinkSteps] = $this->shrink($info, $next, $generators, $parameterNames, $arguments);
+                [$shrunk, $shrinkSteps] = $this->shrink($info, $next, $generators, $parameterNames, $arguments, $property->maxShrinks);
 
                 return new TestResult(
                     info: $info,
@@ -213,6 +213,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
      * @param list<string> $parameterNames
      * @param array<string, mixed> $failingArguments
      * @param callable(TestInfo): TestResult $next
+     * @param ?int $maxShrinks Cap on accepted shrink steps; null means no cap, 0 disables shrinking.
      * @return array{0: array<string, mixed>, 1: int} The minimised arguments and the number of accepted shrink steps.
      */
     private function shrink(
@@ -221,6 +222,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         array $generators,
         array $parameterNames,
         array $failingArguments,
+        ?int $maxShrinks,
     ): array {
         /** @var array<string, mixed> $current */
         $current = $failingArguments;
@@ -230,6 +232,13 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             $improved = false;
 
             foreach ($parameterNames as $name) {
+                // Stop before accepting any further candidate once the cap is hit.
+                // Checking here (before the per-parameter search) makes maxShrinks=0
+                // return the original counterexample with zero accepted steps.
+                if ($maxShrinks !== null && $steps >= $maxShrinks) {
+                    return [$current, $steps];
+                }
+
                 /** @var mixed $candidate */
                 foreach ($generators[$name]->shrink($current[$name]) as $candidate) {
                     // A candidate equal to the current value makes no progress and would loop.
