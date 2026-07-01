@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\PropertyTesting\Tests;
 
+use DateTimeImmutable;
 use Rasuvaeff\PropertyTesting\Arbitrary\ArrayArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\BoolArbitrary;
+use Rasuvaeff\PropertyTesting\Arbitrary\ConstantArbitrary;
+use Rasuvaeff\PropertyTesting\Arbitrary\DateTimeArbitrary;
+use Rasuvaeff\PropertyTesting\Arbitrary\DictionaryArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\FilteredArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\FloatArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\FrequencyArbitrary;
@@ -13,11 +17,14 @@ use Rasuvaeff\PropertyTesting\Arbitrary\IntArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\MappedArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\NullableArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\OneOfArbitrary;
+use Rasuvaeff\PropertyTesting\Arbitrary\RecordArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\StringArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\TupleArbitrary;
+use Rasuvaeff\PropertyTesting\Arbitrary\UuidArbitrary;
 use Rasuvaeff\PropertyTesting\Gen;
 use Rasuvaeff\PropertyTesting\Random;
 use Testo\Assert;
+use Testo\Assert\ExpectException;
 use Testo\Codecov\Covers;
 use Testo\Test;
 
@@ -67,9 +74,121 @@ final class GenTest
         Assert::instanceOf(Gen::nonEmptyArrayOf(Gen::int()), ArrayArbitrary::class);
     }
 
+    public function dictOfReturnsDictionaryArbitrary(): void
+    {
+        Assert::instanceOf(Gen::dictOf(Gen::stringOf(1, 5), Gen::int()), DictionaryArbitrary::class);
+    }
+
+    public function dictOfReachesTheEmptyMap(): void
+    {
+        // The factory must configure minSize 0 so an empty map is reachable.
+        $arbitrary = Gen::dictOf(Gen::stringOf(1, 5), Gen::int());
+        $random = new Random(1);
+        $sawEmpty = false;
+
+        for ($i = 0; $i < 200; ++$i) {
+            if ($arbitrary->generate($random) === []) {
+                $sawEmpty = true;
+
+                break;
+            }
+        }
+
+        Assert::true($sawEmpty);
+    }
+
+    public function recordReturnsRecordArbitrary(): void
+    {
+        Assert::instanceOf(Gen::record(['x' => Gen::int(), 'y' => Gen::bool()]), RecordArbitrary::class);
+    }
+
     public function oneOfReturnsOneOfArbitrary(): void
     {
         Assert::instanceOf(Gen::oneOf('a', 'b', 'c'), OneOfArbitrary::class);
+    }
+
+    public function elementsReturnsOneOfArbitraryFromAnArray(): void
+    {
+        $arbitrary = Gen::elements(['a', 'b', 'c']);
+
+        Assert::instanceOf($arbitrary, OneOfArbitrary::class);
+        Assert::true(in_array($arbitrary->generate(new Random(1)), ['a', 'b', 'c'], true));
+    }
+
+    public function elementsAcceptsAStringKeyedArray(): void
+    {
+        // Keys are dropped via array_values, so a non-list array is accepted.
+        $arbitrary = Gen::elements(['x' => 10, 'y' => 20]);
+
+        Assert::true(in_array($arbitrary->generate(new Random(1)), [10, 20], true));
+    }
+
+    public function constantReturnsConstantArbitrary(): void
+    {
+        $arbitrary = Gen::constant('fixed');
+
+        Assert::instanceOf($arbitrary, ConstantArbitrary::class);
+        Assert::same($arbitrary->generate(new Random(1)), 'fixed');
+    }
+
+    public function charReturnsSinglePrintableAsciiCharacter(): void
+    {
+        $arbitrary = Gen::char();
+
+        Assert::instanceOf($arbitrary, StringArbitrary::class);
+
+        $random = new Random(1);
+        for ($i = 0; $i < 100; ++$i) {
+            $char = $arbitrary->generate($random);
+            $code = ord($char);
+
+            Assert::same(strlen($char), 1);
+            Assert::true($code >= 32 && $code <= 126);
+        }
+    }
+
+    public function uuidReturnsUuidArbitrary(): void
+    {
+        Assert::instanceOf(Gen::uuid(), UuidArbitrary::class);
+    }
+
+    public function datetimeReturnsDateTimeArbitrary(): void
+    {
+        Assert::instanceOf(Gen::datetime(), DateTimeArbitrary::class);
+        Assert::instanceOf(
+            Gen::datetime(new DateTimeImmutable('@0'), new DateTimeImmutable('@100')),
+            DateTimeArbitrary::class,
+        );
+    }
+
+    public function sampleGeneratesTheRequestedNumberOfValues(): void
+    {
+        $values = Gen::sample(Gen::intBetween(1, 6), 20, 42);
+
+        Assert::same(count($values), 20);
+
+        foreach ($values as $value) {
+            Assert::true(is_int($value) && $value >= 1 && $value <= 6);
+        }
+    }
+
+    public function sampleIsReproducibleForAGivenSeed(): void
+    {
+        Assert::same(
+            Gen::sample(Gen::intBetween(1, 1_000_000), 10, 7),
+            Gen::sample(Gen::intBetween(1, 1_000_000), 10, 7),
+        );
+    }
+
+    public function sampleAcceptsACountOfOne(): void
+    {
+        Assert::same(count(Gen::sample(Gen::int(), 1, 0)), 1);
+    }
+
+    #[ExpectException(\InvalidArgumentException::class)]
+    public function sampleRejectsNonPositiveCount(): void
+    {
+        Gen::sample(Gen::int(), 0);
     }
 
     public function nullableWrapsInnerArbitrary(): void

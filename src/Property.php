@@ -31,14 +31,20 @@ final readonly class Property implements Interceptable
      *        (the failing seed is reported by {@see PropertyViolationException}).
      * @param ?string $generators Method name returning array<string, ArbitraryInterface>.
      *        Defaults to `<testMethod>Generators`.
+     * @param ?int $maxShrinks Cap on the number of accepted shrink steps. Null (default) means
+     *        no cap. 0 disables shrinking, reporting the original counterexample unchanged.
      */
     public function __construct(
         public int $runs = 100,
         public ?int $seed = null,
         public ?string $generators = null,
+        public ?int $maxShrinks = null,
     ) {
         if ($runs < 1) {
             throw new \InvalidArgumentException('Runs must be greater than or equal to 1');
+        }
+        if ($maxShrinks !== null && $maxShrinks < 0) {
+            throw new \InvalidArgumentException('Max shrinks must be greater than or equal to 0');
         }
     }
 }

@@ -6,6 +6,7 @@ namespace Rasuvaeff\PropertyTesting\Internal;
 
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
 use Rasuvaeff\PropertyTesting\AssumptionSkipped;
+use Rasuvaeff\PropertyTesting\Classify;
 use Rasuvaeff\PropertyTesting\CounterExample;
 use Rasuvaeff\PropertyTesting\Property;
 use Rasuvaeff\PropertyTesting\PropertyViolationException;
@@ -76,15 +77,20 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             $reflection->getParameters(),
         );
 
-        $seed = $property->seed ?? random_int(0, PHP_INT_MAX);
+        $runs = $this->resolveRuns($property->runs);
+        $seed = $this->resolveSeed($property->seed);
         $random = new Random($seed);
 
         $skips = 0;
         $checks = 0;
+        /** @var array<string, int> $classifications */
+        $classifications = [];
 
-        for ($run = 1; $run <= $property->runs; ++$run) {
+        for ($run = 1; $run <= $runs; ++$run) {
+            Classify::beginRun();
             $arguments = $this->generate($generators, $parameterNames, $random);
             $result = $next($info->with(arguments: array_values($arguments)));
+            $labels = Classify::flushRun();
 
             // A discarded run is neither a failure nor a check.
             if ($result->failure instanceof AssumptionSkipped) {
@@ -94,7 +100,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             }
 
             if ($result->status->isFailure()) {
-                [$shrunk, $shrinkSteps] = $this->shrink($info, $next, $generators, $parameterNames, $arguments);
+                [$shrunk, $shrinkSteps] = $this->shrink($info, $next, $generators, $parameterNames, $arguments, $property->maxShrinks);
 
                 return new TestResult(
                     info: $info,
@@ -111,15 +117,63 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                 );
             }
 
+            foreach ($labels as $label) {
+                $classifications[$label] = ($classifications[$label] ?? 0) + 1;
+            }
+
             ++$checks;
         }
 
-        $this->warnOnExcessiveSkips($info->name, $skips, $property->runs);
+        $this->warnOnExcessiveSkips($info->name, $skips, $runs);
+        $this->reportClassifications($info->name, $classifications, $checks);
 
         return new TestResult(
             info: $info,
             status: Status::Passed,
         );
+    }
+
+    /**
+     * The `PROPERTY_RUNS` environment variable overrides the attribute's run
+     * count (handy for dialing runs up in CI). It must be a positive integer.
+     */
+    private function resolveRuns(int $runs): int
+    {
+        $env = getenv('PROPERTY_RUNS');
+
+        if ($env === false || $env === '') {
+            return $runs;
+        }
+
+        if (preg_match('/^\d+$/', $env) !== 1 || (int) $env < 1) {
+            throw new \InvalidArgumentException(sprintf('PROPERTY_RUNS must be a positive integer, got "%s"', $env));
+        }
+
+        return (int) $env;
+    }
+
+    /**
+     * The attribute seed wins; otherwise `PROPERTY_SEED` fixes the seed for the
+     * whole suite (handy for replaying a CI failure); otherwise a random seed is
+     * drawn. `PROPERTY_SEED`, when set, must be an integer.
+     */
+    private function resolveSeed(?int $attributeSeed): int
+    {
+        if ($attributeSeed !== null) {
+            return $attributeSeed;
+        }
+
+        $env = getenv('PROPERTY_SEED');
+
+        if ($env === false || $env === '') {
+            return random_int(0, PHP_INT_MAX);
+        }
+
+        if (preg_match('/^-?\d+$/', $env) !== 1) {
+            throw new \InvalidArgumentException(sprintf('PROPERTY_SEED must be an integer, got "%s"', $env));
+        }
+
+        return (int) $env;
     }
 
     /**
@@ -213,6 +267,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
      * @param list<string> $parameterNames
      * @param array<string, mixed> $failingArguments
      * @param callable(TestInfo): TestResult $next
+     * @param ?int $maxShrinks Cap on accepted shrink steps; null means no cap, 0 disables shrinking.
      * @return array{0: array<string, mixed>, 1: int} The minimised arguments and the number of accepted shrink steps.
      */
     private function shrink(
@@ -221,6 +276,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         array $generators,
         array $parameterNames,
         array $failingArguments,
+        ?int $maxShrinks,
     ): array {
         /** @var array<string, mixed> $current */
         $current = $failingArguments;
@@ -230,6 +286,13 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             $improved = false;
 
             foreach ($parameterNames as $name) {
+                // Stop before accepting any further candidate once the cap is hit.
+                // Checking here (before the per-parameter search) makes maxShrinks=0
+                // return the original counterexample with zero accepted steps.
+                if ($maxShrinks !== null && $steps >= $maxShrinks) {
+                    return [$current, $steps];
+                }
+
                 /** @var mixed $candidate */
                 foreach ($generators[$name]->shrink($current[$name]) as $candidate) {
                     // A candidate equal to the current value makes no progress and would loop.
@@ -270,6 +333,37 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         }
 
         return $result->status->isFailure();
+    }
+
+    /**
+     * Print the share of (passing) runs that hit each {@see Classify} label.
+     *
+     * @param array<string, int> $classifications
+     */
+    private function reportClassifications(string $name, array $classifications, int $checks): void
+    {
+        if ($classifications === [] || $checks <= 0) {
+            return;
+        }
+
+        arsort($classifications);
+
+        $parts = [];
+        foreach ($classifications as $label => $count) {
+            $parts[] = sprintf(
+                '%s %d%% (%d/%d)',
+                $label,
+                (int) round(((float) $count / (float) $checks) * 100.0),
+                $count,
+                $checks,
+            );
+        }
+
+        $this->messenger->log(
+            Messenger::CHANNEL_STDOUT,
+            sprintf('Property "%s" distribution: %s', $name, implode(', ', $parts)),
+            Level::Info,
+        );
     }
 
     private function warnOnExcessiveSkips(string $name, int $skips, int $runs): void

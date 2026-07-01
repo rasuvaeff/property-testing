@@ -6,6 +6,7 @@ namespace Rasuvaeff\PropertyTesting\Tests\Internal;
 
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Rasuvaeff\PropertyTesting\AssumptionSkipped;
+use Rasuvaeff\PropertyTesting\Classify;
 use Rasuvaeff\PropertyTesting\Internal\PropertyInterceptor;
 use Rasuvaeff\PropertyTesting\PropertyViolationException;
 use Testo\Application\Internal\MessengerHub;
@@ -211,6 +212,174 @@ final class PropertyInterceptorTest
         $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
 
         $interceptor->runTest($this->info(MissingParameterGeneratorStub::class, 'check'), $next);
+    }
+
+    public function maxShrinksCapsTheNumberOfAcceptedShrinkSteps(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        // The property fails for every input, so without a cap shrinking would
+        // accept one step per parameter (two). maxShrinks=1 stops after the first.
+        $next = static fn(TestInfo $info): TestResult => new TestResult(
+            info: $info,
+            status: Status::Failed,
+            failure: new \RuntimeException('always fails'),
+        );
+
+        $result = $interceptor->runTest($this->info(MaxShrinksCapStub::class, 'check'), $next);
+
+        Assert::instanceOf($result->failure, PropertyViolationException::class);
+
+        $counterExample = $result->failure->getCounterExample();
+        Assert::same($counterExample->shrinkSteps, 1);
+
+        // Exactly one accepted step changes exactly one parameter.
+        $changed = 0;
+        foreach ($counterExample->originalArguments as $name => $original) {
+            if ($counterExample->shrunkArguments[$name] !== $original) {
+                ++$changed;
+            }
+        }
+        Assert::same($changed, 1);
+    }
+
+    public function maxShrinksZeroDisablesShrinking(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => new TestResult(
+            info: $info,
+            status: Status::Failed,
+            failure: new \RuntimeException('always fails'),
+        );
+
+        $result = $interceptor->runTest($this->info(MaxShrinksDisabledStub::class, 'check'), $next);
+
+        Assert::instanceOf($result->failure, PropertyViolationException::class);
+
+        $counterExample = $result->failure->getCounterExample();
+        Assert::same($counterExample->shrinkSteps, 0);
+        Assert::same($counterExample->shrunkArguments, $counterExample->originalArguments);
+    }
+
+    public function envPropertyRunsOverridesTheAttributeRunCount(): void
+    {
+        putenv('PROPERTY_RUNS=3');
+
+        try {
+            $interceptor = new PropertyInterceptor($this->createMessenger());
+            $calls = 0;
+            $next = static function (TestInfo $info) use (&$calls): TestResult {
+                ++$calls;
+
+                return new TestResult(info: $info, status: Status::Passed);
+            };
+
+            // PassingStub declares runs: 5; the env var forces 3.
+            $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
+
+            Assert::same($calls, 3);
+        } finally {
+            putenv('PROPERTY_RUNS');
+        }
+    }
+
+    public function envPropertySeedSuppliesTheSeedWhenTheAttributeOmitsIt(): void
+    {
+        putenv('PROPERTY_SEED=777');
+
+        try {
+            $interceptor = new PropertyInterceptor($this->createMessenger());
+            $next = static fn(TestInfo $info): TestResult => $info->arguments[0] > 50
+                ? new TestResult(info: $info, status: Status::Failed, failure: new \RuntimeException('x>50'))
+                : new TestResult(info: $info, status: Status::Passed);
+
+            $result = $interceptor->runTest($this->info(NoSeedFalsifyingStub::class, 'check'), $next);
+
+            Assert::instanceOf($result->failure, PropertyViolationException::class);
+            Assert::same($result->failure->getCounterExample()->seed, 777);
+        } finally {
+            putenv('PROPERTY_SEED');
+        }
+    }
+
+    public function attributeSeedWinsOverTheEnvironmentSeed(): void
+    {
+        putenv('PROPERTY_SEED=777');
+
+        try {
+            $interceptor = new PropertyInterceptor($this->createMessenger());
+            $next = static fn(TestInfo $info): TestResult => new TestResult(
+                info: $info,
+                status: Status::Failed,
+                failure: new \RuntimeException('always'),
+            );
+
+            // FalsifyingStub declares seed: 1, which must win over the env seed.
+            $result = $interceptor->runTest($this->info(FalsifyingStub::class, 'check'), $next);
+
+            Assert::instanceOf($result->failure, PropertyViolationException::class);
+            Assert::same($result->failure->getCounterExample()->seed, 1);
+        } finally {
+            putenv('PROPERTY_SEED');
+        }
+    }
+
+    #[ExpectException(\InvalidArgumentException::class)]
+    public function rejectsNonNumericPropertyRuns(): void
+    {
+        putenv('PROPERTY_RUNS=abc');
+
+        try {
+            $interceptor = new PropertyInterceptor($this->createMessenger());
+            $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+
+            $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
+        } finally {
+            putenv('PROPERTY_RUNS');
+        }
+    }
+
+    #[ExpectException(\InvalidArgumentException::class)]
+    public function rejectsNonNumericPropertySeed(): void
+    {
+        putenv('PROPERTY_SEED=abc');
+
+        try {
+            $interceptor = new PropertyInterceptor($this->createMessenger());
+            $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+
+            $interceptor->runTest($this->info(NoSeedFalsifyingStub::class, 'check'), $next);
+        } finally {
+            putenv('PROPERTY_SEED');
+        }
+    }
+
+    public function reportsClassificationDistributionAfterPassingRuns(): void
+    {
+        $messenger = $this->createMessenger();
+        $interceptor = new PropertyInterceptor($messenger);
+        $next = static function (TestInfo $info): TestResult {
+            Classify::label('checked');
+
+            return new TestResult(info: $info, status: Status::Passed);
+        };
+
+        // PassingStub runs 5 times; every run records 'checked'.
+        $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
+        $messages = $messenger->getMessages()->channel(Messenger::CHANNEL_STDOUT);
+
+        Assert::same(count($messages), 1);
+        Assert::string($messages[0]->content)->contains('checked 100% (5/5)');
+    }
+
+    public function reportsNoDistributionWhenNoLabelsRecorded(): void
+    {
+        $messenger = $this->createMessenger();
+        $interceptor = new PropertyInterceptor($messenger);
+        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+
+        $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
+
+        Assert::same(count($messenger->getMessages()->channel(Messenger::CHANNEL_STDOUT)), 0);
     }
 
     private function info(string $class, string $method): TestInfo

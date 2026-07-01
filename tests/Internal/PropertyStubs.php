@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\PropertyTesting\Tests\Internal;
 
+use Rasuvaeff\PropertyTesting\ArbitraryInterface;
 use Rasuvaeff\PropertyTesting\Gen;
 use Rasuvaeff\PropertyTesting\Property;
 
@@ -17,7 +18,7 @@ final class PassingStub
     #[Property(runs: 5, seed: 1, generators: 'provide')]
     public function check(int $x): void {}
 
-    /** @return array<string, \Rasuvaeff\PropertyTesting\ArbitraryInterface> */
+    /** @return array<string, ArbitraryInterface> */
     public static function provide(): array
     {
         return ['x' => Gen::intBetween(1, 10)];
@@ -29,7 +30,7 @@ final class ConventionStub
     #[Property(runs: 3, seed: 1)]
     public function check(int $x): void {}
 
-    /** @return array<string, \Rasuvaeff\PropertyTesting\ArbitraryInterface> */
+    /** @return array<string, ArbitraryInterface> */
     public static function checkGenerators(): array
     {
         return ['x' => Gen::intBetween(1, 10)];
@@ -41,7 +42,7 @@ final class FalsifyingStub
     #[Property(runs: 1, seed: 1, generators: 'provide')]
     public function check(int $x): void {}
 
-    /** @return array<string, \Rasuvaeff\PropertyTesting\ArbitraryInterface> */
+    /** @return array<string, ArbitraryInterface> */
     public static function provide(): array
     {
         return ['x' => Gen::intBetween(51, 100)];
@@ -53,7 +54,7 @@ final class MultiParamFalsifyingStub
     #[Property(runs: 1, seed: 1, generators: 'provide')]
     public function check(int $a, int $b): void {}
 
-    /** @return array<string, \Rasuvaeff\PropertyTesting\ArbitraryInterface> */
+    /** @return array<string, ArbitraryInterface> */
     public static function provide(): array
     {
         return ['a' => Gen::intBetween(0, 10), 'b' => Gen::intBetween(51, 100)];
@@ -70,7 +71,7 @@ final class MissingParameterGeneratorStub
     #[Property(runs: 1, seed: 1, generators: 'provide')]
     public function check(int $x, int $y): void {}
 
-    /** @return array<string, \Rasuvaeff\PropertyTesting\ArbitraryInterface> */
+    /** @return array<string, ArbitraryInterface> */
     public static function provide(): array
     {
         return ['x' => Gen::int()];
@@ -81,4 +82,40 @@ final class MissingGeneratorMethodStub
 {
     #[Property(runs: 1, seed: 1, generators: 'doesNotExist')]
     public function check(int $x): void {}
+}
+
+final class MaxShrinksCapStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'provide', maxShrinks: 1)]
+    public function check(int $a, int $b): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['a' => Gen::intBetween(10, 100), 'b' => Gen::intBetween(10, 100)];
+    }
+}
+
+final class MaxShrinksDisabledStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'provide', maxShrinks: 0)]
+    public function check(int $a): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['a' => Gen::intBetween(10, 100)];
+    }
+}
+
+final class NoSeedFalsifyingStub
+{
+    #[Property(runs: 1, generators: 'provide')]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(51, 100)];
+    }
 }
