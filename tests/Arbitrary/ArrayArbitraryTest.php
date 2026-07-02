@@ -77,6 +77,19 @@ final class ArrayArbitraryTest
         ]);
     }
 
+    public function shrinkYieldsTheEmptyArrayExactlyOnce(): void
+    {
+        // The empty array comes only from the minSize===0 guard; the length loop
+        // must stop at 1 and never emit a second [] via a zero-length slice.
+        $node = Trees::generateWhere(
+            new ArrayArbitrary(new IntArbitrary(0, 10), 0, 8),
+            static fn(mixed $v): bool => is_array($v) && count($v) === 4,
+        );
+
+        $empties = array_filter(Trees::childValues($node), static fn(mixed $candidate): bool => $candidate === []);
+        Assert::same(count($empties), 1);
+    }
+
     public function shrinkNeverEscapesBelowMinimumSize(): void
     {
         // A nonEmptyArrayOf-style generator must never shrink to [] (out of domain).

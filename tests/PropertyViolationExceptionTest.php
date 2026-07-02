@@ -40,6 +40,9 @@ final class PropertyViolationExceptionTest
             failure: new \RuntimeException('cap exceeded'),
         ));
 
+        // The failure line is appended to the counterexample rendering, never
+        // replacing it.
+        Assert::string($exception->getMessage())->contains('seed=1');
         Assert::string($exception->getMessage())->contains('Failure:  cap exceeded');
     }
 

@@ -80,6 +80,50 @@ final class StringArbitraryTest
         Assert::same(Trees::childValues($node), ['a']);
     }
 
+    public function shrinkYieldsTheEmptyStringExactlyOnce(): void
+    {
+        // The empty string comes only from the minLength===0 guard; the length
+        // loop must stop at 1 and never emit a second '' via a zero-length prefix.
+        $node = Trees::generateWhere(
+            new StringArbitrary(0, 12),
+            static fn(mixed $v): bool => is_string($v) && strlen($v) === 8,
+        );
+
+        $empties = array_filter(Trees::childValues($node), static fn(mixed $candidate): bool => $candidate === '');
+        Assert::same(count($empties), 1);
+    }
+
+    public function shrinkCharacterPhaseContinuesPastCharactersAlreadyA(): void
+    {
+        // v[0] is already 'a': the loop must skip it (continue, not break) and
+        // still drive v[1] to 'a'. minLength 2 blocks the length phase, so the
+        // substitution is the only candidate.
+        $node = Trees::generateWhere(
+            new StringArbitrary(2, 2),
+            static fn(mixed $v): bool => is_string($v) && $v[0] === 'a' && $v[1] !== 'a',
+        );
+
+        Assert::same(Trees::childValues($node), ['aa']);
+    }
+
+    public function unicodeLengthPhaseHalvesPerCharacterNotPerByte(): void
+    {
+        // With multibyte codepoints the half-length prefix must be taken with
+        // mb_substr: a byte-based slice would cut codepoints in half.
+        $node = Trees::generateWhere(
+            new StringArbitrary(0, 6, unicode: true),
+            static fn(mixed $v): bool => is_string($v)
+                && mb_strlen($v, 'UTF-8') === 4
+                && strlen($v) > 4,
+        );
+        $value = $node->value;
+        $candidates = Trees::childValues($node);
+
+        Assert::same($candidates[0], '');
+        Assert::same($candidates[1], mb_substr((string) $value, 0, 2, 'UTF-8'));
+        Assert::same($candidates[2], mb_substr((string) $value, 0, 1, 'UTF-8'));
+    }
+
     public function shrinkNeverEscapesBelowMinimumLength(): void
     {
         // stringOf(5, 10)-style generator must never shrink to '' (out of domain).
@@ -113,9 +157,12 @@ final class StringArbitraryTest
 
     public function unicodeGenerationProducesValidUtf8(): void
     {
+        // 3000 seeds make a surrogate draw (p ~ 0.18% per codepoint) all but
+        // certain, so a broken surrogate-skip loop cannot slip through as the
+        // empty-string fallback.
         $arbitrary = new StringArbitrary(1, 1, unicode: true);
 
-        for ($seed = 1; $seed <= 50; ++$seed) {
+        for ($seed = 1; $seed <= 3000; ++$seed) {
             $value = $arbitrary->generate(new Random($seed))->value;
 
             Assert::same(mb_check_encoding($value, 'UTF-8'), true);

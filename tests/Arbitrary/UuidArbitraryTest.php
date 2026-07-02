@@ -72,6 +72,40 @@ final class UuidArbitraryTest
         );
     }
 
+    public function versionByteLowNibbleStaysRandom(): void
+    {
+        // Only the HIGH nibble of byte 6 is forced (to 4); the low nibble
+        // (position 15) keeps its random bits, so even digits must appear —
+        // a mask that also sets bit 0 would make it permanently odd.
+        $arbitrary = new UuidArbitrary();
+        $random = new Random(1);
+        $sawEven = false;
+
+        for ($i = 0; $i < 300 && !$sawEven; ++$i) {
+            $uuid = $arbitrary->generate($random)->value;
+            $sawEven = in_array($uuid[15], ['0', '2', '4', '6', '8', 'a', 'c', 'e'], true);
+        }
+
+        Assert::true($sawEven);
+    }
+
+    public function variantByteKeepsItsLowRandomBits(): void
+    {
+        // The variant mask (& 0x3F | 0x80) must preserve bit 0 of byte 8, whose
+        // low nibble renders at position 20: odd digits must appear — a mask
+        // clearing bit 0 would make it permanently even.
+        $arbitrary = new UuidArbitrary();
+        $random = new Random(1);
+        $sawOdd = false;
+
+        for ($i = 0; $i < 300 && !$sawOdd; ++$i) {
+            $uuid = $arbitrary->generate($random)->value;
+            $sawOdd = in_array($uuid[20], ['1', '3', '5', '7', '9', 'b', 'd', 'f'], true);
+        }
+
+        Assert::true($sawOdd);
+    }
+
     public function shrinkYieldsNothing(): void
     {
         Assert::same(Trees::childValues((new UuidArbitrary())->generate(new Random(1))), []);

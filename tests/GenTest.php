@@ -99,6 +99,21 @@ final class GenTest
         Assert::true($sawEmpty);
     }
 
+    public function dictOfSpansSizeZeroToHundred(): void
+    {
+        // Long random string keys make collisions vanishingly unlikely, so the
+        // observed maximum size pins the factory's exact upper bound.
+        $arbitrary = Gen::dictOf(Gen::stringOf(20, 20), Gen::int());
+        $random = new Random(1);
+        $maxSize = 0;
+
+        for ($i = 0; $i < 2000; ++$i) {
+            $maxSize = max($maxSize, count($arbitrary->generate($random)->value));
+        }
+
+        Assert::same($maxSize, 100);
+    }
+
     public function recordReturnsRecordArbitrary(): void
     {
         Assert::instanceOf(Gen::record(['x' => Gen::int(), 'y' => Gen::bool()]), RecordArbitrary::class);

@@ -103,6 +103,13 @@ final class DateTimeArbitraryTest
         }
     }
 
+    public function defaultRangeDrawIsExactForAGivenSeed(): void
+    {
+        // Pins the default bounds (epoch .. 2100-01-01) byte-exactly: shifting
+        // either default by one changes the uniform draw for this seed.
+        Assert::same((new DateTimeArbitrary())->generate(new Random(1))->value->getTimestamp(), 1_791_095_845);
+    }
+
     public function acceptsADegenerateRange(): void
     {
         // min === max is a valid single-point range and must construct + generate.

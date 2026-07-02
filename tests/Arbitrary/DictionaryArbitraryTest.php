@@ -120,6 +120,23 @@ final class DictionaryArbitraryTest
         ]);
     }
 
+    public function shrinkValuePhaseKeepsTheOtherEntriesIntact(): void
+    {
+        // Shrinking one value must replace it inside the full map, not collapse
+        // the candidate to a single-entry map.
+        $node = Trees::generateWhere(
+            new DictionaryArbitrary(new StringArbitrary(5, 5), new IntArbitrary(0, 10), 2, 2),
+            static fn(mixed $v): bool => is_array($v) && count($v) === 2 && array_values($v) === [8, 8],
+        );
+        $value = $node->value;
+        [$firstKey, $secondKey] = array_keys($value);
+
+        $candidates = Trees::childValues($node);
+
+        Assert::true(in_array([$firstKey => 0, $secondKey => 8], $candidates, true));
+        Assert::true(in_array([$firstKey => 8, $secondKey => 0], $candidates, true));
+    }
+
     public function shrinkKeepsTheMinimumSizeCandidate(): void
     {
         // With minSize 1 the size-floor slice (one entry) must be produced.

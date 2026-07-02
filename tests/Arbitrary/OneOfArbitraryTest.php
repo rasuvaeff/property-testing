@@ -81,6 +81,37 @@ final class OneOfArbitraryTest
         Assert::same(Trees::childValues($children[0]), []);
     }
 
+    public function shrinkScansPastAnEqualEarlierValue(): void
+    {
+        // For the value 9 drawn at index 2 of (9, 5, 9), index 0 equals the
+        // current value: the scan must skip it (continue, not break) and still
+        // yield the distinct 5. Nodes for index 0 are terminal, so observing
+        // children [5] proves the index-2 scan got past the equal value.
+        $arbitrary = new OneOfArbitrary(9, 5, 9);
+        $sawIndexTwoShrink = false;
+
+        for ($seed = 0; $seed < 100; ++$seed) {
+            $node = $arbitrary->generate(new Random($seed));
+
+            if ($node->value === 9 && Trees::childValues($node) === [5]) {
+                $sawIndexTwoShrink = true;
+
+                break;
+            }
+        }
+
+        Assert::true($sawIndexTwoShrink);
+    }
+
+    public function shrinkScansPastADuplicateToLaterDistinctValues(): void
+    {
+        // From 7 the scan hits 5, its duplicate (skipped), then must continue
+        // to the distinct 3 — dedup uses continue, not break.
+        $node = Trees::generateWhere(new OneOfArbitrary(5, 5, 3, 7), static fn(mixed $v): bool => $v === 7);
+
+        Assert::same(Trees::childValues($node), [5, 3]);
+    }
+
     public function shrinkDeduplicatesIdenticalCandidates(): void
     {
         $node = Trees::generateWhere(new OneOfArbitrary(1, 1, 2), static fn(mixed $v): bool => $v === 2);
