@@ -6,6 +6,7 @@ namespace Rasuvaeff\PropertyTesting\Tests\Arbitrary;
 
 use Rasuvaeff\PropertyTesting\Arbitrary\OneOfArbitrary;
 use Rasuvaeff\PropertyTesting\Random;
+use Rasuvaeff\PropertyTesting\Tests\Support\Trees;
 use Testo\Assert;
 use Testo\Assert\ExpectException;
 use Testo\Codecov\Covers;
@@ -22,7 +23,7 @@ final class OneOfArbitraryTest
         $random = new Random(1);
 
         for ($i = 0; $i < 200; ++$i) {
-            Assert::true(in_array($arbitrary->generate($random), $values, true));
+            Assert::true(in_array($arbitrary->generate($random)->value, $values, true));
         }
     }
 
@@ -35,33 +36,73 @@ final class OneOfArbitraryTest
         $seen = [];
 
         for ($i = 0; $i < 200; ++$i) {
-            $seen[$arbitrary->generate($random)] = true;
+            $seen[$arbitrary->generate($random)->value] = true;
         }
 
         Assert::same(isset($seen['a'], $seen['b'], $seen['c']), true);
     }
 
-    public function shrinkYieldsAllOtherDistinctValues(): void
+    public function shrinkYieldsOnlyEarlierValues(): void
     {
-        $candidates = iterator_to_array((new OneOfArbitrary('x', 'y', 'z'))->shrink('y'));
+        // Earlier values are "smaller": the middle value shrinks to the first
+        // one only, never sideways to the last — this is what guarantees the
+        // shrink index strictly decreases and the loop terminates.
+        $node = Trees::generateWhere(new OneOfArbitrary('x', 'y', 'z'), static fn(mixed $v): bool => $v === 'y');
 
-        Assert::same($candidates, ['x', 'z']);
+        Assert::same(Trees::childValues($node), ['x']);
+    }
+
+    public function lastValueShrinksThroughAllEarlierDistinctValues(): void
+    {
+        $node = Trees::generateWhere(new OneOfArbitrary('x', 'y', 'z'), static fn(mixed $v): bool => $v === 'z');
+
+        Assert::same(Trees::childValues($node), ['x', 'y']);
+    }
+
+    public function firstValueDoesNotShrink(): void
+    {
+        $node = Trees::generateWhere(new OneOfArbitrary('x', 'y', 'z'), static fn(mixed $v): bool => $v === 'x');
+
+        Assert::same(Trees::childValues($node), []);
+    }
+
+    public function candidatesCarryTheirOwnEarlierOnlySubtrees(): void
+    {
+        // Descending into 'y' (from 'z') offers 'x'; descending into 'x' ends.
+        $node = Trees::generateWhere(new OneOfArbitrary('x', 'y', 'z'), static fn(mixed $v): bool => $v === 'z');
+
+        $children = [];
+        foreach ($node->shrinks() as $child) {
+            $children[] = $child;
+        }
+
+        Assert::same($children[1]->value, 'y');
+        Assert::same(Trees::childValues($children[1]), ['x']);
+        Assert::same(Trees::childValues($children[0]), []);
     }
 
     public function shrinkDeduplicatesIdenticalCandidates(): void
     {
-        $candidates = iterator_to_array((new OneOfArbitrary(1, 1, 2))->shrink(2));
+        $node = Trees::generateWhere(new OneOfArbitrary(1, 1, 2), static fn(mixed $v): bool => $v === 2);
 
-        Assert::same($candidates, [1]);
+        Assert::same(Trees::childValues($node), [1]);
     }
 
-    public function shrinkContinuesPastDuplicatesToLaterDistinctValues(): void
+    public function shrinkSkipsEarlierValuesEqualToTheCurrentOne(): void
     {
-        // A duplicate is skipped but the scan must continue: the later distinct
-        // value (7) is still yielded, so the dedup uses continue, not break.
-        $candidates = iterator_to_array((new OneOfArbitrary(5, 5, 7))->shrink(9));
+        // The value 5 at index 1 must not offer the identical 5 at index 0.
+        $arbitrary = new OneOfArbitrary(5, 5, 7);
+        $random = new Random(1);
 
-        Assert::same($candidates, [5, 7]);
+        for ($i = 0; $i < 100; ++$i) {
+            $node = $arbitrary->generate($random);
+
+            if ($node->value === 5) {
+                Assert::same(Trees::childValues($node), []);
+            } else {
+                Assert::same(Trees::childValues($node), [5]);
+            }
+        }
     }
 
     #[ExpectException(\InvalidArgumentException::class)]

@@ -15,6 +15,11 @@ counterexample you can actually read.
 
 > Using an AI coding assistant? [llms.txt](llms.txt) contains a compact API reference you can share with the model.
 
+Since 2.0 shrinking is **integrated**: `generate()` returns a
+[`Shrinkable`](src/Shrinkable.php) — the value plus a lazy tree of smaller
+candidates — so transformed generators (`Gen::map()`, `Gen::flatMap()`) shrink
+through their source domain. Upgrading from 1.x? See [UPGRADE.md](UPGRADE.md).
+
 ## Requirements
 
 - PHP 8.3+
@@ -109,22 +114,46 @@ argument is omitted the runner falls back to a method named `<testMethod>Generat
 | `Gen::nonEmptyArrayOf($element)` | `ArrayArbitrary`, non-empty lists | by length (never below 1), then each element |
 | `Gen::dictOf($key, $value)` | `DictionaryArbitrary`, maps with keys from `$key` (int/string) and values from `$value`, size 0..100 | toward `[]`, then by size, then each value (keys fixed) |
 | `Gen::record($shape)` | `RecordArbitrary`, fixed-shape map `['field' => $arb, ...]` | each field via its arbitrary, key set fixed |
-| `Gen::elements($array)` | `OneOfArbitrary`, one value from an array (array form of `oneOf`) | each distinct other value |
+| `Gen::elements($array)` | `OneOfArbitrary`, one value from an array (array form of `oneOf`) | toward earlier-listed distinct values |
 | `Gen::constant($value)` | `ConstantArbitrary`, always `$value` | does not shrink |
 | `Gen::char()` | `StringArbitrary`, a single printable ASCII character | toward `a` |
 | `Gen::uuid()` | `UuidArbitrary`, RFC 4122 v4 UUID strings | does not shrink |
 | `Gen::datetime($min, $max)` | `DateTimeArbitrary`, UTC `DateTimeImmutable`, timestamp in `[$min, $max]` | toward the Unix epoch, clamped |
+| `Gen::oneOf(...$values)` | `OneOfArbitrary`, one of the given values | toward earlier-listed distinct values (put simpler values first) |
+| `Gen::nullable($inner)` | `NullableArbitrary`, `null` or an `$inner` value | prefers `null`, then the inner tree |
+| `Gen::map($inner, $fn)` | `MappedArbitrary`, `$inner` transformed by `$fn` | through the inner tree, re-applying `$fn` |
+| `Gen::flatMap($inner, $fn)` | `FlatMappedArbitrary`, dependent generator returned by `$fn($innerValue)` | source value first (dependent value regenerated), then the dependent tree |
+| `Gen::filter($inner, $predicate)` | `FilteredArbitrary`, `$inner` values satisfying `$predicate` | inner tree, pruning candidates that fail the predicate |
+| `Gen::tuple(...$elements)` | `TupleArbitrary`, fixed-arity tuple, one value per element | each position via its element, arity fixed |
+| `Gen::frequency($pairs)` | `FrequencyArbitrary`, weighted choice over `[weight, arbitrary]` pairs | within the branch that generated the value |
 
 Numeric generators (`int*`, `float*`) are **boundary-biased**: roughly one draw in
 five returns an in-range edge value (`0`, `±1`, `min`, `max` for ints; `0.0` or
 `min` for floats), where bugs cluster, instead of a uniform one. Shrinking is
 unaffected.
-| `Gen::oneOf(...$values)` | `OneOfArbitrary`, one of the given values | each distinct other value |
-| `Gen::nullable($inner)` | `NullableArbitrary`, `null` or an `$inner` value | prefers `null` |
-| `Gen::map($inner, $fn)` | `MappedArbitrary`, `$inner` transformed by `$fn` | no shrinking (mapping may not be invertible) |
-| `Gen::filter($inner, $predicate)` | `FilteredArbitrary`, `$inner` values satisfying `$predicate` | delegates, keeping predicate-satisfying candidates |
-| `Gen::tuple(...$elements)` | `TupleArbitrary`, fixed-arity tuple, one value per element | each position via its element, arity fixed |
-| `Gen::frequency($pairs)` | `FrequencyArbitrary`, weighted choice over `[weight, arbitrary]` pairs | delegates to the inner arbitraries |
+
+### Dependent generators (`flatMap`)
+
+When one input's domain depends on another — a list plus a valid index into it,
+a size plus a payload of that size — `Gen::flatMap()` feeds each generated value
+into a closure that returns the arbitrary for the final value. Unlike an
+`Assume::that()` guard, no runs are discarded, and both levels shrink: the
+source value shrinks (the dependent value is regenerated deterministically from
+the run's seed), then the dependent value shrinks with the source held fixed.
+
+```php
+/** @return array<string, ArbitraryInterface> */
+private function sliceGenerators(): array
+{
+    return ['pair' => Gen::flatMap(
+        Gen::nonEmptyArrayOf(Gen::int()),
+        static fn(array $items): ArbitraryInterface => Gen::tuple(
+            Gen::constant($items),
+            Gen::intBetween(0, count($items) - 1), // always a valid index
+        ),
+    )];
+}
+```
 
 ### `Assume::that()`
 
@@ -155,13 +184,15 @@ entirely and reports the original counterexample unchanged. The cap counts
 
 `Gen` covers common cases, but any value space is reachable by implementing
 [`ArbitraryInterface`](src/ArbitraryInterface.php) directly: `generate(Random)`
-draws one value, and `shrink(mixed)` yields progressively smaller candidates
-(most aggressive first). Draw randomness only through the injected `Random`
-(`int()`, `float()`, `bytes()`) so seeded runs stay reproducible.
+returns a [`Shrinkable`](src/Shrinkable.php) — the drawn value plus a lazy tree
+of smaller candidates, most aggressive first, each carrying its own subtree.
+Draw randomness only through the injected `Random` (`int()`, `float()`,
+`bytes()`) so seeded runs stay reproducible.
 
 ```php
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
 use Rasuvaeff\PropertyTesting\Random;
+use Rasuvaeff\PropertyTesting\Shrinkable;
 
 /**
  * Even integers in [0, $max], shrinking toward 0 in even steps.
@@ -171,32 +202,36 @@ final readonly class EvenArbitrary implements ArbitraryInterface
     public function __construct(private int $max = 1000) {}
 
     #[\Override]
-    public function generate(Random $random): int
+    public function generate(Random $random): Shrinkable
     {
-        return $random->int(0, intdiv($this->max, 2)) * 2;
+        return $this->tree($random->int(0, intdiv($this->max, 2)) * 2);
     }
 
-    #[\Override]
-    public function shrink(mixed $value): iterable
+    private function tree(int $value): Shrinkable
     {
-        if (!is_int($value) || $value === 0) {
-            return;
-        }
+        return Shrinkable::of($value, function () use ($value): \Generator {
+            if ($value === 0) {
+                return;
+            }
 
-        $half = intdiv($value, 4) * 2; // stay even
+            yield $this->tree(0);
 
-        yield 0;
+            $half = intdiv($value, 4) * 2; // stay even
 
-        if ($half !== 0 && $half !== $value) {
-            yield $half;
-        }
+            if ($half !== 0 && $half !== $value) {
+                yield $this->tree($half);
+            }
+        });
     }
 }
 ```
 
 A custom arbitrary is used like any built-in: return it from the generators
-method keyed by parameter name. Keep `shrink()` terminating — never yield a
-candidate equal to the input.
+method keyed by parameter name. `Shrinkable::leaf($value)` builds a terminal
+node (no candidates); `Shrinkable::of($value, $closure)` attaches lazily
+computed candidates; `Shrinkable::map($fn)` transforms a whole tree. Keep every
+branch of the tree finite and never yield a candidate equal to its parent —
+that is what guarantees shrinking terminates.
 
 ### Environment overrides
 
@@ -252,7 +287,9 @@ See [examples/](examples/) for runnable scripts.
 
 | Script | Shows | Needs server? |
 |---|---|---|
-| `basic.php` | a property that holds, one that is falsified, and shrinking | No |
+| `basic.php` | a property that holds, one that is falsified, and tree-based shrinking | No |
+| `property_test.php` | canonical `#[Property]` usage as a real Testo test case | No |
+| `generators.php` | `sample`, boundary bias, `uuid`, `datetime`, `dictOf`, `record`, `flatMap` | No |
 
 ## Development
 

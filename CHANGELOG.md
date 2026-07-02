@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.0.0 — Unreleased
+
+Integrated shrinking: shrink candidates now come from the generation tree, so
+transformed generators shrink correctly. See [UPGRADE.md](UPGRADE.md).
+
+- **BC break**: `ArbitraryInterface::generate()` returns a `Shrinkable` (the
+  value plus a lazy tree of smaller candidates) and
+  `ArbitraryInterface::shrink(mixed)` is removed. `#[Property]` test code using
+  `Gen` factories is unaffected; custom arbitraries must be rewritten.
+- Add `Shrinkable`: an immutable value/lazy-shrink-tree node with `leaf()`,
+  `of()`, `shrinks()` and `map()`.
+- Add `Gen::flatMap()` (`FlatMappedArbitrary`): dependent generators (monadic
+  bind). The source value shrinks with the dependent value regenerated from the
+  run's seed, then the dependent value shrinks with the source held fixed.
+- `Gen::map()` now shrinks: candidates come from the inner tree with the
+  mapping re-applied (previously mapped values did not shrink at all).
+- `Gen::frequency()` shrinks within the branch that generated the value
+  (previously it delegated to every branch by type discrimination).
+- `Gen::oneOf()`/`Gen::elements()` shrink toward earlier-listed values only,
+  which guarantees termination; list simpler values first.
+- Integers shrink by halving the distance to the in-range target — a binary
+  search that finds the exact failing boundary of monotone predicates.
+- Shrunk counterexamples for a given 1.x seed may differ (typically smaller);
+  seed reproducibility holds within a major version, not across.
+
 ## 1.1.0 — 2026-07-01
 
 - Add `Gen::dictOf()` (`DictionaryArbitrary`): associative-array/map generator

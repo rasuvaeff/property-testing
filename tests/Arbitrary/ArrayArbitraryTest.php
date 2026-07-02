@@ -7,6 +7,7 @@ namespace Rasuvaeff\PropertyTesting\Tests\Arbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\ArrayArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\IntArbitrary;
 use Rasuvaeff\PropertyTesting\Random;
+use Rasuvaeff\PropertyTesting\Tests\Support\Trees;
 use Testo\Assert;
 use Testo\Assert\ExpectException;
 use Testo\Codecov\Covers;
@@ -22,7 +23,7 @@ final class ArrayArbitraryTest
         $random = new Random(1);
 
         for ($i = 0; $i < 200; ++$i) {
-            $count = count($arbitrary->generate($random));
+            $count = count($arbitrary->generate($random)->value);
 
             Assert::true($count >= 2 && $count <= 8);
         }
@@ -37,7 +38,7 @@ final class ArrayArbitraryTest
         $sawEmpty = false;
 
         for ($i = 0; $i < 200; ++$i) {
-            if ($arbitrary->generate($random) === []) {
+            if ($arbitrary->generate($random)->value === []) {
                 $sawEmpty = true;
 
                 break;
@@ -47,39 +48,86 @@ final class ArrayArbitraryTest
         Assert::true($sawEmpty);
     }
 
-    public function shrinkTriesEmptyArrayFirstThenHalves(): void
+    public function shrinkTriesEmptyArrayFirstThenExactHalfPrefixes(): void
     {
-        $candidates = iterator_to_array((new ArrayArbitrary(new IntArbitrary()))->shrink([1, 2, 3, 4]), false);
+        $node = Trees::generateWhere(
+            new ArrayArbitrary(new IntArbitrary(0, 10), 0, 8),
+            static fn(mixed $v): bool => is_array($v) && count($v) === 4,
+        );
+        $value = $node->value;
+        $candidates = Trees::childValues($node);
 
         Assert::same($candidates[0], []);
-        Assert::true(in_array([1], $candidates, true));
+        Assert::same($candidates[1], array_slice($value, 0, 2));
+        Assert::same($candidates[2], array_slice($value, 0, 1));
     }
 
-    public function shrinkReducesElementsAfterLength(): void
+    public function shrinkElementPhaseShrinksEachPositionInPlace(): void
     {
-        // After the length candidates, each element is shrunk toward zero in place,
-        // keeping the array length fixed.
-        $candidates = iterator_to_array((new ArrayArbitrary(new IntArbitrary(0, 10)))->shrink([5, 5]), false);
+        // A fixed size blocks the length phase: candidates are exactly the
+        // element ladders, one position at a time, via each element's own tree.
+        $node = Trees::generateWhere(
+            new ArrayArbitrary(new IntArbitrary(0, 10), 2, 2),
+            static fn(mixed $v): bool => $v === [8, 8],
+        );
 
-        Assert::true(in_array([0, 5], $candidates, true));
-        Assert::true(in_array([5, 0], $candidates, true));
+        Assert::same(Trees::childValues($node), [
+            [0, 8], [4, 8], [6, 8], [7, 8],
+            [8, 0], [8, 4], [8, 6], [8, 7],
+        ]);
     }
 
     public function shrinkNeverEscapesBelowMinimumSize(): void
     {
         // A nonEmptyArrayOf-style generator must never shrink to [] (out of domain).
-        $candidates = iterator_to_array((new ArrayArbitrary(new IntArbitrary(), 1, 100))->shrink([1, 2, 3, 4]), false);
+        $node = Trees::generateWhere(
+            new ArrayArbitrary(new IntArbitrary(0, 5), 1, 8),
+            static fn(mixed $v): bool => is_array($v) && count($v) === 4,
+        );
 
-        Assert::false(in_array([], $candidates, true));
-
-        foreach ($candidates as $candidate) {
+        foreach (Trees::valuesToDepth($node, 2) as $candidate) {
             Assert::true(count($candidate) >= 1);
         }
     }
 
+    public function nonEmptyShrinkKeepsTheMinimumSizeCandidate(): void
+    {
+        // The length-floor candidate (size === minSize) must be produced.
+        $node = Trees::generateWhere(
+            new ArrayArbitrary(new IntArbitrary(7, 7), 1, 8),
+            static fn(mixed $v): bool => is_array($v) && count($v) === 4,
+        );
+
+        Assert::true(in_array([7], Trees::childValues($node), true));
+    }
+
     public function shrinkOfEmptyArrayYieldsNothing(): void
     {
-        Assert::same(iterator_to_array((new ArrayArbitrary(new IntArbitrary()))->shrink([])), []);
+        $node = Trees::generateWhere(
+            new ArrayArbitrary(new IntArbitrary(), 0, 3),
+            static fn(mixed $v): bool => $v === [],
+        );
+
+        Assert::same(Trees::childValues($node), []);
+    }
+
+    public function lengthCandidatesCarryTheirOwnElementTrees(): void
+    {
+        // Descending into a half-length prefix must offer that prefix's element
+        // shrinks (the element trees travel with the slice).
+        $node = Trees::generateWhere(
+            new ArrayArbitrary(new IntArbitrary(8, 8), 0, 8),
+            static fn(mixed $v): bool => $v === [8, 8],
+        );
+
+        $children = [];
+        foreach ($node->shrinks() as $child) {
+            $children[] = $child;
+        }
+
+        // children[0] is [], children[1] is the one-element prefix [8].
+        Assert::same($children[1]->value, [8]);
+        Assert::same(Trees::childValues($children[1])[0], []);
     }
 
     public function generateReachesBothExactSizeBounds(): void
@@ -91,7 +139,7 @@ final class ArrayArbitraryTest
         $maxSize = 0;
 
         for ($i = 0; $i < 200; ++$i) {
-            $size = count($arbitrary->generate($random));
+            $size = count($arbitrary->generate($random)->value);
             $minSize = min($minSize, $size);
             $maxSize = max($maxSize, $size);
         }
@@ -105,37 +153,7 @@ final class ArrayArbitraryTest
         // Elements come from the element arbitrary, not from the index range.
         $arbitrary = new ArrayArbitrary(new IntArbitrary(100, 100), 3, 3);
 
-        Assert::same($arbitrary->generate(new Random(1)), [100, 100, 100]);
-    }
-
-    public function shrinkYieldsExactLengthThenElementPrefix(): void
-    {
-        // Length phase ([], halves) immediately followed by the first element
-        // candidate; pins that the length loop stops at 1 (no trailing []).
-        $candidates = iterator_to_array((new ArrayArbitrary(new IntArbitrary(0, 10)))->shrink([8, 8, 8, 8]), false);
-
-        Assert::same($candidates[0], []);
-        Assert::same($candidates[1], [8, 8]);
-        Assert::same($candidates[2], [8]);
-        Assert::same($candidates[3], [0, 8, 8, 8]);
-    }
-
-    public function shrinkElementPhaseShrinksEachPositionInPlace(): void
-    {
-        // After length candidates, each element is shrunk in place via the element arbitrary.
-        $candidates = iterator_to_array((new ArrayArbitrary(new IntArbitrary(0, 10), 4, 4))->shrink([8, 8, 8, 8]), false);
-
-        Assert::true(in_array([0, 8, 8, 8], $candidates, true));
-        Assert::true(in_array([8, 8, 8, 0], $candidates, true));
-    }
-
-    public function shrinkReindexesNonListInputToAList(): void
-    {
-        // The element phase re-indexes to a list so positions stay stable even
-        // when the failing array has gaps or string keys.
-        $candidates = iterator_to_array((new ArrayArbitrary(new IntArbitrary(0, 10), 0, 100))->shrink([2 => 8, 5 => 8]), false);
-
-        Assert::true(in_array([0, 8], $candidates, true));
+        Assert::same($arbitrary->generate(new Random(1))->value, [100, 100, 100]);
     }
 
     public function acceptsMaximumSizeOfOne(): void
@@ -143,15 +161,7 @@ final class ArrayArbitraryTest
         // maxSize === 1 is valid (the boundary of the "at least 1" rule).
         $arbitrary = new ArrayArbitrary(new IntArbitrary(0, 0), 1, 1);
 
-        Assert::same($arbitrary->generate(new Random(1)), [0]);
-    }
-
-    public function nonEmptyShrinkKeepsTheMinimumSizeCandidate(): void
-    {
-        // The length-floor candidate (size === minSize) must be produced.
-        $candidates = iterator_to_array((new ArrayArbitrary(new IntArbitrary(7, 7), 1, 100))->shrink([7, 7, 7, 7]), false);
-
-        Assert::true(in_array([7], $candidates, true));
+        Assert::same($arbitrary->generate(new Random(1))->value, [0]);
     }
 
     #[ExpectException(\InvalidArgumentException::class)]

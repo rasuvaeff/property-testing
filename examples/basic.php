@@ -10,7 +10,8 @@ use Rasuvaeff\PropertyTesting\Random;
 /**
  * This example shows the three pieces of property-based testing in isolation,
  * without the Testo runner: a generator, a property that holds, and a property
- * that is falsified and then shrunk to a minimal counterexample.
+ * that is falsified and then shrunk to a minimal counterexample by descending
+ * through the generated value's shrink tree.
  */
 
 $random = new Random(42);
@@ -22,8 +23,8 @@ $right = Gen::intBetween(0, 1000);
 $violated = false;
 
 for ($run = 0; $run < 100; ++$run) {
-    $a = $left->generate($random);
-    $b = $right->generate($random);
+    $a = $left->generate($random)->value;
+    $b = $right->generate($random)->value;
 
     if ($a + $b < 0) {
         $violated = true;
@@ -34,16 +35,18 @@ echo $violated
     ? "sum-is-nonnegative: FAILED unexpectedly\n"
     : "sum-is-nonnegative: held for 100 runs\n";
 
-// A property that is falsified: "every integer is even". Shrinking lands on the
-// smallest odd value the generator happened to produce (clamped to the range).
+// A property that is falsified: "every integer is even". Since 2.0 generate()
+// returns a Shrinkable — the value plus a lazy tree of smaller candidates —
+// so shrinking is a greedy descent: move to the first candidate that still
+// fails, repeat until no candidate does.
 $ints = Gen::intBetween(0, 1000);
 
 $failing = null;
 for ($run = 0; $run < 100; ++$run) {
-    $value = $ints->generate($random);
+    $shrinkable = $ints->generate($random);
 
-    if ($value % 2 !== 0) {
-        $failing = $value;
+    if ($shrinkable->value % 2 !== 0) {
+        $failing = $shrinkable;
 
         break;
     }
@@ -52,13 +55,20 @@ for ($run = 0; $run < 100; ++$run) {
 if ($failing === null) {
     echo "all-even: never falsified\n";
 } else {
-    echo "all-even: falsified with original value $failing\n";
+    echo "all-even: falsified with original value {$failing->value}\n";
 
-    $minimal = $failing;
-    foreach ($ints->shrink($failing) as $candidate) {
-        if ($candidate % 2 !== 0) {
-            $minimal = $candidate;
+    do {
+        $descended = false;
+
+        foreach ($failing->shrinks() as $candidate) {
+            if ($candidate->value % 2 !== 0) {
+                $failing = $candidate;
+                $descended = true;
+
+                break;
+            }
         }
-    }
-    echo "all-even: shrunk to minimal odd value $minimal\n";
+    } while ($descended);
+
+    echo "all-even: shrunk to minimal odd value {$failing->value}\n";
 }

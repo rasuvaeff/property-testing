@@ -6,6 +6,7 @@ namespace Rasuvaeff\PropertyTesting\Arbitrary;
 
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
 use Rasuvaeff\PropertyTesting\Random;
+use Rasuvaeff\PropertyTesting\Shrinkable;
 
 /**
  * Always produces the same fixed value. Useful as a building block for composite
@@ -23,14 +24,8 @@ final readonly class ConstantArbitrary implements ArbitraryInterface
     ) {}
 
     #[\Override]
-    public function generate(Random $random): mixed
+    public function generate(Random $random): Shrinkable
     {
-        return $this->value;
-    }
-
-    #[\Override]
-    public function shrink(mixed $value): iterable
-    {
-        yield from [];
+        return Shrinkable::leaf($this->value);
     }
 }

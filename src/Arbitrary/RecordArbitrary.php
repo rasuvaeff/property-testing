@@ -6,6 +6,7 @@ namespace Rasuvaeff\PropertyTesting\Arbitrary;
 
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
 use Rasuvaeff\PropertyTesting\Random;
+use Rasuvaeff\PropertyTesting\Shrinkable;
 
 /**
  * Fixed-shape associative array: produces a map with one value per named field,
@@ -13,8 +14,8 @@ use Rasuvaeff\PropertyTesting\Random;
  * payloads where every key is known up front (the property receives the record
  * as a single string-keyed array argument).
  *
- * Shrinking keeps the key set fixed and shrinks one field at a time through that
- * field's own arbitrary, so each value shrinks within its domain.
+ * Shrinking keeps the key set fixed and shrinks one field at a time through
+ * that field's own shrink tree, so each value shrinks within its domain.
  *
  * @api
  */
@@ -35,40 +36,32 @@ final readonly class RecordArbitrary implements ArbitraryInterface
         $this->shape = $shape;
     }
 
-    /**
-     * @return array<string, mixed>
-     */
     #[\Override]
-    public function generate(Random $random): array
+    public function generate(Random $random): Shrinkable
     {
         // array_map over the shape preserves the field keys, so the record is
         // built without a per-key mixed assignment.
-        return array_map(
-            static fn(ArbitraryInterface $arbitrary): mixed => $arbitrary->generate($random),
+        return $this->tree(array_map(
+            static fn(ArbitraryInterface $arbitrary): Shrinkable => $arbitrary->generate($random),
             $this->shape,
-        );
+        ));
     }
 
-    #[\Override]
-    public function shrink(mixed $value): iterable
+    /**
+     * @param array<string, Shrinkable> $fields
+     */
+    private function tree(array $fields): Shrinkable
     {
-        if (!is_array($value)) {
-            return;
-        }
+        $value = array_map(static fn(Shrinkable $field): mixed => $field->value, $fields);
 
-        // The key set is fixed: there is no length phase. Shrink one field at a
-        // time through its arbitrary, keeping the others as-is. Guard each key by
-        // presence (not by count) so a same-size array with different keys does
-        // not index a missing offset.
-        foreach ($this->shape as $key => $arbitrary) {
-            if (!array_key_exists($key, $value)) {
-                continue;
+        return Shrinkable::of($value, function () use ($fields): \Generator {
+            // The key set is fixed: there is no length phase. Shrink one field at a
+            // time through its own tree, keeping the others as-is.
+            foreach ($fields as $key => $field) {
+                foreach ($field->shrinks() as $smaller) {
+                    yield $this->tree(array_replace($fields, [$key => $smaller]));
+                }
             }
-
-            /** @var mixed $smaller */
-            foreach ($arbitrary->shrink($value[$key]) as $smaller) {
-                yield array_replace($value, [$key => $smaller]);
-            }
-        }
+        });
     }
 }

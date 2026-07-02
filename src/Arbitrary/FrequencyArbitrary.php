@@ -6,16 +6,15 @@ namespace Rasuvaeff\PropertyTesting\Arbitrary;
 
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
 use Rasuvaeff\PropertyTesting\Random;
+use Rasuvaeff\PropertyTesting\Shrinkable;
 
 /**
  * Weighted choice among several arbitraries: each `[weight, arbitrary]` pair is
  * picked with probability proportional to its (positive integer) weight, then
  * the chosen arbitrary produces the value.
  *
- * The produced value carries no record of which branch made it, so shrinking
- * delegates to every inner arbitrary: each built-in arbitrary's `shrink()` is
- * type-discriminating and ignores values it could not have produced, so only
- * the branches that could have generated the value contribute candidates.
+ * The chosen branch's shrink tree is returned as-is, so shrinking stays within
+ * the branch that actually generated the value.
  *
  * @api
  */
@@ -62,7 +61,7 @@ final readonly class FrequencyArbitrary implements ArbitraryInterface
     }
 
     #[\Override]
-    public function generate(Random $random): mixed
+    public function generate(Random $random): Shrinkable
     {
         $target = $random->int(1, $this->totalWeight);
 
@@ -78,16 +77,5 @@ final readonly class FrequencyArbitrary implements ArbitraryInterface
         // so the cumulative subtraction always crosses zero on some branch; the
         // loop therefore always returns. This throw only satisfies the compiler.
         throw new \LogicException('Frequency selection failed to pick a branch');
-    }
-
-    #[\Override]
-    public function shrink(mixed $value): iterable
-    {
-        foreach ($this->pairs as [, $arbitrary]) {
-            /** @var mixed $candidate */
-            foreach ($arbitrary->shrink($value) as $candidate) {
-                yield $candidate;
-            }
-        }
     }
 }

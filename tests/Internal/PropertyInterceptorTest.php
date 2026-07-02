@@ -104,6 +104,54 @@ final class PropertyInterceptorTest
     }
 
 
+    public function mappedGeneratorShrinksThroughTheSourceDomain(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        // Values are doubled ints; fails iff x > 50. The minimal even value that
+        // still fails is 52 — reachable only by shrinking the source int (26)
+        // and re-applying the mapping. Pre-2.0 map() reported the original
+        // counterexample unshrunk.
+        $next = static fn(TestInfo $info): TestResult => $info->arguments[0] > 50
+            ? new TestResult(info: $info, status: Status::Failed, failure: new \RuntimeException('x>50'))
+            : new TestResult(info: $info, status: Status::Passed);
+
+        $result = $interceptor->runTest($this->info(MappedFalsifyingStub::class, 'check'), $next);
+
+        Assert::instanceOf($result->failure, PropertyViolationException::class);
+        Assert::same($result->failure->getCounterExample()->shrunkArguments['x'], 52);
+    }
+
+    public function flatMapGeneratorShrinksTheDependentValue(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        // The dependent value m lies in [0, n]; fails iff m > 3, so the minimal
+        // failing value is 4 regardless of how the source n shrinks.
+        $next = static fn(TestInfo $info): TestResult => $info->arguments[0] > 3
+            ? new TestResult(info: $info, status: Status::Failed, failure: new \RuntimeException('m>3'))
+            : new TestResult(info: $info, status: Status::Passed);
+
+        $result = $interceptor->runTest($this->info(FlatMapFalsifyingStub::class, 'check'), $next);
+
+        Assert::instanceOf($result->failure, PropertyViolationException::class);
+        Assert::same($result->failure->getCounterExample()->shrunkArguments['x'], 4);
+    }
+
+    public function flatMapCounterexampleIsReproducibleForAFixedSeed(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => $info->arguments[0] > 3
+            ? new TestResult(info: $info, status: Status::Failed, failure: new \RuntimeException('m>3'))
+            : new TestResult(info: $info, status: Status::Passed);
+
+        $first = $interceptor->runTest($this->info(FlatMapFalsifyingStub::class, 'check'), $next);
+        $second = $interceptor->runTest($this->info(FlatMapFalsifyingStub::class, 'check'), $next);
+
+        Assert::instanceOf($first->failure, PropertyViolationException::class);
+        Assert::instanceOf($second->failure, PropertyViolationException::class);
+        Assert::same($first->failure->getCounterExample()->originalArguments, $second->failure->getCounterExample()->originalArguments);
+        Assert::same($first->failure->getCounterExample()->shrunkArguments, $second->failure->getCounterExample()->shrunkArguments);
+    }
+
     public function fixedSeedReproducesTheSameCounterexample(): void
     {
         $interceptor = new PropertyInterceptor($this->createMessenger());

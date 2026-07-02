@@ -6,6 +6,7 @@ namespace Rasuvaeff\PropertyTesting\Arbitrary;
 
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
 use Rasuvaeff\PropertyTesting\Random;
+use Rasuvaeff\PropertyTesting\Shrinkable;
 
 /**
  * Generates RFC 4122 version 4 (random) UUID strings in the canonical
@@ -21,7 +22,7 @@ use Rasuvaeff\PropertyTesting\Random;
 final readonly class UuidArbitrary implements ArbitraryInterface
 {
     #[\Override]
-    public function generate(Random $random): string
+    public function generate(Random $random): Shrinkable
     {
         $bytes = $random->bytes(16);
 
@@ -31,19 +32,13 @@ final readonly class UuidArbitrary implements ArbitraryInterface
 
         $hex = bin2hex($bytes);
 
-        return sprintf(
+        return Shrinkable::leaf(sprintf(
             '%s-%s-%s-%s-%s',
             substr($hex, 0, 8),
             substr($hex, 8, 4),
             substr($hex, 12, 4),
             substr($hex, 16, 4),
             substr($hex, 20, 12),
-        );
-    }
-
-    #[\Override]
-    public function shrink(mixed $value): iterable
-    {
-        yield from [];
+        ));
     }
 }

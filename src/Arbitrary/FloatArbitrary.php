@@ -7,6 +7,7 @@ namespace Rasuvaeff\PropertyTesting\Arbitrary;
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
 use Rasuvaeff\PropertyTesting\Internal\Boundary;
 use Rasuvaeff\PropertyTesting\Random;
+use Rasuvaeff\PropertyTesting\Shrinkable;
 
 /**
  * Generates floats in the half-open range [min, max).
@@ -15,13 +16,11 @@ use Rasuvaeff\PropertyTesting\Random;
  * in-range boundary value (0.0 or min) instead of a uniform one, because bugs
  * cluster at edges. The exclusive upper bound is never emitted.
  *
- * Shrinking floats reliably is hard (no natural "smallest" value), so this
- * arbitrary shrinks to a single candidate: zero, clamped into the configured
- * range. For properties that need fine-grained shrinking on a numeric input,
- * drive the property with an integer generator and convert to a float inside
- * the test body — the integer then shrinks normally. Note that
- * {@see \Rasuvaeff\PropertyTesting\Gen::map()} does NOT shrink its result, so
- * mapping an integer to a float discards shrinking.
+ * Shrinking floats reliably is hard (no natural "smallest" value), so the
+ * shrink tree has a single candidate: zero, clamped into the configured range.
+ * For fine-grained shrinking on a numeric input, generate an integer and
+ * {@see \Rasuvaeff\PropertyTesting\Gen::map()} it to a float — with integrated
+ * shrinking the mapped value shrinks through the integer's tree.
  *
  * @api
  */
@@ -39,31 +38,29 @@ final readonly class FloatArbitrary implements ArbitraryInterface
     }
 
     #[\Override]
-    public function generate(Random $random): float
+    public function generate(Random $random): Shrinkable
     {
         $boundaries = Boundary::floats($this->min, $this->max);
 
         if ($boundaries !== [] && $random->int(1, self::BIAS_DENOMINATOR) === 1) {
-            return $boundaries[$random->int(0, count($boundaries) - 1)];
+            return $this->tree($boundaries[$random->int(0, count($boundaries) - 1)]);
         }
 
-        return $this->min + $random->float() * ($this->max - $this->min);
+        return $this->tree($this->min + $random->float() * ($this->max - $this->min));
     }
 
-    #[\Override]
-    public function shrink(mixed $value): iterable
+    private function tree(float $value): Shrinkable
     {
-        if (!is_float($value)) {
-            return;
-        }
+        return Shrinkable::of($value, function () use ($value): \Generator {
+            // Shrink toward zero, clamped to the configured range so the candidate
+            // stays in the generated domain (mirrors IntArbitrary). For a range
+            // that excludes zero, e.g. [5.0, 10.0], the target is the nearest
+            // bound (5.0).
+            $target = max($this->min, min($this->max, 0.0));
 
-        // Shrink toward zero, clamped to the configured range so the candidate
-        // stays in the generated domain (mirrors IntArbitrary). For a range that
-        // excludes zero, e.g. [5.0, 10.0], the target is the nearest bound (5.0).
-        $target = max($this->min, min($this->max, 0.0));
-
-        if ($value !== $target) {
-            yield $target;
-        }
+            if ($value !== $target) {
+                yield Shrinkable::leaf($target);
+            }
+        });
     }
 }

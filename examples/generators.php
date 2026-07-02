@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
+use Rasuvaeff\PropertyTesting\ArbitraryInterface;
 use Rasuvaeff\PropertyTesting\Gen;
 use Rasuvaeff\PropertyTesting\Random;
 
 /**
- * Tours the generators added in 1.1.0 without the Testo runner: sampling,
- * boundary-biased numbers, and the new value/structure generators.
+ * Tours the generators without the Testo runner: sampling, boundary-biased
+ * numbers, the value/structure generators, and dependent generation with
+ * flatMap. generate() returns a Shrinkable; the plain value is at ->value.
  */
 
 // Gen::sample — eyeball what a generator produces for a fixed seed.
@@ -21,23 +23,35 @@ $random = new Random(7);
 $int = Gen::intBetween(0, 1000);
 $edges = 0;
 for ($i = 0; $i < 100; ++$i) {
-    if (in_array($int->generate($random), [0, 1, 1000], true)) {
+    if (in_array($int->generate($random)->value, [0, 1, 1000], true)) {
         ++$edges;
     }
 }
 echo "boundary hits in 100 draws: {$edges} (uniform would be ~0)\n";
 
-// New value generators.
+// Value generators.
 $random = new Random(1);
-echo 'uuid: ' . Gen::uuid()->generate($random) . "\n";
-echo 'datetime: ' . Gen::datetime()->generate($random)->format(DATE_ATOM) . "\n";
+echo 'uuid: ' . Gen::uuid()->generate($random)->value . "\n";
+echo 'datetime: ' . Gen::datetime()->generate($random)->value->format(DATE_ATOM) . "\n";
 
 // dictOf — string-keyed map; record — fixed shape keyed by field name.
-$dictionary = Gen::dictOf(Gen::stringOf(3, 5), Gen::intBetween(1, 9))->generate($random);
+$dictionary = Gen::dictOf(Gen::stringOf(3, 5), Gen::intBetween(1, 9))->generate($random)->value;
 echo 'dictOf entries: ' . count($dictionary) . "\n";
 
 $user = Gen::record([
     'age' => Gen::intBetween(0, 120),
     'active' => Gen::bool(),
-])->generate($random);
+])->generate($random)->value;
 echo "record: age={$user['age']}, active=" . ($user['active'] ? 'true' : 'false') . "\n";
+
+// flatMap — dependent generators: an array plus an always-valid index into it.
+// No Assume::that() discards, and both levels shrink.
+$pair = Gen::flatMap(
+    Gen::nonEmptyArrayOf(Gen::intBetween(1, 9)),
+    static fn(array $items): ArbitraryInterface => Gen::tuple(
+        Gen::constant($items),
+        Gen::intBetween(0, count($items) - 1),
+    ),
+)->generate($random)->value;
+[$items, $index] = $pair;
+echo 'flatMap: ' . count($items) . " items, valid index {$index}, item={$items[$index]}\n";

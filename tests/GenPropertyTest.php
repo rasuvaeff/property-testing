@@ -87,4 +87,37 @@ final class GenPropertyTest
             'active' => Gen::bool(),
         ])];
     }
+
+    #[Property(runs: 100, seed: 987)]
+    public function flatMapKeepsTheDependentValueInsideTheSourceDomain(array $pair): void
+    {
+        [$size, $index] = $pair;
+
+        Assert::true($size >= 1 && $size <= 20);
+        Assert::true($index >= 0 && $index < $size);
+    }
+
+    /** @return array<string, ArbitraryInterface> */
+    private function flatMapKeepsTheDependentValueInsideTheSourceDomainGenerators(): array
+    {
+        return ['pair' => Gen::flatMap(
+            Gen::intBetween(1, 20),
+            static fn(int $size): ArbitraryInterface => Gen::tuple(
+                Gen::constant($size),
+                Gen::intBetween(0, $size - 1),
+            ),
+        )];
+    }
+
+    #[Property(runs: 100, seed: 555)]
+    public function mapTransformsEveryGeneratedValue(int $even): void
+    {
+        Assert::same($even % 2, 0);
+    }
+
+    /** @return array<string, ArbitraryInterface> */
+    private function mapTransformsEveryGeneratedValueGenerators(): array
+    {
+        return ['even' => Gen::map(Gen::intBetween(0, 100), static fn(int $x): int => $x * 2)];
+    }
 }

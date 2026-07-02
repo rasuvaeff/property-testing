@@ -11,6 +11,7 @@ use Rasuvaeff\PropertyTesting\Arbitrary\ConstantArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\DateTimeArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\DictionaryArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\FilteredArbitrary;
+use Rasuvaeff\PropertyTesting\Arbitrary\FlatMappedArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\FloatArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\FrequencyArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\IntArbitrary;
@@ -23,6 +24,7 @@ use Rasuvaeff\PropertyTesting\Arbitrary\TupleArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\UuidArbitrary;
 use Rasuvaeff\PropertyTesting\Gen;
 use Rasuvaeff\PropertyTesting\Random;
+use Rasuvaeff\PropertyTesting\Tests\Support\Trees;
 use Testo\Assert;
 use Testo\Assert\ExpectException;
 use Testo\Codecov\Covers;
@@ -47,7 +49,7 @@ final class GenTest
         $arbitrary = Gen::intBetween(-5, 5);
 
         Assert::instanceOf($arbitrary, IntArbitrary::class);
-        Assert::same($arbitrary->generate(new \Rasuvaeff\PropertyTesting\Random(1)) >= -5, true);
+        Assert::same($arbitrary->generate(new Random(1))->value >= -5, true);
     }
 
     public function floatAndFloatBetweenReturnFloatArbitrary(): void
@@ -87,7 +89,7 @@ final class GenTest
         $sawEmpty = false;
 
         for ($i = 0; $i < 200; ++$i) {
-            if ($arbitrary->generate($random) === []) {
+            if ($arbitrary->generate($random)->value === []) {
                 $sawEmpty = true;
 
                 break;
@@ -112,7 +114,7 @@ final class GenTest
         $arbitrary = Gen::elements(['a', 'b', 'c']);
 
         Assert::instanceOf($arbitrary, OneOfArbitrary::class);
-        Assert::true(in_array($arbitrary->generate(new Random(1)), ['a', 'b', 'c'], true));
+        Assert::true(in_array($arbitrary->generate(new Random(1))->value, ['a', 'b', 'c'], true));
     }
 
     public function elementsAcceptsAStringKeyedArray(): void
@@ -120,7 +122,7 @@ final class GenTest
         // Keys are dropped via array_values, so a non-list array is accepted.
         $arbitrary = Gen::elements(['x' => 10, 'y' => 20]);
 
-        Assert::true(in_array($arbitrary->generate(new Random(1)), [10, 20], true));
+        Assert::true(in_array($arbitrary->generate(new Random(1))->value, [10, 20], true));
     }
 
     public function constantReturnsConstantArbitrary(): void
@@ -128,7 +130,7 @@ final class GenTest
         $arbitrary = Gen::constant('fixed');
 
         Assert::instanceOf($arbitrary, ConstantArbitrary::class);
-        Assert::same($arbitrary->generate(new Random(1)), 'fixed');
+        Assert::same($arbitrary->generate(new Random(1))->value, 'fixed');
     }
 
     public function charReturnsSinglePrintableAsciiCharacter(): void
@@ -139,10 +141,10 @@ final class GenTest
 
         $random = new Random(1);
         for ($i = 0; $i < 100; ++$i) {
-            $char = $arbitrary->generate($random);
+            $char = $arbitrary->generate($random)->value;
             $code = ord($char);
 
-            Assert::same(strlen($char), 1);
+            Assert::same(strlen((string) $char), 1);
             Assert::true($code >= 32 && $code <= 126);
         }
     }
@@ -180,6 +182,14 @@ final class GenTest
         );
     }
 
+    public function sampleReturnsPlainValuesNotShrinkables(): void
+    {
+        // sample() unwraps each Shrinkable — consumers get values, not trees.
+        foreach (Gen::sample(Gen::intBetween(1, 6), 5, 42) as $value) {
+            Assert::true(is_int($value));
+        }
+    }
+
     public function sampleAcceptsACountOfOne(): void
     {
         Assert::same(count(Gen::sample(Gen::int(), 1, 0)), 1);
@@ -201,6 +211,28 @@ final class GenTest
         Assert::instanceOf(Gen::map(Gen::int(), static fn(int $x): int => $x * 2), MappedArbitrary::class);
     }
 
+    public function flatMapReturnsFlatMappedArbitrary(): void
+    {
+        $arbitrary = Gen::flatMap(Gen::intBetween(1, 10), static fn(int $n): IntArbitrary => new IntArbitrary(0, $n));
+
+        Assert::instanceOf($arbitrary, FlatMappedArbitrary::class);
+    }
+
+    public function flatMapGeneratesDependentValues(): void
+    {
+        $arbitrary = Gen::flatMap(
+            Gen::intBetween(1, 10),
+            static fn(int $n): TupleArbitrary => new TupleArbitrary(new ConstantArbitrary($n), new IntArbitrary(0, $n - 1)),
+        );
+        $random = new Random(1);
+
+        for ($i = 0; $i < 100; ++$i) {
+            [$n, $index] = $arbitrary->generate($random)->value;
+
+            Assert::true($index >= 0 && $index < $n);
+        }
+    }
+
     public function filterReturnsFilteredArbitrary(): void
     {
         Assert::instanceOf(Gen::filter(Gen::int(), static fn(int $x): bool => $x > 0), FilteredArbitrary::class);
@@ -218,10 +250,10 @@ final class GenTest
 
     public function intPositiveHasLowerBoundOne(): void
     {
-        // The clamped-to-zero shrink candidate reveals the configured lower bound.
-        $candidates = iterator_to_array(Gen::intPositive()->shrink(8), false);
+        // The clamped shrink target reveals the configured lower bound.
+        $node = Trees::generateWhere(Gen::intPositive(), static fn(mixed $v): bool => $v !== 1);
 
-        Assert::same($candidates[0], 1);
+        Assert::same(Trees::childValues($node)[0], 1);
     }
 
     public function floatSpansTheHalfOpenUnitRange(): void
@@ -231,7 +263,7 @@ final class GenTest
         $sawHigh = false;
 
         for ($i = 0; $i < 200; ++$i) {
-            $value = Gen::float()->generate($random);
+            $value = Gen::float()->generate($random)->value;
 
             Assert::true($value >= 0.0 && $value < 1.0);
             $value < 0.5 ? $sawLow = true : $sawHigh = true;
@@ -249,14 +281,14 @@ final class GenTest
         $maxLength = 0;
 
         for ($i = 0; $i < 4000; ++$i) {
-            $value = Gen::string()->generate($random);
-            $length = mb_strlen($value, 'UTF-8');
+            $value = Gen::string()->generate($random)->value;
+            $length = mb_strlen((string) $value, 'UTF-8');
             $maxLength = max($maxLength, $length);
 
             if ($value === '') {
                 $sawEmpty = true;
             }
-            if (strlen($value) !== $length) {
+            if (strlen((string) $value) !== $length) {
                 $sawMultibyte = true;
             }
         }
@@ -273,8 +305,8 @@ final class GenTest
         $maxLength = 0;
 
         for ($i = 0; $i < 4000; ++$i) {
-            $value = Gen::stringAscii()->generate($random);
-            $maxLength = max($maxLength, strlen($value));
+            $value = Gen::stringAscii()->generate($random)->value;
+            $maxLength = max($maxLength, strlen((string) $value));
 
             if ($value === '') {
                 $sawEmpty = true;
@@ -294,11 +326,11 @@ final class GenTest
         $sawMultibyte = false;
 
         for ($i = 0; $i < 500; ++$i) {
-            $value = Gen::stringOf(3, 6)->generate($random);
-            $length = mb_strlen($value, 'UTF-8');
+            $value = Gen::stringOf(3, 6)->generate($random)->value;
+            $length = mb_strlen((string) $value, 'UTF-8');
 
             Assert::true($length >= 3 && $length <= 6);
-            if (strlen($value) !== $length) {
+            if (strlen((string) $value) !== $length) {
                 $sawMultibyte = true;
             }
         }
@@ -313,7 +345,7 @@ final class GenTest
         $maxSize = 0;
 
         for ($i = 0; $i < 4000; ++$i) {
-            $size = count(Gen::arrayOf(Gen::int())->generate($random));
+            $size = count(Gen::arrayOf(Gen::int())->generate($random)->value);
             $maxSize = max($maxSize, $size);
 
             if ($size === 0) {
@@ -332,7 +364,7 @@ final class GenTest
         $maxSize = 0;
 
         for ($i = 0; $i < 4000; ++$i) {
-            $size = count(Gen::nonEmptyArrayOf(Gen::int())->generate($random));
+            $size = count(Gen::nonEmptyArrayOf(Gen::int())->generate($random)->value);
             $minSize = min($minSize, $size);
             $maxSize = max($maxSize, $size);
         }

@@ -6,6 +6,7 @@ namespace Rasuvaeff\PropertyTesting\Tests\Arbitrary;
 
 use Rasuvaeff\PropertyTesting\Arbitrary\FloatArbitrary;
 use Rasuvaeff\PropertyTesting\Random;
+use Rasuvaeff\PropertyTesting\Tests\Support\Trees;
 use Testo\Assert;
 use Testo\Assert\ExpectException;
 use Testo\Codecov\Covers;
@@ -21,7 +22,7 @@ final class FloatArbitraryTest
         $random = new Random(1);
 
         for ($i = 0; $i < 200; ++$i) {
-            $value = $arbitrary->generate($random);
+            $value = $arbitrary->generate($random)->value;
 
             Assert::true($value >= 1.5 && $value <= 3.5);
         }
@@ -29,22 +30,34 @@ final class FloatArbitraryTest
 
     public function shrinkTriesZero(): void
     {
-        $candidates = iterator_to_array((new FloatArbitrary())->shrink(2.5));
+        $node = Trees::generateWhere(new FloatArbitrary(), static fn(mixed $v): bool => $v !== 0.0);
 
-        Assert::same($candidates, [0.0]);
+        Assert::same(Trees::childValues($node), [0.0]);
     }
 
     public function shrinkTargetsNearestBoundWhenRangeExcludesZero(): void
     {
         // floatBetween(5, 10) must shrink toward the in-range bound (5.0), not 0.0.
-        $candidates = iterator_to_array((new FloatArbitrary(5.0, 10.0))->shrink(8.0));
+        $node = Trees::generateWhere(new FloatArbitrary(5.0, 10.0), static fn(mixed $v): bool => $v !== 5.0);
 
-        Assert::same($candidates, [5.0]);
+        Assert::same(Trees::childValues($node), [5.0]);
     }
 
     public function shrinkOfZeroYieldsNothing(): void
     {
-        Assert::same(iterator_to_array((new FloatArbitrary())->shrink(0.0)), []);
+        $node = Trees::generateWhere(new FloatArbitrary(), static fn(mixed $v): bool => $v === 0.0);
+
+        Assert::same(Trees::childValues($node), []);
+    }
+
+    public function shrinkTargetIsTerminal(): void
+    {
+        // The single candidate is a leaf: descending offers nothing further.
+        $node = Trees::generateWhere(new FloatArbitrary(), static fn(mixed $v): bool => $v !== 0.0);
+
+        foreach ($node->shrinks() as $child) {
+            Assert::same(Trees::childValues($child), []);
+        }
     }
 
     public function acceptsAndGeneratesADegenerateRange(): void
@@ -52,7 +65,7 @@ final class FloatArbitraryTest
         // min === max is a valid single-point range and must construct.
         $arbitrary = new FloatArbitrary(2.0, 2.0);
 
-        Assert::same($arbitrary->generate(new Random(1)), 2.0);
+        Assert::same($arbitrary->generate(new Random(1))->value, 2.0);
     }
 
     public function generateBiasesTowardZero(): void
@@ -64,7 +77,7 @@ final class FloatArbitraryTest
         $zeroHits = 0;
 
         for ($i = 0; $i < 1000; ++$i) {
-            if ($arbitrary->generate($random) === 0.0) {
+            if ($arbitrary->generate($random)->value === 0.0) {
                 ++$zeroHits;
             }
         }
@@ -80,7 +93,7 @@ final class FloatArbitraryTest
         $random = new Random(1);
 
         for ($i = 0; $i < 1000; ++$i) {
-            Assert::true($arbitrary->generate($random) < 1.0);
+            Assert::true($arbitrary->generate($random)->value < 1.0);
         }
     }
 

@@ -7,13 +7,21 @@ namespace Rasuvaeff\PropertyTesting\Arbitrary;
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
 use Rasuvaeff\PropertyTesting\Internal\Boundary;
 use Rasuvaeff\PropertyTesting\Random;
+use Rasuvaeff\PropertyTesting\Shrinkable;
 
 /**
- * Generates integers within an inclusive range and shrinks them toward zero.
+ * Generates integers within an inclusive range and shrinks them toward zero
+ * (clamped into the range, so the target of a zero-free range is its nearest
+ * bound).
  *
  * Generation is biased: roughly one draw in {@see BIAS_DENOMINATOR} returns an
  * in-range boundary value (0, ±1, min, max) instead of a uniform one, because
- * bugs cluster at edges. Shrinking is unaffected.
+ * bugs cluster at edges.
+ *
+ * The shrink tree halves the distance to the target: the target itself first,
+ * then candidates progressively closer to the failing value, each with its own
+ * subtree toward the same target — a binary search for the minimal failing
+ * integer.
  *
  * @api
  */
@@ -31,42 +39,35 @@ final readonly class IntArbitrary implements ArbitraryInterface
     }
 
     #[\Override]
-    public function generate(Random $random): int
+    public function generate(Random $random): Shrinkable
     {
         // Boundary candidates always include min and max, so the list is non-empty.
         if ($random->int(1, self::BIAS_DENOMINATOR) === 1) {
             $boundaries = Boundary::ints($this->min, $this->max);
 
-            return $boundaries[$random->int(0, count($boundaries) - 1)];
+            return $this->tree($boundaries[$random->int(0, count($boundaries) - 1)]);
         }
 
-        return $random->int($this->min, $this->max);
+        return $this->tree($random->int($this->min, $this->max));
     }
 
-    #[\Override]
-    public function shrink(mixed $value): iterable
+    private function tree(int $value): Shrinkable
     {
-        if (!is_int($value) || $value === 0) {
-            return;
-        }
+        return Shrinkable::of($value, function () use ($value): \Generator {
+            $target = max($this->min, min($this->max, 0));
 
-        // The most aggressive shrink is zero; try it first, then halve the
-        // magnitude repeatedly. Candidates are clamped to the configured range
-        // so the shrunk counterexample stays within the generated domain.
-        $sign = $value <=> 0;
-        $magnitude = abs($value);
+            if ($value === $target) {
+                return;
+            }
 
-        yield $this->clamp(0);
+            yield $this->tree($target);
 
-        while ($magnitude > 1) {
-            $magnitude = intdiv($magnitude, 2);
-
-            yield $this->clamp($sign * $magnitude);
-        }
-    }
-
-    private function clamp(int $value): int
-    {
-        return max($this->min, min($this->max, $value));
+            // Halve the distance to the target: value - d/2, value - d/4, ...
+            // Every candidate lies strictly between target and value, so each
+            // level of the tree gets closer and shrinking terminates.
+            for ($delta = intdiv($value - $target, 2); $delta !== 0; $delta = intdiv($delta, 2)) {
+                yield $this->tree($value - $delta);
+            }
+        });
     }
 }
