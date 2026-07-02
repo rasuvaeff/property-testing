@@ -41,6 +41,14 @@ final class Classify
     private static array $current = [];
 
     /**
+     * Minimum coverage requirements registered during the current property
+     * (label => required percentage of passing runs).
+     *
+     * @var array<string, float>
+     */
+    private static array $requirements = [];
+
+    /**
      * Record $label for the current run.
      */
     public static function label(string $label): void
@@ -53,6 +61,30 @@ final class Classify
      */
     public static function when(bool $condition, string $label): void
     {
+        if ($condition) {
+            self::$current[$label] = true;
+        }
+    }
+
+    /**
+     * Like {@see when()}, but additionally REQUIRES the label to occur in at
+     * least $minPercent of the property's passing runs. When the requirement is
+     * not met the property fails with a {@see CoverageViolationException} even
+     * though every run passed — turning "the distribution looks wrong" from a
+     * printed hint into a CI failure.
+     *
+     * ```php
+     * Classify::cover($n % 2 === 0, 'even', 30.0);
+     * ```
+     */
+    public static function cover(bool $condition, string $label, float $minPercent): void
+    {
+        if ($minPercent < 0.0 || $minPercent > 100.0) {
+            throw new \InvalidArgumentException('Minimum coverage percentage must be between 0 and 100');
+        }
+
+        self::$requirements[$label] = $minPercent;
+
         if ($condition) {
             self::$current[$label] = true;
         }
@@ -81,5 +113,22 @@ final class Classify
         self::$current = [];
 
         return $labels;
+    }
+
+    /**
+     * Return the coverage requirements registered during the property and clear
+     * them. The runner drains this once after the run loop (and defensively
+     * before it, in case a previous property aborted mid-flight).
+     *
+     * @internal Driven by the property runner.
+     *
+     * @return array<string, float>
+     */
+    public static function flushRequirements(): array
+    {
+        $requirements = self::$requirements;
+        self::$requirements = [];
+
+        return $requirements;
     }
 }

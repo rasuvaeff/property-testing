@@ -120,6 +120,25 @@ final class NoSeedFalsifyingStub
     }
 }
 
+final class MixedArgumentsStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'provide')]
+    public function check(string $s, bool $b, mixed $n, array $a, \DateTimeImmutable $d, int $i): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return [
+            's' => Gen::constant('fixed'),
+            'b' => Gen::constant(false),
+            'n' => Gen::constant(null),
+            'a' => Gen::constant([1, 2]),
+            'd' => Gen::datetime(new \DateTimeImmutable('@5'), new \DateTimeImmutable('@5')),
+            'i' => Gen::constant(7),
+        ];
+    }
+}
+
 final class MappedFalsifyingStub
 {
     #[Property(runs: 50, seed: 1, generators: 'provide')]

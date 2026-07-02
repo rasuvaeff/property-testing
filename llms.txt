@@ -68,16 +68,23 @@ Gen::bool()                             // BoolArbitrary, true -> false on shrin
 Gen::string()                           // StringArbitrary, Unicode, len 0..100, shrinks to '' then chars->a
 Gen::stringAscii()                      // StringArbitrary, printable ASCII, len 0..100
 Gen::stringOf(int $minLen, int $maxLen) // StringArbitrary, Unicode, bounded length
-Gen::arrayOf(ArbitraryInterface $el)    // ArrayArbitrary, lists size 0..100
-Gen::nonEmptyArrayOf(ArbitraryInterface $el)  // ArrayArbitrary, size 1..100
-Gen::dictOf(ArbitraryInterface $key, ArbitraryInterface $value) // DictionaryArbitrary, maps size 0..100, keys int|string, colliding keys overwrite
+Gen::stringFrom(string $alphabet, int $minLen = 0, int $maxLen = 100) // CharsetStringArbitrary: chars from a fixed alphabet (multibyte OK); shrinks to '' then chars toward alphabet[0]
+Gen::bytes(int $minLen = 0, int $maxLen = 100) // BytesArbitrary: raw bytes 0..255; shrinks to '' then bytes toward "\x00"
+Gen::arrayOf(ArbitraryInterface $el, int $min = 0, int $max = 100)    // ArrayArbitrary, lists
+Gen::nonEmptyArrayOf(ArbitraryInterface $el, int $max = 100)  // ArrayArbitrary, size >= 1
+Gen::uniqueArrayOf(ArbitraryInterface $el, int $min = 0, int $max = 100) // UniqueArrayArbitrary: pairwise-distinct lists; may settle for fewer than drawn when the element space runs dry (never below min — throws)
+Gen::dictOf(ArbitraryInterface $key, ArbitraryInterface $value, int $min = 0, int $max = 100) // DictionaryArbitrary, keys int|string, colliding keys overwrite
 Gen::record(array $shape)               // RecordArbitrary, fixed-shape map ['field' => ArbitraryInterface, ...]
 Gen::oneOf(mixed ...$values)           // OneOfArbitrary, one value; shrinks toward EARLIER-listed distinct values (put simpler first)
 Gen::elements(array $values)           // OneOfArbitrary, one value from an array (array form of oneOf)
+Gen::enum(SomeEnum::class)             // OneOfArbitrary over enum cases; shrinks toward earlier-DECLARED cases
 Gen::constant(mixed $value)            // ConstantArbitrary, always $value; does NOT shrink
 Gen::char()                            // StringArbitrary, one printable ASCII char
 Gen::uuid()                            // UuidArbitrary, RFC 4122 v4 UUID strings; does NOT shrink
 Gen::datetime(?DateTimeImmutable $min, ?DateTimeImmutable $max)  // DateTimeArbitrary, UTC, shrinks toward epoch
+Gen::floatSpecial()                    // OneOfArbitrary over NAN, INF, -INF, -0.0, PHP_FLOAT_EPSILON/MIN/MAX (opt-in; float()/floatBetween() stay finite)
+Gen::intRange(int $min, int $max)      // FlatMappedArbitrary: ordered pairs [lo, hi], min <= lo <= hi <= max; both bounds shrink
+Gen::recursive(ArbitraryInterface $leaf, Closure $wrap, int $maxDepth = 3) // bounded recursion: $wrap(ArbitraryInterface): ArbitraryInterface lifts the previous level; 50/50 leaf-vs-branch at each level
 Gen::nullable(ArbitraryInterface $inner)      // NullableArbitrary, null or inner value
 Gen::map(ArbitraryInterface $inner, Closure $fn)   // MappedArbitrary; shrinks through the inner tree, re-applying $fn (pure!)
 Gen::flatMap(ArbitraryInterface $inner, Closure $fn)  // FlatMappedArbitrary; $fn(mixed): ArbitraryInterface — dependent generators; shrinks source (dependent regenerated from seed) then dependent value
@@ -85,6 +92,7 @@ Gen::filter(ArbitraryInterface $inner, Closure $predicate) // FilteredArbitrary,
 Gen::tuple(ArbitraryInterface ...$elements)        // TupleArbitrary, fixed-arity tuple (list), shrinks each position
 Gen::frequency(iterable $pairs)                    // FrequencyArbitrary, weighted [int $weight, ArbitraryInterface] pairs; shrinks within the generating branch
 Gen::sample(ArbitraryInterface $arb, int $count = 10, int $seed = 0)  // list<mixed>: eager debug helper, returns plain values not an arbitrary
+Gen::sampleShrinks(ArbitraryInterface $arb, int $seed = 0, int $limit = 10) // array{value: mixed, shrinks: list<mixed>}: one value + its first shrink candidates (debug custom arbitraries)
 ```
 
 Dependent generators — a list plus a valid index (no discarded runs):
@@ -122,17 +130,23 @@ use Rasuvaeff\PropertyTesting\Classify;
 
 Classify::label(string $label): void              // tally $label for the current run
 Classify::when(bool $condition, string $label): void  // tally only when $condition
+Classify::cover(bool $condition, string $label, float $minPercent): void
+// like when(), but REQUIRES the label in >= $minPercent of passing runs;
+// otherwise the property FAILS with CoverageViolationException even though
+// every run passed. Discarded runs are excluded from the denominator.
 ```
 
 Call inside a property body. After a fully passing property the runner prints the
 share of runs that hit each label (a label counts once per run). Confirms a
-property is not passing vacuously.
+property is not passing vacuously; `cover()` turns that into a hard CI gate.
 
 ### Environment overrides
 
 - `PROPERTY_RUNS` (positive int): overrides every property's run count.
 - `PROPERTY_SEED` (int): seed for any property whose attribute omits `seed`; an
   explicit attribute `seed` still wins.
+- `PROPERTY_VERBOSE` (any value except ''/'0'): logs every run's generated
+  arguments to stdout — inspect what a replayed seed actually feeds the test.
 
 ### Discarding runs: `Assume::that(bool $condition): void`
 

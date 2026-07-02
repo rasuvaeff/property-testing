@@ -55,3 +55,13 @@ $pair = Gen::flatMap(
 )->generate($random)->value;
 [$items, $index] = $pair;
 echo 'flatMap: ' . count($items) . " items, valid index {$index}, item={$items[$index]}\n";
+
+// 2.1.0 generators: alphabet-bound strings, raw bytes, ordered ranges.
+echo 'stringFrom(hex): ' . Gen::stringFrom('0123456789abcdef', 8, 8)->generate($random)->value . "\n";
+echo 'bytes: ' . bin2hex(Gen::bytes(4, 4)->generate($random)->value) . "\n";
+[$lo, $hi] = Gen::intRange(0, 100)->generate($random)->value;
+echo "intRange: [{$lo}, {$hi}]\n";
+
+// sampleShrinks — eyeball how a value would shrink (debug custom arbitraries).
+$sampled = Gen::sampleShrinks(Gen::intBetween(0, 100), seed: 5, limit: 5);
+echo "sampleShrinks: value={$sampled['value']}, candidates=" . implode(', ', $sampled['shrinks']) . "\n";

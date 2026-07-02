@@ -8,6 +8,8 @@ use Closure;
 use DateTimeImmutable;
 use Rasuvaeff\PropertyTesting\Arbitrary\ArrayArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\BoolArbitrary;
+use Rasuvaeff\PropertyTesting\Arbitrary\BytesArbitrary;
+use Rasuvaeff\PropertyTesting\Arbitrary\CharsetStringArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\ConstantArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\DateTimeArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\DictionaryArbitrary;
@@ -22,6 +24,7 @@ use Rasuvaeff\PropertyTesting\Arbitrary\OneOfArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\RecordArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\StringArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\TupleArbitrary;
+use Rasuvaeff\PropertyTesting\Arbitrary\UniqueArrayArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\UuidArbitrary;
 
 /**
@@ -119,29 +122,59 @@ final class Gen
     }
 
     /**
-     * Lists whose elements are drawn from $element. Size 0..100.
+     * Strings whose characters come from a fixed alphabet (split per Unicode
+     * codepoint). Shrinks by length toward '', then each character toward the
+     * first alphabet character — list simpler characters first.
      */
-    public static function arrayOf(ArbitraryInterface $element): ArrayArbitrary
+    public static function stringFrom(string $alphabet, int $minLength = 0, int $maxLength = 100): CharsetStringArbitrary
     {
-        return new ArrayArbitrary($element, 0, 100);
+        return new CharsetStringArbitrary($alphabet, $minLength, $maxLength);
     }
 
     /**
-     * Non-empty lists (size 1..100) whose elements are drawn from $element.
+     * Raw byte strings (every byte 0..255). Shrinks by length toward '', then
+     * each byte toward "\x00".
      */
-    public static function nonEmptyArrayOf(ArbitraryInterface $element): ArrayArbitrary
+    public static function bytes(int $minLength = 0, int $maxLength = 100): BytesArbitrary
     {
-        return new ArrayArbitrary($element, 1, 100);
+        return new BytesArbitrary($minLength, $maxLength);
     }
 
     /**
-     * Associative arrays (maps) of size 0..100 with keys from $key and values
-     * from $value. Keys must be int or string; colliding keys overwrite, so the
-     * result may be smaller than the drawn size.
+     * Lists whose elements are drawn from $element.
      */
-    public static function dictOf(ArbitraryInterface $key, ArbitraryInterface $value): DictionaryArbitrary
+    public static function arrayOf(ArbitraryInterface $element, int $minSize = 0, int $maxSize = 100): ArrayArbitrary
     {
-        return new DictionaryArbitrary($key, $value, 0, 100);
+        return new ArrayArbitrary($element, $minSize, $maxSize);
+    }
+
+    /**
+     * Non-empty lists whose elements are drawn from $element.
+     */
+    public static function nonEmptyArrayOf(ArbitraryInterface $element, int $maxSize = 100): ArrayArbitrary
+    {
+        return new ArrayArbitrary($element, 1, $maxSize);
+    }
+
+    /**
+     * Lists of pairwise-distinct elements (strict comparison) drawn from
+     * $element. Element shrinking keeps the list distinct; the result may be
+     * smaller than the drawn size when the element space runs out of fresh
+     * values (but never below $minSize, which throws instead).
+     */
+    public static function uniqueArrayOf(ArbitraryInterface $element, int $minSize = 0, int $maxSize = 100): UniqueArrayArbitrary
+    {
+        return new UniqueArrayArbitrary($element, $minSize, $maxSize);
+    }
+
+    /**
+     * Associative arrays (maps) with keys from $key and values from $value.
+     * Keys must be int or string; colliding keys overwrite, so the result may
+     * be smaller than the drawn size.
+     */
+    public static function dictOf(ArbitraryInterface $key, ArbitraryInterface $value, int $minSize = 0, int $maxSize = 100): DictionaryArbitrary
+    {
+        return new DictionaryArbitrary($key, $value, $minSize, $maxSize);
     }
 
     /**
@@ -181,6 +214,97 @@ final class Gen
     public static function constant(mixed $value): ConstantArbitrary
     {
         return new ConstantArbitrary($value);
+    }
+
+    /**
+     * One case of a PHP enum, in declaration order. Shrinks toward
+     * earlier-declared cases, so declare simpler cases first.
+     *
+     * @param class-string $enum
+     */
+    public static function enum(string $enum): OneOfArbitrary
+    {
+        if (!enum_exists($enum)) {
+            throw new \InvalidArgumentException(sprintf('"%s" is not an enum', $enum));
+        }
+
+        $cases = array_map(
+            static fn(\ReflectionEnumUnitCase $case): \UnitEnum => $case->getValue(),
+            (new \ReflectionEnum($enum))->getCases(),
+        );
+
+        return new OneOfArbitrary(...$cases);
+    }
+
+    /**
+     * Special float values (NaN, ±INF, -0.0 and the representation edges) where
+     * float bugs cluster — an opt-in complement to {@see float()}, which stays
+     * inside its finite range. Shrinks toward earlier-listed specials.
+     */
+    public static function floatSpecial(): OneOfArbitrary
+    {
+        // NAN/INF are produced via fdiv(): Psalm crashes on the NAN constant
+        // (Psalm\Type::getFloat(NAN)), and the values are identical.
+        return new OneOfArbitrary(
+            fdiv(0.0, 0.0),   // NAN
+            fdiv(1.0, 0.0),   // INF
+            fdiv(-1.0, 0.0),  // -INF
+            -0.0,
+            PHP_FLOAT_EPSILON,
+            PHP_FLOAT_MIN,
+            PHP_FLOAT_MAX,
+        );
+    }
+
+    /**
+     * Ordered integer pairs `[lo, hi]` with $min <= lo <= hi <= $max — the
+     * "range/interval" input without an {@see Assume::that()} discard. Built on
+     * {@see flatMap()}, so both bounds shrink while `lo <= hi` always holds.
+     */
+    public static function intRange(int $min, int $max): FlatMappedArbitrary
+    {
+        return new FlatMappedArbitrary(
+            new IntArbitrary($min, $max),
+            static function (mixed $lo) use ($max): TupleArbitrary {
+                \assert(is_int($lo));
+
+                return new TupleArbitrary(new ConstantArbitrary($lo), new IntArbitrary($lo, $max));
+            },
+        );
+    }
+
+    /**
+     * Recursive structures with a bounded depth: $wrap receives the arbitrary
+     * for the previous level and returns the next one (e.g. wrap a value in an
+     * array). At every level generation picks the leaf or the wrapped branch
+     * with equal odds, so nesting is possible but not forced. Keep the branch
+     * fan-out small (bounded array sizes) — breadth multiplies per level.
+     *
+     * @param Closure(ArbitraryInterface): ArbitraryInterface $wrap
+     */
+    public static function recursive(ArbitraryInterface $leaf, Closure $wrap, int $maxDepth = 3): ArbitraryInterface
+    {
+        if ($maxDepth < 1) {
+            throw new \InvalidArgumentException('Max depth must be greater than or equal to 1');
+        }
+
+        $arbitrary = $leaf;
+
+        for ($depth = 0; $depth < $maxDepth; ++$depth) {
+            /** @var mixed $wrapped */
+            $wrapped = ($wrap)($arbitrary);
+
+            if (!$wrapped instanceof ArbitraryInterface) {
+                throw new \InvalidArgumentException(sprintf(
+                    'recursive() wrap closure must return an ArbitraryInterface, got %s',
+                    get_debug_type($wrapped),
+                ));
+            }
+
+            $arbitrary = new FrequencyArbitrary([[1, $leaf], [1, $wrapped]]);
+        }
+
+        return $arbitrary;
     }
 
     /**
@@ -286,5 +410,37 @@ final class Gen
             static fn(int $i): mixed => $arbitrary->generate($random)->value,
             range(1, $count),
         );
+    }
+
+    /**
+     * Eagerly generate one value from $arbitrary for a fixed $seed and collect
+     * its first direct shrink candidates. A debugging aid for authors of custom
+     * {@see ArbitraryInterface}s: eyeball what the shrink tree offers before
+     * wiring the arbitrary into a property.
+     *
+     * @return array{value: mixed, shrinks: list<mixed>}
+     */
+    public static function sampleShrinks(ArbitraryInterface $arbitrary, int $seed = 0, int $limit = 10): array
+    {
+        if ($limit < 1) {
+            throw new \InvalidArgumentException('Limit must be greater than or equal to 1');
+        }
+
+        $shrinkable = $arbitrary->generate(new Random($seed));
+
+        /** @var list<Shrinkable> $candidates */
+        $candidates = [];
+        foreach ($shrinkable->shrinks() as $candidate) {
+            $candidates[] = $candidate;
+
+            if (count($candidates) >= $limit) {
+                break;
+            }
+        }
+
+        return [
+            'value' => $shrinkable->value,
+            'shrinks' => array_map(static fn(Shrinkable $candidate): mixed => $candidate->value, $candidates),
+        ];
     }
 }

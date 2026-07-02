@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.1.0 — Unreleased
+
+Consumer-driven additions (Wave 3); no BC breaks, seed sequences of existing
+generators are unchanged.
+
+- Add `Classify::cover($condition, $label, $minPercent)`: a coverage
+  requirement — the property fails with the new `CoverageViolationException`
+  when the label occurs in fewer than `$minPercent` of passing runs, making
+  vacuous passes a CI failure instead of a printed hint.
+- Add `Gen::stringFrom($alphabet, $min, $max)` (`CharsetStringArbitrary`):
+  strings over a fixed (possibly multibyte) alphabet; shrinks by length, then
+  each character toward the first alphabet character.
+- Add `Gen::bytes($min, $max)` (`BytesArbitrary`): raw byte strings for
+  parsers/codecs; shrinks by length, then each byte toward `"\x00"`.
+- Add `Gen::enum(SomeEnum::class)`: one enum case, shrinking toward
+  earlier-declared cases.
+- Add `Gen::uniqueArrayOf($element, $min, $max)` (`UniqueArrayArbitrary`):
+  lists of pairwise-distinct elements; shrinking preserves distinctness.
+- Add `Gen::intRange($min, $max)`: ordered pairs `[lo, hi]` with `lo <= hi`
+  built on `flatMap`, replacing `Assume::that()` discards for intervals.
+- Add `Gen::floatSpecial()`: opt-in `NAN`/`±INF`/`-0.0`/representation-edge
+  floats (the default `float()`/`floatBetween()` stay finite and in range).
+- Add `Gen::recursive($leaf, $wrap, $maxDepth)`: bounded recursive structures
+  built by lifting the previous level's arbitrary.
+- Add `Gen::sampleShrinks()`: generate one value and list its first shrink
+  candidates — a debugging aid for custom arbitraries.
+- Add optional size bounds to `Gen::arrayOf()`, `Gen::nonEmptyArrayOf()` and
+  `Gen::dictOf()`.
+- Honour `PROPERTY_VERBOSE` to log every run's generated arguments.
+
 ## 2.0.0 — 2026-07-02
 
 Integrated shrinking: shrink candidates now come from the generation tree, so

@@ -52,6 +52,25 @@ Isolated single idea: shrink via a generation tree.
 Ship with a migration guide. Keep this major free of unrelated additive work so
 `release-check` / BC diagnostics / changelog stay focused on one contract change.
 
+## Wave 3 — `2.1.0` (minor, consumer-driven additions)
+
+Derived from a consumer-perspective review after 2.0.0. Additive only; the
+`ArbitraryInterface` contract and existing seed sequences are untouched.
+
+| Item | What | Status |
+|---|---|---|
+| coverage gate | `Classify::cover($cond, $label, $minPercent)` — under-covered label FAILS the property (`CoverageViolationException`) | done |
+| charset strings | `Gen::stringFrom($alphabet, $min, $max)` — identifiers/hex/slugs without map-boilerplate | done |
+| binary | `Gen::bytes($min, $max)` — raw bytes for parsers/codecs | done |
+| enums | `Gen::enum(SomeEnum::class)` — shrinks toward earlier-declared cases | done |
+| distinct lists | `Gen::uniqueArrayOf($el, $min, $max)` — shrinking preserves distinctness | done |
+| intervals | `Gen::intRange($min, $max)` — ordered `[lo, hi]` on top of `flatMap` | done |
+| float specials | `Gen::floatSpecial()` — opt-in NaN/±INF/-0.0/edges (default floats stay finite) | done |
+| recursion | `Gen::recursive($leaf, $wrap, $maxDepth)` — bounded depth, 50/50 leaf-vs-branch per level | done |
+| shrink debugging | `Gen::sampleShrinks()` — value + first shrink candidates for custom arbitraries | done |
+| sized collections | optional `$min`/`$max` on `arrayOf`/`nonEmptyArrayOf`/`dictOf` | done |
+| verbose runs | `PROPERTY_VERBOSE` env — log every run's generated arguments | done |
+
 ## Non-goals (by design, not gaps)
 
 - Testo-only (no PHPUnit/Pest adapter).
@@ -61,4 +80,5 @@ Ship with a migration guide. Keep this major free of unrelated additive work so
 ## Status
 
 - `1.1.0` — entire Wave 1 (done, PR #4).
-- `2.0.0` — integrated shrinking + `flatMap`, planned as a separate effort.
+- `2.0.0` — integrated shrinking + `flatMap` (done, PR #5, released 2026-07-02).
+- `2.1.0` — entire Wave 3 (consumer-driven additions).

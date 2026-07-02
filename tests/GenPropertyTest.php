@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Rasuvaeff\PropertyTesting\Tests;
 
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
+use Rasuvaeff\PropertyTesting\Classify;
 use Rasuvaeff\PropertyTesting\Gen;
 use Rasuvaeff\PropertyTesting\Property;
 use Testo\Assert;
@@ -119,5 +120,34 @@ final class GenPropertyTest
     private function mapTransformsEveryGeneratedValueGenerators(): array
     {
         return ['even' => Gen::map(Gen::intBetween(0, 100), static fn(int $x): int => $x * 2)];
+    }
+
+    #[Property(runs: 100, seed: 111)]
+    public function stringFromStaysInsideItsAlphabet(string $identifier): void
+    {
+        Assert::same(preg_match('/^[a-z_]{1,16}$/', $identifier), 1);
+    }
+
+    /** @return array<string, ArbitraryInterface> */
+    private function stringFromStaysInsideItsAlphabetGenerators(): array
+    {
+        return ['identifier' => Gen::stringFrom('abcdefghijklmnopqrstuvwxyz_', 1, 16)];
+    }
+
+    #[Property(runs: 200, seed: 222)]
+    public function coverEnforcesTheDistributionOfAPassingProperty(int $n): void
+    {
+        // The generator is symmetric, so both parities comfortably clear 20%;
+        // this dogfoods the coverage gate through the real runner.
+        Classify::cover($n % 2 === 0, 'even', 20.0);
+        Classify::cover($n % 2 !== 0, 'odd', 20.0);
+
+        Assert::true($n >= 0 && $n <= 1000);
+    }
+
+    /** @return array<string, ArbitraryInterface> */
+    private function coverEnforcesTheDistributionOfAPassingPropertyGenerators(): array
+    {
+        return ['n' => Gen::intBetween(0, 1000)];
     }
 }

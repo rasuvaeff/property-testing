@@ -75,6 +75,11 @@ make release-check
   body↔runner channel for `classify`/`collect`; the interceptor clears it via
   `beginRun()` and drains it via `flushRun()` each run, so it is never shared
   concurrently (property runs are sequential).
+- `Classify` carries a second static: coverage requirements from `cover()`,
+  scoped per PROPERTY (not per run). The interceptor drains them once after
+  the run loop via `flushRequirements()` and defensively before it — a
+  falsified property returns early and would otherwise leak its requirements
+  into the next one.
 - `Gen::filter()` retries up to 100 times then yields the last value; prefer
   `Assume::that()` in the property body when the rejection rate is high. For
   dependent domains use `Gen::flatMap()` instead of filtering.

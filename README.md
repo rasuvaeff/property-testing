@@ -110,15 +110,22 @@ argument is omitted the runner falls back to a method named `<testMethod>Generat
 | `Gen::string()` | `StringArbitrary`, Unicode, length 0..100 | toward `''`, then by length, then each character toward `a` |
 | `Gen::stringAscii()` | `StringArbitrary`, printable ASCII, length 0..100 | toward `''`, then by length, then each character toward `a` |
 | `Gen::stringOf($min, $max)` | `StringArbitrary`, Unicode, bounded length | toward `''`, then by length, then each character toward `a` |
-| `Gen::arrayOf($element)` | `ArrayArbitrary`, lists of `$element`, size 0..100 | toward `[]`, then by length, then each element |
-| `Gen::nonEmptyArrayOf($element)` | `ArrayArbitrary`, non-empty lists | by length (never below 1), then each element |
-| `Gen::dictOf($key, $value)` | `DictionaryArbitrary`, maps with keys from `$key` (int/string) and values from `$value`, size 0..100 | toward `[]`, then by size, then each value (keys fixed) |
+| `Gen::stringFrom($alphabet, $min, $max)` | `CharsetStringArbitrary`, characters from a fixed alphabet (multibyte OK) | toward `''`, then by length, then each character toward the first alphabet character |
+| `Gen::bytes($min, $max)` | `BytesArbitrary`, raw byte strings (bytes 0..255) | toward `''`, then by length, then each byte toward `"\x00"` |
+| `Gen::arrayOf($element, $min, $max)` | `ArrayArbitrary`, lists of `$element`, size 0..100 by default | toward `[]`, then by length, then each element |
+| `Gen::nonEmptyArrayOf($element, $max)` | `ArrayArbitrary`, non-empty lists | by length (never below 1), then each element |
+| `Gen::uniqueArrayOf($element, $min, $max)` | `UniqueArrayArbitrary`, lists of pairwise-distinct elements | like `arrayOf`, but element candidates colliding with another element are skipped |
+| `Gen::dictOf($key, $value, $min, $max)` | `DictionaryArbitrary`, maps with keys from `$key` (int/string) and values from `$value`, size 0..100 by default | toward `[]`, then by size, then each value (keys fixed) |
 | `Gen::record($shape)` | `RecordArbitrary`, fixed-shape map `['field' => $arb, ...]` | each field via its arbitrary, key set fixed |
 | `Gen::elements($array)` | `OneOfArbitrary`, one value from an array (array form of `oneOf`) | toward earlier-listed distinct values |
+| `Gen::enum(SomeEnum::class)` | `OneOfArbitrary` over the enum's cases | toward earlier-declared cases (declare simpler cases first) |
 | `Gen::constant($value)` | `ConstantArbitrary`, always `$value` | does not shrink |
 | `Gen::char()` | `StringArbitrary`, a single printable ASCII character | toward `a` |
 | `Gen::uuid()` | `UuidArbitrary`, RFC 4122 v4 UUID strings | does not shrink |
 | `Gen::datetime($min, $max)` | `DateTimeArbitrary`, UTC `DateTimeImmutable`, timestamp in `[$min, $max]` | toward the Unix epoch, clamped |
+| `Gen::floatSpecial()` | `OneOfArbitrary` over `NAN`, `±INF`, `-0.0` and the float representation edges | toward earlier-listed specials |
+| `Gen::intRange($min, $max)` | `FlatMappedArbitrary`, ordered pairs `[lo, hi]` with `lo <= hi` | both bounds shrink, order always holds |
+| `Gen::recursive($leaf, $wrap, $maxDepth)` | bounded recursive structures: `$wrap` lifts the previous level's arbitrary | within the branch that generated the value |
 | `Gen::oneOf(...$values)` | `OneOfArbitrary`, one of the given values | toward earlier-listed distinct values (put simpler values first) |
 | `Gen::nullable($inner)` | `NullableArbitrary`, `null` or an `$inner` value | prefers `null`, then the inner tree |
 | `Gen::map($inner, $fn)` | `MappedArbitrary`, `$inner` transformed by `$fn` | through the inner tree, re-applying `$fn` |
@@ -242,6 +249,7 @@ CI:
 |---|---|
 | `PROPERTY_RUNS` | Positive integer that overrides every property's run count (dial runs up in CI). |
 | `PROPERTY_SEED` | Integer seed used for any property whose attribute omits `seed` (replay a whole suite). An explicit attribute `seed` still wins. |
+| `PROPERTY_VERBOSE` | Any value except `''`/`0` logs every run's generated arguments — see exactly what a replayed seed feeds the property. |
 
 ### Checking the distribution
 
@@ -262,6 +270,25 @@ public function holds(int $n): void
 
 A label recorded several times within one run still counts once for that run.
 
+### Enforcing the distribution
+
+`Classify::cover()` upgrades the printed hint to a hard requirement: the label
+must occur in at least the given percentage of passing runs, or the property
+**fails** with a `CoverageViolationException` — even though every run passed.
+Use it to make vacuous passes impossible in CI.
+
+```php
+#[Property(runs: 500)]
+public function holds(int $n): void
+{
+    Classify::cover($n % 2 === 0, 'even', 30.0); // fail if < 30% of runs are even
+    // ... assertions ...
+}
+```
+
+Discarded runs (`Assume::that()`) are excluded from the denominator. A property
+whose runs are all discarded fails its coverage requirements outright.
+
 ### Sampling a generator
 
 `Gen::sample()` eagerly generates values from any arbitrary for a fixed seed — a
@@ -271,6 +298,46 @@ arbitrary).
 ```php
 Gen::sample(Gen::intBetween(1, 6), count: 5, seed: 42); // [3, 1, 6, 6, 2]
 ```
+
+`Gen::sampleShrinks()` does the same for the shrink tree: it generates one
+value and lists its first direct shrink candidates — the fastest way to check
+that a custom arbitrary shrinks the way you intended.
+
+```php
+Gen::sampleShrinks(Gen::intBetween(0, 100), seed: 1);
+// ['value' => 87, 'shrinks' => [0, 44, 66, 77, 82, 85, 86]]
+```
+
+### Recipes
+
+Dependent values without discards — build, don't filter:
+
+```php
+// A size and a payload of exactly that size.
+Gen::flatMap(Gen::intBetween(1, 32), static fn(int $size): ArbitraryInterface
+    => Gen::tuple(Gen::constant($size), Gen::bytes($size, $size)));
+
+// An ordered interval: Gen::intRange(0, 1440) yields [lo, hi] with lo <= hi.
+
+// Domain strings from an alphabet instead of filtering Unicode.
+Gen::stringFrom('abcdefghijklmnopqrstuvwxyz0123456789-', 1, 63); // hostname label
+```
+
+Bounded recursive data:
+
+```php
+use Rasuvaeff\PropertyTesting\Arbitrary\ArrayArbitrary;
+
+// JSON-ish scalars nested in small arrays, at most 3 levels deep.
+Gen::recursive(
+    Gen::oneOf(null, true, false, 0, 1, 'a'),
+    static fn(ArbitraryInterface $inner): ArbitraryInterface => new ArrayArbitrary($inner, 0, 3),
+    maxDepth: 3,
+);
+```
+
+Keep the branch fan-out small (bounded array sizes): breadth multiplies at
+every level of nesting.
 
 ## Security
 
