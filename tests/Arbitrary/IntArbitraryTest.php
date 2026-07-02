@@ -6,6 +6,7 @@ namespace Rasuvaeff\PropertyTesting\Tests\Arbitrary;
 
 use Rasuvaeff\PropertyTesting\Arbitrary\IntArbitrary;
 use Rasuvaeff\PropertyTesting\Random;
+use Rasuvaeff\PropertyTesting\Tests\Support\Trees;
 use Testo\Assert;
 use Testo\Assert\ExpectException;
 use Testo\Codecov\Covers;
@@ -21,7 +22,7 @@ final class IntArbitraryTest
         $random = new Random(1);
 
         for ($i = 0; $i < 200; ++$i) {
-            $value = $arbitrary->generate($random);
+            $value = $arbitrary->generate($random)->value;
 
             Assert::true($value >= 5 && $value <= 10);
         }
@@ -29,40 +30,68 @@ final class IntArbitraryTest
 
     public function shrinkTriesZeroFirst(): void
     {
-        $candidates = iterator_to_array((new IntArbitrary(-1000, 1000))->shrink(100));
+        $node = Trees::generateWhere(new IntArbitrary(-1000, 1000), static fn(mixed $v): bool => $v !== 0);
 
-        Assert::same($candidates[0], 0);
+        Assert::same(Trees::childValues($node)[0], 0);
     }
 
-    public function shrinkCandidatesAreSmallerInMagnitude(): void
+    public function shrinkHalvesTheDistanceToTheTarget(): void
     {
-        $candidates = iterator_to_array((new IntArbitrary())->shrink(100));
+        // Candidates for 8 (target 0): the target, then 8 - 4, 8 - 2, 8 - 1 —
+        // a binary-search ladder from the most aggressive candidate upward.
+        $node = Trees::generateWhere(new IntArbitrary(0, 16), static fn(mixed $v): bool => $v === 8);
 
-        Assert::true(end($candidates) >= -50 && end($candidates) <= 50);
+        Assert::same(Trees::childValues($node), [0, 4, 6, 7]);
     }
 
-    public function shrinkOfNegativeValueStaysNegative(): void
+    public function shrinkCandidatesCarryTheirOwnSubtrees(): void
     {
-        $candidates = iterator_to_array((new IntArbitrary(-1000, 1000))->shrink(-100));
+        // Descending into candidate 4 must offer its own ladder toward 0.
+        $node = Trees::generateWhere(new IntArbitrary(0, 16), static fn(mixed $v): bool => $v === 8);
 
-        Assert::same($candidates[0], 0);
+        $children = [];
+        foreach ($node->shrinks() as $child) {
+            $children[] = $child;
+        }
 
-        // remaining candidates are negative or zero (toward -100 by halving)
-        Assert::true(end($candidates) >= -100 && end($candidates) < 0);
+        Assert::same($children[1]->value, 4);
+        Assert::same(Trees::childValues($children[1]), [0, 2, 3]);
+    }
+
+    public function shrinkOfNegativeValueStaysBetweenTargetAndValue(): void
+    {
+        $node = Trees::generateWhere(new IntArbitrary(-16, 0), static fn(mixed $v): bool => $v === -8);
+
+        Assert::same(Trees::childValues($node), [0, -4, -6, -7]);
     }
 
     public function shrinkOfZeroYieldsNothing(): void
     {
-        Assert::same(iterator_to_array((new IntArbitrary())->shrink(0)), []);
+        $node = Trees::generateWhere(new IntArbitrary(-1000, 1000), static fn(mixed $v): bool => $v === 0);
+
+        Assert::same(Trees::childValues($node), []);
     }
 
     public function shrinkCandidatesAreClampedToConfiguredRange(): void
     {
-        $candidates = iterator_to_array((new IntArbitrary(50, 100))->shrink(80));
+        $node = Trees::generateWhere(new IntArbitrary(50, 100), static fn(mixed $v): bool => $v === 80);
+        $candidates = Trees::childValues($node);
+
+        Assert::same($candidates[0], 50);
 
         foreach ($candidates as $candidate) {
             Assert::true($candidate >= 50 && $candidate <= 100);
         }
+    }
+
+    public function greedyDescentFindsTheMinimalFailingValue(): void
+    {
+        // The runner's per-parameter loop: for the monotone predicate "> 50" the
+        // binary-search ladder must land exactly on 51.
+        $node = Trees::generateWhere(new IntArbitrary(0, 100), static fn(mixed $v): bool => is_int($v) && $v > 50);
+        $minimal = Trees::descendWhile($node, static fn(mixed $v): bool => is_int($v) && $v > 50);
+
+        Assert::same($minimal->value, 51);
     }
 
     public function acceptsAndGeneratesADegenerateRange(): void
@@ -70,7 +99,12 @@ final class IntArbitraryTest
         // min === max is a valid (single-value) range and must construct.
         $arbitrary = new IntArbitrary(7, 7);
 
-        Assert::same($arbitrary->generate(new Random(1)), 7);
+        Assert::same($arbitrary->generate(new Random(1))->value, 7);
+    }
+
+    public function degenerateRangeValueIsItsOwnTargetAndDoesNotShrink(): void
+    {
+        Assert::same(Trees::childValues((new IntArbitrary(7, 7))->generate(new Random(1))), []);
     }
 
     public function generateReachesBothExactBounds(): void
@@ -83,21 +117,13 @@ final class IntArbitraryTest
         $max = PHP_INT_MIN;
 
         for ($i = 0; $i < 200; ++$i) {
-            $value = $arbitrary->generate($random);
+            $value = $arbitrary->generate($random)->value;
             $min = min($min, $value);
             $max = max($max, $value);
         }
 
         Assert::same($min, 3);
         Assert::same($max, 6);
-    }
-
-    public function shrinkProducesExactHalvingSequence(): void
-    {
-        // Zero first, then the magnitude halved repeatedly toward 1.
-        $candidates = iterator_to_array((new IntArbitrary())->shrink(8), false);
-
-        Assert::same($candidates, [0, 4, 2, 1]);
     }
 
     public function generateBiasesTowardBoundaryValues(): void
@@ -109,7 +135,7 @@ final class IntArbitraryTest
         $boundaryHits = 0;
 
         for ($i = 0; $i < 1000; ++$i) {
-            if (in_array($arbitrary->generate($random), [0, 1, 1_000_000], true)) {
+            if (in_array($arbitrary->generate($random)->value, [0, 1, 1_000_000], true)) {
                 ++$boundaryHits;
             }
         }

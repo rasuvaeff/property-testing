@@ -6,11 +6,12 @@ namespace Rasuvaeff\PropertyTesting\Arbitrary;
 
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
 use Rasuvaeff\PropertyTesting\Random;
+use Rasuvaeff\PropertyTesting\Shrinkable;
 
 /**
  * Wraps another arbitrary and additionally yields `null` with roughly even odds.
  *
- * Shrinking prefers `null` over delegating to the inner arbitrary.
+ * Shrinking prefers `null` over descending into the inner value's tree.
  *
  * @api
  */
@@ -21,25 +22,21 @@ final readonly class NullableArbitrary implements ArbitraryInterface
     ) {}
 
     #[\Override]
-    public function generate(Random $random): mixed
+    public function generate(Random $random): Shrinkable
     {
         return $random->int(0, 1) === 1
-            ? null
-            : $this->inner->generate($random);
+            ? Shrinkable::leaf(null)
+            : $this->wrap($this->inner->generate($random));
     }
 
-    #[\Override]
-    public function shrink(mixed $value): iterable
+    private function wrap(Shrinkable $inner): Shrinkable
     {
-        if ($value === null) {
-            return;
-        }
+        return Shrinkable::of($inner->value, function () use ($inner): \Generator {
+            yield Shrinkable::leaf(null);
 
-        yield null;
-
-        /** @var mixed $candidate */
-        foreach ($this->inner->shrink($value) as $candidate) {
-            yield $candidate;
-        }
+            foreach ($inner->shrinks() as $smaller) {
+                yield $this->wrap($smaller);
+            }
+        });
     }
 }

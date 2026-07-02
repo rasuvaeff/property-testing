@@ -6,6 +6,7 @@ namespace Rasuvaeff\PropertyTesting\Tests\Arbitrary;
 
 use Rasuvaeff\PropertyTesting\Arbitrary\StringArbitrary;
 use Rasuvaeff\PropertyTesting\Random;
+use Rasuvaeff\PropertyTesting\Tests\Support\Trees;
 use Testo\Assert;
 use Testo\Assert\ExpectException;
 use Testo\Codecov\Covers;
@@ -21,57 +22,179 @@ final class StringArbitraryTest
         $random = new Random(1);
 
         for ($i = 0; $i < 200; ++$i) {
-            $length = strlen($arbitrary->generate($random));
+            $length = strlen((string) $arbitrary->generate($random)->value);
 
             Assert::true($length >= 2 && $length <= 8);
         }
     }
 
-    public function shrinkTriesEmptyStringFirstThenHalves(): void
+    public function shrinkTriesEmptyStringFirstThenExactHalfPrefixes(): void
     {
-        $candidates = iterator_to_array((new StringArbitrary())->shrink('hello world'), false);
+        $node = Trees::generateWhere(
+            new StringArbitrary(0, 12),
+            static fn(mixed $v): bool => is_string($v) && strlen($v) === 8,
+        );
+        $value = $node->value;
+        $candidates = Trees::childValues($node);
 
         Assert::same($candidates[0], '');
-        Assert::true(in_array('h', $candidates, true));
+        Assert::same($candidates[1], substr((string) $value, 0, 4));
+        Assert::same($candidates[2], substr((string) $value, 0, 2));
+        Assert::same($candidates[3], substr((string) $value, 0, 1));
     }
 
     public function shrinkReducesCharactersTowardLowercaseA(): void
     {
-        // After the length candidates, each character is driven toward 'a' in place.
-        $candidates = iterator_to_array((new StringArbitrary())->shrink('hi'), false);
+        // After the length candidates, each non-'a' character is driven toward
+        // 'a' in place, one position at a time.
+        $node = Trees::generateWhere(
+            new StringArbitrary(2, 2),
+            static fn(mixed $v): bool => is_string($v) && strlen($v) === 2 && $v[0] !== 'a' && $v[1] !== 'a',
+        );
+        $value = $node->value;
+        $candidates = Trees::childValues($node);
 
-        Assert::true(in_array('ai', $candidates, true));
-        Assert::true(in_array('ha', $candidates, true));
+        Assert::true(in_array('a' . $value[1], $candidates, true));
+        Assert::true(in_array($value[0] . 'a', $candidates, true));
+    }
+
+    public function shrinkSkipsCharactersAlreadyA(): void
+    {
+        // A single 'a' is fully shrunk in the character phase: with minLength 1
+        // there is no length candidate either, so the node is terminal.
+        $node = Trees::generateWhere(
+            new StringArbitrary(1, 1),
+            static fn(mixed $v): bool => $v === 'a',
+        );
+
+        Assert::same(Trees::childValues($node), []);
+    }
+
+    public function singleCharacterShrinksOnlyToA(): void
+    {
+        $node = Trees::generateWhere(
+            new StringArbitrary(1, 1),
+            static fn(mixed $v): bool => is_string($v) && $v !== 'a',
+        );
+
+        Assert::same(Trees::childValues($node), ['a']);
+    }
+
+    public function shrinkYieldsTheEmptyStringExactlyOnce(): void
+    {
+        // The empty string comes only from the minLength===0 guard; the length
+        // loop must stop at 1 and never emit a second '' via a zero-length prefix.
+        $node = Trees::generateWhere(
+            new StringArbitrary(0, 12),
+            static fn(mixed $v): bool => is_string($v) && strlen($v) === 8,
+        );
+
+        $empties = array_filter(Trees::childValues($node), static fn(mixed $candidate): bool => $candidate === '');
+        Assert::same(count($empties), 1);
+    }
+
+    public function shrinkCharacterPhaseContinuesPastCharactersAlreadyA(): void
+    {
+        // v[0] is already 'a': the loop must skip it (continue, not break) and
+        // still drive v[1] to 'a'. minLength 2 blocks the length phase, so the
+        // substitution is the only candidate.
+        $node = Trees::generateWhere(
+            new StringArbitrary(2, 2),
+            static fn(mixed $v): bool => is_string($v) && $v[0] === 'a' && $v[1] !== 'a',
+        );
+
+        Assert::same(Trees::childValues($node), ['aa']);
+    }
+
+    public function unicodeLengthPhaseHalvesPerCharacterNotPerByte(): void
+    {
+        // With multibyte codepoints the half-length prefix must be taken with
+        // mb_substr: a byte-based slice would cut codepoints in half.
+        $node = Trees::generateWhere(
+            new StringArbitrary(0, 6, unicode: true),
+            static fn(mixed $v): bool => is_string($v)
+                && mb_strlen($v, 'UTF-8') === 4
+                && strlen($v) > 4,
+        );
+        $value = $node->value;
+        $candidates = Trees::childValues($node);
+
+        Assert::same($candidates[0], '');
+        Assert::same($candidates[1], mb_substr((string) $value, 0, 2, 'UTF-8'));
+        Assert::same($candidates[2], mb_substr((string) $value, 0, 1, 'UTF-8'));
     }
 
     public function shrinkNeverEscapesBelowMinimumLength(): void
     {
         // stringOf(5, 10)-style generator must never shrink to '' (out of domain).
-        $candidates = iterator_to_array((new StringArbitrary(5, 10))->shrink('abcdefgh'), false);
+        $node = Trees::generateWhere(
+            new StringArbitrary(5, 10),
+            static fn(mixed $v): bool => is_string($v) && mb_strlen($v, 'UTF-8') >= 8,
+        );
 
-        Assert::false(in_array('', $candidates, true));
-
-        foreach ($candidates as $candidate) {
-            Assert::true(mb_strlen((string) $candidate) >= 5);
+        foreach (Trees::valuesToDepth($node, 2) as $candidate) {
+            Assert::true(mb_strlen((string) $candidate, 'UTF-8') >= 5);
         }
+    }
+
+    public function shrinkKeepsTheMinimumLengthCandidate(): void
+    {
+        // With minLength 2 the length-floor prefix (exactly 2 chars) is produced.
+        $node = Trees::generateWhere(
+            new StringArbitrary(2, 100),
+            static fn(mixed $v): bool => is_string($v) && strlen($v) === 8,
+        );
+
+        Assert::true(in_array(substr((string) $node->value, 0, 2), Trees::childValues($node), true));
     }
 
     public function shrinkOfEmptyStringYieldsNothing(): void
     {
-        Assert::same(iterator_to_array((new StringArbitrary())->shrink('')), []);
+        $node = Trees::generateWhere(new StringArbitrary(0, 3), static fn(mixed $v): bool => $v === '');
+
+        Assert::same(Trees::childValues($node), []);
     }
 
     public function unicodeGenerationProducesValidUtf8(): void
     {
+        // 3000 seeds make a surrogate draw (p ~ 0.18% per codepoint) all but
+        // certain, so a broken surrogate-skip loop cannot slip through as the
+        // empty-string fallback.
         $arbitrary = new StringArbitrary(1, 1, unicode: true);
 
-        for ($seed = 1; $seed <= 50; ++$seed) {
-            $value = $arbitrary->generate(new Random($seed));
+        for ($seed = 1; $seed <= 3000; ++$seed) {
+            $value = $arbitrary->generate(new Random($seed))->value;
 
             Assert::same(mb_check_encoding($value, 'UTF-8'), true);
             // A single requested character must yield exactly one codepoint (never
             // the empty fallback), and it must be valid UTF-8.
-            Assert::same(mb_strlen($value, 'UTF-8'), 1);
+            Assert::same(mb_strlen((string) $value, 'UTF-8'), 1);
+        }
+    }
+
+    public function shrinkHalvesAndDrivesCharactersByCharacterNotByte(): void
+    {
+        // Multibyte strings must halve and substitute per character, never per
+        // byte, so candidates stay valid UTF-8 of the right character length.
+        $node = Trees::generateWhere(
+            new StringArbitrary(4, 4, unicode: true),
+            static fn(mixed $v): bool => is_string($v)
+                && mb_strlen($v, 'UTF-8') === 4
+                && strlen($v) > 4
+                && !str_contains($v, 'a'),
+        );
+        $value = $node->value;
+        $candidates = Trees::childValues($node);
+
+        // minLength 4 blocks the length phase entirely: only the four character
+        // substitutions remain, each replacing one codepoint with 'a'.
+        Assert::same(count($candidates), 4);
+        $chars = mb_str_split((string) $value, 1, 'UTF-8');
+        Assert::same($candidates[0], 'a' . implode('', array_slice($chars, 1)));
+
+        foreach ($candidates as $candidate) {
+            Assert::same(mb_check_encoding($candidate, 'UTF-8'), true);
+            Assert::same(mb_strlen((string) $candidate, 'UTF-8'), 4);
         }
     }
 
@@ -83,54 +206,13 @@ final class StringArbitraryTest
         $max = 0;
 
         for ($i = 0; $i < 200; ++$i) {
-            $length = strlen($arbitrary->generate($random));
+            $length = strlen((string) $arbitrary->generate($random)->value);
             $min = min($min, $length);
             $max = max($max, $length);
         }
 
         Assert::same($min, 1);
         Assert::same($max, 4);
-    }
-
-    public function shrinkLengthPhaseYieldsEmptyThenExactHalves(): void
-    {
-        $candidates = iterator_to_array((new StringArbitrary())->shrink('abcdefgh'), false);
-
-        Assert::same($candidates[0], '');
-        Assert::same($candidates[1], 'abcd');
-        Assert::same($candidates[2], 'ab');
-        Assert::same($candidates[3], 'a');
-    }
-
-    public function shrinkHalvesAndDrivesCharactersByCharacterNotByte(): void
-    {
-        // 'αβγδ' is four 2-byte codepoints; both the length halving and the
-        // character-to-'a' phase must operate per character, never per byte.
-        $candidates = iterator_to_array((new StringArbitrary())->shrink('αβγδ'), false);
-
-        Assert::same($candidates[0], '');
-        Assert::same($candidates[1], 'αβ');
-        Assert::same($candidates[2], 'α');
-        Assert::same(in_array('aβγδ', $candidates, true), true);
-    }
-
-    public function shrinkCharacterPhaseSkipsOnlyTheCharactersAlreadyA(): void
-    {
-        // The middle 'a' is skipped, but the loop continues past it: the trailing
-        // 'b' must still be driven to 'a'. ('bab' -> '', 'b', 'aab', 'baa'.)
-        $candidates = iterator_to_array((new StringArbitrary())->shrink('bab'), false);
-
-        Assert::same($candidates, ['', 'b', 'aab', 'baa']);
-    }
-
-    public function shrinkKeepsTheMinimumLengthCandidate(): void
-    {
-        // With minLength 2 the length-floor candidate (exactly 2 chars) is produced.
-        $candidates = iterator_to_array((new StringArbitrary(2, 100))->shrink('abcdefgh'), false);
-        $lengthTwo = array_filter($candidates, static fn(string $c): bool => mb_strlen($c, 'UTF-8') === 2);
-
-        Assert::same(in_array('ab', $candidates, true), true);
-        Assert::true($lengthTwo !== []);
     }
 
     #[ExpectException(\InvalidArgumentException::class)]

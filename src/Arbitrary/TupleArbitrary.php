@@ -6,6 +6,7 @@ namespace Rasuvaeff\PropertyTesting\Arbitrary;
 
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
 use Rasuvaeff\PropertyTesting\Random;
+use Rasuvaeff\PropertyTesting\Shrinkable;
 
 /**
  * Fixed-arity tuple: produces a list with one value per element arbitrary, in
@@ -13,7 +14,7 @@ use Rasuvaeff\PropertyTesting\Random;
  * (the property receives the tuple as one array argument and destructures it).
  *
  * Shrinking keeps the arity fixed and shrinks one position at a time through
- * that position's own arbitrary, so each component shrinks within its domain.
+ * that position's own shrink tree, so each component shrinks within its domain.
  *
  * @api
  */
@@ -29,36 +30,34 @@ final readonly class TupleArbitrary implements ArbitraryInterface
         }
 
         // Named variadic arguments arrive string-keyed; re-index to a list so
-        // generate()/shrink() address each element by its positional index.
+        // generate() addresses each element by its positional index.
         $this->elements = array_values($elements);
     }
 
     #[\Override]
-    public function generate(Random $random): array
+    public function generate(Random $random): Shrinkable
     {
-        return array_map(
-            static fn(ArbitraryInterface $element): mixed => $element->generate($random),
+        return $this->tree(array_map(
+            static fn(ArbitraryInterface $element): Shrinkable => $element->generate($random),
             $this->elements,
-        );
+        ));
     }
 
-    #[\Override]
-    public function shrink(mixed $value): iterable
+    /**
+     * @param list<Shrinkable> $components
+     */
+    private function tree(array $components): Shrinkable
     {
-        if (!is_array($value) || count($value) !== count($this->elements)) {
-            return;
-        }
+        $value = array_map(static fn(Shrinkable $component): mixed => $component->value, $components);
 
-        // Arity is fixed: there is no length phase. Re-index to a list so each
-        // position maps to the element arbitrary at the same index, then shrink
-        // one position at a time, keeping the others as-is.
-        $values = array_values($value);
-
-        foreach ($this->elements as $index => $element) {
-            /** @var mixed $smaller */
-            foreach ($element->shrink($values[$index]) as $smaller) {
-                yield array_replace($values, [$index => $smaller]);
+        return Shrinkable::of($value, function () use ($components): \Generator {
+            // Arity is fixed: there is no length phase. Shrink one position at a
+            // time through its own tree, keeping the others as-is.
+            foreach ($components as $index => $component) {
+                foreach ($component->shrinks() as $smaller) {
+                    yield $this->tree(array_replace($components, [$index => $smaller]));
+                }
             }
-        }
+        });
     }
 }

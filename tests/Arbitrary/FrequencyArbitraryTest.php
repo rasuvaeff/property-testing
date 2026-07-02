@@ -8,6 +8,7 @@ use Rasuvaeff\PropertyTesting\Arbitrary\BoolArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\FrequencyArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\IntArbitrary;
 use Rasuvaeff\PropertyTesting\Random;
+use Rasuvaeff\PropertyTesting\Tests\Support\Trees;
 use Testo\Assert;
 use Testo\Assert\ExpectException;
 use Testo\Codecov\Covers;
@@ -26,7 +27,7 @@ final class FrequencyArbitraryTest
         $random = new Random(1);
 
         for ($i = 0; $i < 200; ++$i) {
-            Assert::true(in_array($arbitrary->generate($random), [0, 1], true));
+            Assert::true(in_array($arbitrary->generate($random)->value, [0, 1], true));
         }
     }
 
@@ -43,7 +44,7 @@ final class FrequencyArbitraryTest
         $seen = [];
 
         for ($i = 0; $i < 300; ++$i) {
-            $seen[$arbitrary->generate($random)] = true;
+            $seen[$arbitrary->generate($random)->value] = true;
         }
 
         Assert::same(isset($seen[0], $seen[1], $seen[2]), true);
@@ -61,7 +62,7 @@ final class FrequencyArbitraryTest
         $seen = [];
 
         for ($i = 0; $i < 400; ++$i) {
-            $seen[$arbitrary->generate($random)] = true;
+            $seen[$arbitrary->generate($random)->value] = true;
         }
 
         Assert::same(isset($seen[7], $seen[9]), true);
@@ -71,40 +72,37 @@ final class FrequencyArbitraryTest
     {
         $arbitrary = new FrequencyArbitrary([[1, new IntArbitrary(3, 3)]]);
 
-        Assert::same($arbitrary->generate(new Random(1)), 3);
+        Assert::same($arbitrary->generate(new Random(1))->value, 3);
     }
 
-    public function shrinkDelegatesToBranchesThatCouldHaveProducedTheValue(): void
+    public function shrinkStaysWithinTheGeneratingBranch(): void
     {
-        // The value 8 can only come from the int branch; the bool branch ignores
-        // it. So candidates are the int shrinks (toward 0), no booleans.
-        $candidates = iterator_to_array(
-            (new FrequencyArbitrary([
-                [1, new IntArbitrary(0, 10)],
-                [1, new BoolArbitrary()],
-            ]))->shrink(8),
-            false,
-        );
+        // The value carries its generating branch's tree: an int from the
+        // [5, 9] branch shrinks along that branch's ladder (toward 5), and no
+        // boolean ever appears among the candidates.
+        $arbitrary = new FrequencyArbitrary([
+            [1, new IntArbitrary(5, 9)],
+            [1, new BoolArbitrary()],
+        ]);
+        $node = Trees::generateWhere($arbitrary, static fn(mixed $v): bool => is_int($v) && $v > 5);
+        $candidates = Trees::childValues($node);
 
-        Assert::true(in_array(0, $candidates, true));
+        Assert::same($candidates[0], 5);
 
-        foreach ($candidates as $candidate) {
+        foreach (Trees::valuesToDepth($node, 2) as $candidate) {
             Assert::true(is_int($candidate));
         }
     }
 
-    public function shrinkUsesTheBranchMatchingTheValueType(): void
+    public function boolBranchValueShrinksAsABool(): void
     {
-        // A boolean value is shrunk only by the bool branch (true -> false).
-        $candidates = iterator_to_array(
-            (new FrequencyArbitrary([
-                [1, new IntArbitrary(0, 10)],
-                [1, new BoolArbitrary()],
-            ]))->shrink(true),
-            false,
-        );
+        $arbitrary = new FrequencyArbitrary([
+            [1, new IntArbitrary(5, 9)],
+            [1, new BoolArbitrary()],
+        ]);
+        $node = Trees::generateWhere($arbitrary, static fn(mixed $v): bool => $v === true);
 
-        Assert::same($candidates, [false]);
+        Assert::same(Trees::childValues($node), [false]);
     }
 
     #[ExpectException(\InvalidArgumentException::class)]

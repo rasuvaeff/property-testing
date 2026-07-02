@@ -119,3 +119,33 @@ final class NoSeedFalsifyingStub
         return ['x' => Gen::intBetween(51, 100)];
     }
 }
+
+final class MappedFalsifyingStub
+{
+    #[Property(runs: 50, seed: 1, generators: 'provide')]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        // Doubled ints: with integrated shrinking the mapped value shrinks
+        // through the source int's tree (pre-2.0, map() did not shrink at all).
+        return ['x' => Gen::map(Gen::intBetween(0, 100), static fn(int $n): int => $n * 2)];
+    }
+}
+
+final class FlatMapFalsifyingStub
+{
+    #[Property(runs: 50, seed: 1, generators: 'provide')]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        // Dependent generator: the value's domain [0, n] depends on the source n.
+        return ['x' => Gen::flatMap(
+            Gen::intBetween(1, 10),
+            static fn(int $n): ArbitraryInterface => Gen::intBetween(0, $n),
+        )];
+    }
+}

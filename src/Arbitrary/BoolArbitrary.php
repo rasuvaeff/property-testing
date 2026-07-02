@@ -6,30 +6,23 @@ namespace Rasuvaeff\PropertyTesting\Arbitrary;
 
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
 use Rasuvaeff\PropertyTesting\Random;
+use Rasuvaeff\PropertyTesting\Shrinkable;
 
 /**
- * Generates booleans. Booleans have no meaningful shrink.
+ * Generates booleans. false is the "smaller" boolean: true shrinks to false,
+ * false is terminal.
  *
  * @api
  */
 final readonly class BoolArbitrary implements ArbitraryInterface
 {
     #[\Override]
-    public function generate(Random $random): bool
+    public function generate(Random $random): Shrinkable
     {
-        return $random->int(0, 1) === 1;
-    }
-
-    #[\Override]
-    public function shrink(mixed $value): iterable
-    {
-        if (!is_bool($value)) {
-            return;
+        if ($random->int(0, 1) === 1) {
+            return Shrinkable::of(true, static fn(): array => [Shrinkable::leaf(false)]);
         }
 
-        // false is the "smaller" boolean.
-        if ($value) {
-            yield false;
-        }
+        return Shrinkable::leaf(false);
     }
 }

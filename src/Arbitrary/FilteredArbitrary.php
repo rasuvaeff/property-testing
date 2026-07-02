@@ -7,6 +7,7 @@ namespace Rasuvaeff\PropertyTesting\Arbitrary;
 use Closure;
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
 use Rasuvaeff\PropertyTesting\Random;
+use Rasuvaeff\PropertyTesting\Shrinkable;
 
 /**
  * Generates values from a delegate arbitrary, retrying until a predicate holds.
@@ -17,8 +18,8 @@ use Rasuvaeff\PropertyTesting\Random;
  * rejection rate is high, which skips discarded runs cleanly instead of
  * burning random budget here.
  *
- * Shrinking delegates to the inner arbitrary and keeps only candidates that
- * satisfy the predicate.
+ * Shrinking walks the inner value's tree, keeping only branches whose value
+ * satisfies the predicate (a rejected candidate's subtree is pruned with it).
  *
  * @api
  */
@@ -35,31 +36,30 @@ final readonly class FilteredArbitrary implements ArbitraryInterface
     ) {}
 
     #[\Override]
-    public function generate(Random $random): mixed
+    public function generate(Random $random): Shrinkable
     {
         $attempt = 0;
 
         do {
-            /** @var mixed $value */
-            $value = $this->inner->generate($random);
+            $shrinkable = $this->inner->generate($random);
 
-            if (($this->predicate)($value)) {
-                return $value;
+            if (($this->predicate)($shrinkable->value)) {
+                return $this->filtered($shrinkable);
             }
             ++$attempt;
         } while ($attempt < self::MAX_ATTEMPTS);
 
-        return $value;
+        return $this->filtered($shrinkable);
     }
 
-    #[\Override]
-    public function shrink(mixed $value): iterable
+    private function filtered(Shrinkable $shrinkable): Shrinkable
     {
-        /** @var mixed $candidate */
-        foreach ($this->inner->shrink($value) as $candidate) {
-            if (($this->predicate)($candidate)) {
-                yield $candidate;
+        return Shrinkable::of($shrinkable->value, function () use ($shrinkable): \Generator {
+            foreach ($shrinkable->shrinks() as $candidate) {
+                if (($this->predicate)($candidate->value)) {
+                    yield $this->filtered($candidate);
+                }
             }
-        }
+        });
     }
 }

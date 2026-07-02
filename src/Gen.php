@@ -12,6 +12,7 @@ use Rasuvaeff\PropertyTesting\Arbitrary\ConstantArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\DateTimeArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\DictionaryArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\FilteredArbitrary;
+use Rasuvaeff\PropertyTesting\Arbitrary\FlatMappedArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\FloatArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\FrequencyArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\IntArbitrary;
@@ -192,12 +193,28 @@ final class Gen
 
     /**
      * Transforms each value produced by $inner through a pure function.
+     * Shrinking happens in the source domain and the function is re-applied,
+     * so mapped values shrink through the inner arbitrary's tree.
      *
      * @param Closure(mixed): mixed $map
      */
     public static function map(ArbitraryInterface $inner, Closure $map): MappedArbitrary
     {
         return new MappedArbitrary($inner, $map);
+    }
+
+    /**
+     * Dependent generators (aka `bind`): feeds each value produced by $inner
+     * into $flatMap, which returns the arbitrary generating the final value.
+     * Use it when one input's domain depends on another (e.g. an array plus a
+     * valid index into it) instead of discarding invalid combinations with
+     * {@see Assume::that()}.
+     *
+     * @param Closure(mixed): ArbitraryInterface $flatMap
+     */
+    public static function flatMap(ArbitraryInterface $inner, Closure $flatMap): FlatMappedArbitrary
+    {
+        return new FlatMappedArbitrary($inner, $flatMap);
     }
 
     /**
@@ -223,7 +240,7 @@ final class Gen
     /**
      * Weighted choice among `[weight, arbitrary]` pairs: a branch is picked with
      * probability proportional to its weight, then produces the value. Shrinking
-     * delegates to every inner arbitrary.
+     * stays within the branch that generated the value.
      *
      * @param iterable<array{int, ArbitraryInterface}> $pairs Weights must be >= 1.
      */
@@ -266,7 +283,7 @@ final class Gen
         $random = new Random($seed);
 
         return array_map(
-            static fn(int $i): mixed => $arbitrary->generate($random),
+            static fn(int $i): mixed => $arbitrary->generate($random)->value,
             range(1, $count),
         );
     }

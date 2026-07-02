@@ -11,6 +11,7 @@ use Rasuvaeff\PropertyTesting\CounterExample;
 use Rasuvaeff\PropertyTesting\Property;
 use Rasuvaeff\PropertyTesting\PropertyViolationException;
 use Rasuvaeff\PropertyTesting\Random;
+use Rasuvaeff\PropertyTesting\Shrinkable;
 use Testo\Common\Messenger;
 use Testo\Core\Context\TestInfo;
 use Testo\Core\Context\TestResult;
@@ -88,7 +89,8 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
 
         for ($run = 1; $run <= $runs; ++$run) {
             Classify::beginRun();
-            $arguments = $this->generate($generators, $parameterNames, $random);
+            $trees = $this->generate($generators, $parameterNames, $random);
+            $arguments = $this->values($trees);
             $result = $next($info->with(arguments: array_values($arguments)));
             $labels = Classify::flushRun();
 
@@ -100,7 +102,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             }
 
             if ($result->status->isFailure()) {
-                [$shrunk, $shrinkSteps] = $this->shrink($info, $next, $generators, $parameterNames, $arguments, $property->maxShrinks);
+                [$shrunk, $shrinkSteps] = $this->shrink($info, $next, $trees, $property->maxShrinks);
 
                 return new TestResult(
                     info: $info,
@@ -179,16 +181,28 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
     /**
      * @param array<string, ArbitraryInterface> $generators
      * @param list<string> $parameterNames
-     * @return array<string, mixed>
+     * @return array<string, Shrinkable>
      */
     private function generate(array $generators, array $parameterNames, Random $random): array
     {
         return array_combine(
             $parameterNames,
             array_map(
-                static fn(string $name): mixed => $generators[$name]->generate($random),
+                static fn(string $name): Shrinkable => $generators[$name]->generate($random),
                 $parameterNames,
             ),
+        );
+    }
+
+    /**
+     * @param array<string, Shrinkable> $trees
+     * @return array<string, mixed>
+     */
+    private function values(array $trees): array
+    {
+        return array_map(
+            static fn(Shrinkable $tree): mixed => $tree->value,
+            $trees,
         );
     }
 
@@ -259,13 +273,13 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
     }
 
     /**
-     * Greedy per-parameter shrinking: repeatedly try smaller candidates for one
-     * parameter at a time, accept the first one that still fails, and keep
-     * iterating until a full pass produces no improvement.
+     * Greedy per-parameter descent through each parameter's shrink tree: try the
+     * candidates of one parameter's current node, accept the first that still
+     * fails (descending into that candidate's subtree), and keep iterating until
+     * a full pass produces no improvement. Termination is guaranteed by the
+     * {@see ArbitraryInterface} contract: every branch of a shrink tree is finite.
      *
-     * @param array<string, ArbitraryInterface> $generators
-     * @param list<string> $parameterNames
-     * @param array<string, mixed> $failingArguments
+     * @param array<string, Shrinkable> $trees The failing arguments' shrink trees.
      * @param callable(TestInfo): TestResult $next
      * @param ?int $maxShrinks Cap on accepted shrink steps; null means no cap, 0 disables shrinking.
      * @return array{0: array<string, mixed>, 1: int} The minimised arguments and the number of accepted shrink steps.
@@ -273,30 +287,27 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
     private function shrink(
         TestInfo $info,
         callable $next,
-        array $generators,
-        array $parameterNames,
-        array $failingArguments,
+        array $trees,
         ?int $maxShrinks,
     ): array {
-        /** @var array<string, mixed> $current */
-        $current = $failingArguments;
+        $current = $trees;
         $steps = 0;
 
         do {
             $improved = false;
 
-            foreach ($parameterNames as $name) {
+            foreach (array_keys($current) as $name) {
                 // Stop before accepting any further candidate once the cap is hit.
                 // Checking here (before the per-parameter search) makes maxShrinks=0
                 // return the original counterexample with zero accepted steps.
                 if ($maxShrinks !== null && $steps >= $maxShrinks) {
-                    return [$current, $steps];
+                    return [$this->values($current), $steps];
                 }
 
-                /** @var mixed $candidate */
-                foreach ($generators[$name]->shrink($current[$name]) as $candidate) {
-                    // A candidate equal to the current value makes no progress and would loop.
-                    if ($candidate === $current[$name]) {
+                foreach ($current[$name]->shrinks() as $candidate) {
+                    // A candidate whose value equals the current one (possible under a
+                    // non-injective map) makes no progress; skip it and its subtree.
+                    if ($candidate->value === $current[$name]->value) {
                         continue;
                     }
 
@@ -306,7 +317,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                     // $name to the front and scramble non-leading parameters.
                     $trial = array_replace($current, [$name => $candidate]);
 
-                    if ($this->runFails($info, $next, $trial)) {
+                    if ($this->runFails($info, $next, $this->values($trial))) {
                         $current = $trial;
                         ++$steps;
                         $improved = true;
@@ -317,7 +328,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             }
         } while ($improved);
 
-        return [$current, $steps];
+        return [$this->values($current), $steps];
     }
 
     /**

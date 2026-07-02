@@ -6,9 +6,11 @@ namespace Rasuvaeff\PropertyTesting\Arbitrary;
 
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
 use Rasuvaeff\PropertyTesting\Random;
+use Rasuvaeff\PropertyTesting\Shrinkable;
 
 /**
- * Generates random strings and shrinks them by length toward the empty string.
+ * Generates random strings and shrinks them by length toward the empty string,
+ * then character-by-character toward 'a'.
  *
  * Two alphabets are available: an ASCII printable subset (32..126) and the
  * full Unicode space via {@see mb_chr()}. Length is chosen uniformly within an
@@ -41,7 +43,7 @@ final readonly class StringArbitrary implements ArbitraryInterface
     }
 
     #[\Override]
-    public function generate(Random $random): string
+    public function generate(Random $random): Shrinkable
     {
         $length = $random->int($this->minLength, $this->maxLength);
         $string = '';
@@ -52,46 +54,48 @@ final readonly class StringArbitrary implements ArbitraryInterface
                 : chr($random->int(self::ASCII_MIN, self::ASCII_MAX));
         }
 
-        return $string;
+        return $this->tree($string);
     }
 
-    #[\Override]
-    public function shrink(mixed $value): iterable
+    private function tree(string $value): Shrinkable
     {
-        if (!is_string($value) || $value === '') {
-            return;
-        }
-
-        // 1. Length first: empty string, then halves of the original. Counted in
-        //    characters (not bytes) so multibyte strings never split mid-codepoint.
-        //    Never shrink below minLength, so the candidate stays in the generated
-        //    domain (e.g. stringOf(5, 10) never shrinks to '').
-        if ($this->minLength === 0) {
-            yield '';
-        }
-
-        $length = mb_strlen($value, 'UTF-8');
-        while ($length > 1) {
-            $length = intdiv($length, 2);
-
-            if ($length >= $this->minLength) {
-                yield mb_substr($value, 0, $length, 'UTF-8');
-            }
-        }
-
-        // 2. Then characters: drive each character toward 'a', the canonical
-        //    simplest character, one position at a time.
-        $chars = mb_str_split($value, 1, 'UTF-8');
-        foreach ($chars as $index => $char) {
-            if ($char === 'a') {
-                continue;
+        return Shrinkable::of($value, function () use ($value): \Generator {
+            if ($value === '') {
+                return;
             }
 
-            $candidate = $chars;
-            $candidate[$index] = 'a';
+            // 1. Length first: empty string, then halves of the original. Counted in
+            //    characters (not bytes) so multibyte strings never split mid-codepoint.
+            //    Never shrink below minLength, so the candidate stays in the generated
+            //    domain (e.g. stringOf(5, 10) never shrinks to '').
+            if ($this->minLength === 0) {
+                yield $this->tree('');
+            }
 
-            yield implode('', $candidate);
-        }
+            $length = mb_strlen($value, 'UTF-8');
+            while ($length > 1) {
+                $length = intdiv($length, 2);
+
+                if ($length >= $this->minLength) {
+                    yield $this->tree(mb_substr($value, 0, $length, 'UTF-8'));
+                }
+            }
+
+            // 2. Then characters: drive each character toward 'a', the canonical
+            //    simplest character, one position at a time. Each candidate has one
+            //    fewer non-'a' character, so this phase also terminates.
+            $chars = mb_str_split($value, 1, 'UTF-8');
+            foreach ($chars as $index => $char) {
+                if ($char === 'a') {
+                    continue;
+                }
+
+                $candidate = $chars;
+                $candidate[$index] = 'a';
+
+                yield $this->tree(implode('', $candidate));
+            }
+        });
     }
 
     /**

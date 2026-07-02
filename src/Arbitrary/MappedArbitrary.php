@@ -7,12 +7,15 @@ namespace Rasuvaeff\PropertyTesting\Arbitrary;
 use Closure;
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
 use Rasuvaeff\PropertyTesting\Random;
+use Rasuvaeff\PropertyTesting\Shrinkable;
 
 /**
  * Transforms each value produced by a delegate arbitrary through a pure function.
  *
- * Shrinking delegates to the inner arbitrary and re-applies the mapping so that
- * the shrunk counterexample is reported in the transformed domain.
+ * The whole shrink tree is mapped: shrinking happens in the inner (source)
+ * domain and the function is re-applied to every candidate, so the shrunk
+ * counterexample is reported in the transformed domain. The function must be
+ * pure — it runs once per generated value and once per visited candidate.
  *
  * @api
  */
@@ -27,18 +30,8 @@ final readonly class MappedArbitrary implements ArbitraryInterface
     ) {}
 
     #[\Override]
-    public function generate(Random $random): mixed
+    public function generate(Random $random): Shrinkable
     {
-        return ($this->map)($this->inner->generate($random));
-    }
-
-    #[\Override]
-    public function shrink(mixed $value): iterable
-    {
-        // The mapped domain cannot be inverted in general (the mapping may not
-        // be injective), so no shrinking is attempted on the transformed value.
-        // Properties that rely on shrinking should map within an arbitrary that
-        // itself shrinks, or keep the mapping reversible.
-        yield from [];
+        return $this->inner->generate($random)->map($this->map);
     }
 }

@@ -8,6 +8,8 @@ use Rasuvaeff\PropertyTesting\Arbitrary\FilteredArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\IntArbitrary;
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
 use Rasuvaeff\PropertyTesting\Random;
+use Rasuvaeff\PropertyTesting\Shrinkable;
+use Rasuvaeff\PropertyTesting\Tests\Support\Trees;
 use Testo\Assert;
 use Testo\Codecov\Covers;
 use Testo\Test;
@@ -25,37 +27,53 @@ final class FilteredArbitraryTest
         $random = new Random(1);
 
         for ($i = 0; $i < 100; ++$i) {
-            $value = $arbitrary->generate($random);
+            $value = $arbitrary->generate($random)->value;
 
             Assert::same($value % 2, 0);
         }
     }
 
-    public function shrinkKeepsOnlyCandidatesSatisfyingPredicate(): void
+    public function shrinkKeepsOnlyCandidatesSatisfyingPredicateAtEveryDepth(): void
     {
         $arbitrary = new FilteredArbitrary(
             new IntArbitrary(0, 100),
             static fn(int $x): bool => $x % 2 === 0,
         );
+        $node = Trees::generateWhere($arbitrary, static fn(mixed $v): bool => is_int($v) && $v > 10);
 
-        foreach ($arbitrary->shrink(50) as $candidate) {
+        foreach (Trees::valuesToDepth($node, 3) as $candidate) {
             Assert::same($candidate % 2, 0);
         }
     }
 
-    public function shrinkDelegatesToTheInnerArbitrary(): void
+    public function shrinkDelegatesToTheInnerTree(): void
     {
-        // The inner shrink is actually iterated (not short-circuited away), so a
-        // predicate-satisfying input yields at least one candidate.
+        // The inner shrink tree is actually walked (not short-circuited away):
+        // the inner ladder's first candidate is 0, which satisfies "even".
         $arbitrary = new FilteredArbitrary(
             new IntArbitrary(0, 100),
             static fn(int $x): bool => $x % 2 === 0,
         );
-
-        $candidates = iterator_to_array($arbitrary->shrink(64), false);
+        $node = Trees::generateWhere($arbitrary, static fn(mixed $v): bool => is_int($v) && $v > 10);
+        $candidates = Trees::childValues($node);
 
         Assert::true($candidates !== []);
         Assert::same($candidates[0], 0);
+    }
+
+    public function rejectedCandidatesArePrunedWithTheirSubtrees(): void
+    {
+        // Filtering to multiples of 4: every surviving node at any depth is a
+        // multiple of 4 — an odd candidate cannot smuggle its subtree through.
+        $arbitrary = new FilteredArbitrary(
+            new IntArbitrary(0, 100),
+            static fn(int $x): bool => $x % 4 === 0,
+        );
+        $node = Trees::generateWhere($arbitrary, static fn(mixed $v): bool => is_int($v) && $v > 20);
+
+        foreach (Trees::valuesToDepth($node, 3) as $candidate) {
+            Assert::same($candidate % 4, 0);
+        }
     }
 
     public function givesUpAfterTheRetryBudgetAndReturnsTheLastValue(): void
@@ -67,7 +85,7 @@ final class FilteredArbitraryTest
             static fn(int $x): bool => false,
         );
 
-        $value = $arbitrary->generate(new Random(1));
+        $value = $arbitrary->generate(new Random(1))->value;
 
         Assert::true($value >= 1 && $value <= 100);
     }
@@ -80,17 +98,11 @@ final class FilteredArbitraryTest
             public int $calls = 0;
 
             #[\Override]
-            public function generate(Random $random): mixed
+            public function generate(Random $random): Shrinkable
             {
                 ++$this->calls;
 
-                return 1;
-            }
-
-            #[\Override]
-            public function shrink(mixed $value): iterable
-            {
-                return [];
+                return Shrinkable::leaf(1);
             }
         };
 

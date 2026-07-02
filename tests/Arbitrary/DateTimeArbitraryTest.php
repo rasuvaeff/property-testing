@@ -7,6 +7,7 @@ namespace Rasuvaeff\PropertyTesting\Tests\Arbitrary;
 use DateTimeImmutable;
 use Rasuvaeff\PropertyTesting\Arbitrary\DateTimeArbitrary;
 use Rasuvaeff\PropertyTesting\Random;
+use Rasuvaeff\PropertyTesting\Tests\Support\Trees;
 use Testo\Assert;
 use Testo\Assert\ExpectException;
 use Testo\Codecov\Covers;
@@ -24,7 +25,7 @@ final class DateTimeArbitraryTest
         $random = new Random(1);
 
         for ($i = 0; $i < 200; ++$i) {
-            $timestamp = $arbitrary->generate($random)->getTimestamp();
+            $timestamp = $arbitrary->generate($random)->value->getTimestamp();
 
             Assert::true($timestamp >= 1000 && $timestamp <= 2000);
         }
@@ -38,7 +39,7 @@ final class DateTimeArbitraryTest
         $max = PHP_INT_MIN;
 
         for ($i = 0; $i < 200; ++$i) {
-            $timestamp = $arbitrary->generate($random)->getTimestamp();
+            $timestamp = $arbitrary->generate($random)->value->getTimestamp();
             $min = min($min, $timestamp);
             $max = max($max, $timestamp);
         }
@@ -49,10 +50,12 @@ final class DateTimeArbitraryTest
 
     public function shrinkMovesTowardTheEpoch(): void
     {
-        $candidates = iterator_to_array(
-            (new DateTimeArbitrary())->shrink(new DateTimeImmutable('@500')),
-            false,
+        $node = Trees::generateWhere(
+            new DateTimeArbitrary(),
+            static fn(mixed $v): bool => $v instanceof DateTimeImmutable && $v->getTimestamp() !== 0,
         );
+
+        $candidates = Trees::childValues($node);
 
         Assert::same(count($candidates), 1);
         Assert::same($candidates[0]->getTimestamp(), 0);
@@ -61,38 +64,50 @@ final class DateTimeArbitraryTest
     public function shrinkClampsTheEpochIntoTheRange(): void
     {
         // A range that excludes the epoch shrinks toward the nearest bound.
-        $candidates = iterator_to_array(
-            (new DateTimeArbitrary(new DateTimeImmutable('@1000'), new DateTimeImmutable('@2000')))
-                ->shrink(new DateTimeImmutable('@1500')),
-            false,
+        $node = Trees::generateWhere(
+            new DateTimeArbitrary(new DateTimeImmutable('@1000'), new DateTimeImmutable('@2000')),
+            static fn(mixed $v): bool => $v instanceof DateTimeImmutable && $v->getTimestamp() !== 1000,
         );
 
-        Assert::same($candidates[0]->getTimestamp(), 1000);
+        Assert::same(Trees::childValues($node)[0]->getTimestamp(), 1000);
     }
 
     public function shrinkOfTheTargetYieldsNothing(): void
     {
-        Assert::same(
-            iterator_to_array((new DateTimeArbitrary())->shrink(new DateTimeImmutable('@0'))),
-            [],
-        );
-    }
+        // A degenerate range pinned at the epoch generates the target itself.
+        $arbitrary = new DateTimeArbitrary(new DateTimeImmutable('@0'), new DateTimeImmutable('@0'));
 
-    public function shrinkOfNonDateTimeYieldsNothing(): void
-    {
-        Assert::same(iterator_to_array((new DateTimeArbitrary())->shrink('not a date')), []);
+        Assert::same(Trees::childValues($arbitrary->generate(new Random(1))), []);
     }
 
     public function shrinkTargetsTheEpochWhenItIsInsideTheRange(): void
     {
         // A range spanning the epoch shrinks exactly to timestamp 0.
-        $candidates = iterator_to_array(
-            (new DateTimeArbitrary(new DateTimeImmutable('@-100'), new DateTimeImmutable('@100')))
-                ->shrink(new DateTimeImmutable('@50')),
-            false,
+        $node = Trees::generateWhere(
+            new DateTimeArbitrary(new DateTimeImmutable('@-100'), new DateTimeImmutable('@100')),
+            static fn(mixed $v): bool => $v instanceof DateTimeImmutable && $v->getTimestamp() !== 0,
         );
 
-        Assert::same($candidates[0]->getTimestamp(), 0);
+        Assert::same(Trees::childValues($node)[0]->getTimestamp(), 0);
+    }
+
+    public function theEpochCandidateIsTerminal(): void
+    {
+        $node = Trees::generateWhere(
+            new DateTimeArbitrary(),
+            static fn(mixed $v): bool => $v instanceof DateTimeImmutable && $v->getTimestamp() !== 0,
+        );
+
+        foreach ($node->shrinks() as $child) {
+            Assert::same(Trees::childValues($child), []);
+        }
+    }
+
+    public function defaultRangeDrawIsExactForAGivenSeed(): void
+    {
+        // Pins the default bounds (epoch .. 2100-01-01) byte-exactly: shifting
+        // either default by one changes the uniform draw for this seed.
+        Assert::same((new DateTimeArbitrary())->generate(new Random(1))->value->getTimestamp(), 1_791_095_845);
     }
 
     public function acceptsADegenerateRange(): void
@@ -100,7 +115,7 @@ final class DateTimeArbitraryTest
         // min === max is a valid single-point range and must construct + generate.
         $arbitrary = new DateTimeArbitrary(new DateTimeImmutable('@5'), new DateTimeImmutable('@5'));
 
-        Assert::same($arbitrary->generate(new Random(1))->getTimestamp(), 5);
+        Assert::same($arbitrary->generate(new Random(1))->value->getTimestamp(), 5);
     }
 
     #[ExpectException(\InvalidArgumentException::class)]

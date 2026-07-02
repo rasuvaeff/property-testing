@@ -7,8 +7,10 @@ Guidance for AI agents working on this package. Read before changing code.
 This package provides property-based testing for the Testo testing framework.
 The public API lives in the `Rasuvaeff\PropertyTesting` namespace and consists
 of: the `#[Property]` attribute, the `Gen` static facade of generators
-(implementing `ArbitraryInterface`), the `Assume::that()` discard helper, the
-`PropertyViolationException`/`CounterExample` failure carriers, and the
+(implementing `ArbitraryInterface`), the `Shrinkable` value/lazy-shrink-tree
+node (integrated shrinking: `generate()` returns the value plus its shrink
+tree; there is no `shrink(mixed)` method), the `Assume::that()` discard helper,
+the `PropertyViolationException`/`CounterExample` failure carriers, and the
 self-registering `PropertyInterceptor` that drives the run/falsify/shrink loop.
 
 It is a Testo plugin, not a standalone runner. It depends on Testo's stable
@@ -23,9 +25,11 @@ the `Interceptable`/`FallbackInterceptor`/`InterceptorOptions` attributes.
 3. **Preserve branch identity in the loop.** `#[Property]` must invoke the test
    exactly once per generated input; a discarded run (`Assume::that(false)`)
    is neither a failure nor a successful check.
-4. **Preserve shrinking termination.** Shrinking accepts only candidates that
-   differ from the current value and still fail; candidates equal to the
-   current value must be skipped to avoid an infinite loop.
+4. **Preserve shrinking termination.** Every branch of a `Shrinkable` tree
+   must be finite and no candidate may equal its parent value (each builder
+   guarantees a strictly decreasing measure: distance to target, length,
+   non-'a' count, list index). The interceptor additionally skips candidates
+   whose value equals the current one (possible under a non-injective map).
 5. **Preserve the public contract.** Update README + tests with any API change.
 
 ## Commands
@@ -72,12 +76,24 @@ make release-check
   `beginRun()` and drains it via `flushRun()` each run, so it is never shared
   concurrently (property runs are sequential).
 - `Gen::filter()` retries up to 100 times then yields the last value; prefer
-  `Assume::that()` in the property body when the rejection rate is high.
+  `Assume::that()` in the property body when the rejection rate is high. For
+  dependent domains use `Gen::flatMap()` instead of filtering.
 - `yield from` inside a generator that already `yield`ed causes integer-key
   collisions (later values overwrite earlier ones). Spread inner shrink
   candidates with an explicit `foreach` + `yield`, not `yield from`.
-- Shrinking is greedy per-parameter and best-effort minimal, not provably
-  minimal (halving toward zero/empty; no exhaustive search).
+- Shrink trees are built at generation time: composite arbitraries keep their
+  components as `Shrinkable`s (not raw values) so transformed elements shrink
+  through their own trees. `FlatMappedArbitrary` captures one extra seed at
+  generate() time to regenerate the dependent value deterministically when the
+  source shrinks — do not replace it with ambient randomness.
+- `Shrinkable::shrinks()` re-invokes its closure on every call; children must
+  be re-derivable (pure closures over immutable state).
+- Shrinking is a greedy per-parameter tree descent and best-effort minimal,
+  not provably minimal (no exhaustive search). For monotone predicates the
+  int ladder is an exact binary search.
+- Tests obtain trees only via generation: `tests/Support/Trees.php` scans
+  sequential seeds (`generateWhere`) for a node with the wanted value, then
+  asserts on `childValues`/`valuesToDepth`/`descendWhile`.
 - Code: `declare(strict_types=1)`, `final readonly class`, `#[\Override]`,
   explicit types.
 - `examples/` is part of the public contract: keep scripts runnable and update

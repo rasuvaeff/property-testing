@@ -7,6 +7,7 @@ namespace Rasuvaeff\PropertyTesting\Arbitrary;
 use DateTimeImmutable;
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
 use Rasuvaeff\PropertyTesting\Random;
+use Rasuvaeff\PropertyTesting\Shrinkable;
 
 /**
  * Generates UTC {@see DateTimeImmutable} values with a Unix timestamp drawn
@@ -34,24 +35,18 @@ final readonly class DateTimeArbitrary implements ArbitraryInterface
     }
 
     #[\Override]
-    public function generate(Random $random): DateTimeImmutable
+    public function generate(Random $random): Shrinkable
     {
-        return new DateTimeImmutable('@' . $random->int($this->minTimestamp, $this->maxTimestamp));
-    }
+        $timestamp = $random->int($this->minTimestamp, $this->maxTimestamp);
 
-    #[\Override]
-    public function shrink(mixed $value): iterable
-    {
-        if (!$value instanceof DateTimeImmutable) {
-            return;
-        }
+        return Shrinkable::of(new DateTimeImmutable('@' . $timestamp), function () use ($timestamp): \Generator {
+            // Shrink toward the epoch, clamped into the configured range (mirrors
+            // IntArbitrary/FloatArbitrary: the target is the nearest in-range bound).
+            $target = max($this->minTimestamp, min($this->maxTimestamp, 0));
 
-        // Shrink toward the epoch, clamped into the configured range (mirrors
-        // IntArbitrary/FloatArbitrary: the target is the nearest in-range bound).
-        $target = max($this->minTimestamp, min($this->maxTimestamp, 0));
-
-        if ($value->getTimestamp() !== $target) {
-            yield new DateTimeImmutable('@' . $target);
-        }
+            if ($timestamp !== $target) {
+                yield Shrinkable::leaf(new DateTimeImmutable('@' . $target));
+            }
+        });
     }
 }
