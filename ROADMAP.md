@@ -1,7 +1,7 @@
 # Roadmap — rasuvaeff/property-testing
 
 Development plan derived from a consumer-perspective gap analysis. Current
-version: `1.0.0`.
+version: `2.1.0`.
 
 ## Guiding split
 
@@ -71,14 +71,83 @@ Derived from a consumer-perspective review after 2.0.0. Additive only; the
 | sized collections | optional `$min`/`$max` on `arrayOf`/`nonEmptyArrayOf`/`dictOf` | done |
 | verbose runs | `PROPERTY_VERBOSE` env — log every run's generated arguments | done |
 
+## Consumer gap analysis vs. analogs (2026-07-05)
+
+After `2.1.0`, a consumer-perspective review compared the surface against the
+major property-testing libraries. `property-testing` is already state of the
+art on **integrated shrinking** (Hedgehog model) and carries a **coverage gate**
+(`Classify::cover`) that most libraries lack. The remaining gaps, and who has
+each feature:
+
+| Feature | Hypothesis | fast-check | jqwik | Hedgehog | Eris (PHP) | here |
+|---|:--:|:--:|:--:|:--:|:--:|:--:|
+| Integrated shrinking | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ |
+| Coverage gate (`cover`) | ~ | ✗ | ✓ | ✗ | ✗ | ✓ |
+| Stateful / model-based | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
+| Explicit examples (`@example`) | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ |
+| Persist last failure + auto-replay | ✓ | ~ | ✓ | ✗ | ✗ | ✗ |
+| Domain arbitraries + regex/`stringMatching` | ✓ | ✓✓ | ✓ | ~ | ~ | ✗ |
+| In-body draw (`data.draw()`/`gen()`) | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ |
+| Targeted PBT (`target()`) | ✓ | ✗ | ✓ | ✗ | ✗ | ✗ |
+| Function generation (CoArbitrary) | ✓ | ✓ | ~ | ✗ | ✗ | ✗ |
+| Per-example deadline/timeout | ✓ | ~ | ✓ | ✗ | ✗ | ✗ |
+
+All gap items below are **additive** — none touch the `ArbitraryInterface`
+contract or the existing seed sequences, so all ship as minors (no major).
+
+## Wave 4 — `2.2.0` (stateful / model-based testing)
+
+The single biggest gap: no PHP peer has it, every non-PHP analog does. Tests
+*sequences* of operations against a simplified model, then shrinks the failing
+sequence. Highest-value target in this monorepo — covers invariants unreachable
+by single-shot properties: `bulkhead` (concurrency counters), `yii3-feature-flags`
+/`yii3-settings` (set→get), `yii3-outbox` (enqueue/dequeue/markProcessed),
+`yii3-idempotency`, cache backends.
+
+| Item | What | Status |
+|---|---|---|
+| T1.1 | command/model-based API: a `Command` interface (precondition, apply-to-model, run-against-SUT, postcondition) + a generator producing valid command sequences that shrink by dropping/simplifying steps | planned |
+
+This **reverses** the former "no stateful testing" non-goal below — the gap
+analysis judged it worth the API surface.
+
+## Wave 5 — `2.3.0` (regression ergonomics)
+
+| Item | What | Status |
+|---|---|---|
+| T1.2 | explicit examples — fixed inputs that always run alongside random ones (`@Example`-style, or an `examples` arg on `#[Property]`); pins a found bug as a permanent case | planned |
+| T1.3 | persist the minimal counterexample of a failing property and auto-replay it first on the next run (analog of Hypothesis's example DB / jqwik samples); opt-in storage path, gitignore-friendly | planned |
+
+## Wave 6 — `2.4.0` (generator catalog + in-body draw)
+
+| Item | What | Status |
+|---|---|---|
+| T2.4 | domain arbitraries: `Gen::regex($pattern)` / `stringMatching`, `email`, `url`, `ipv4`, `json` — removes the documented `Gen::map` workaround (root `AGENTS.md` notes `Gen::stringMatching` does not exist) | planned |
+| T2.5 | in-body dependent draw (`Gen::draw($arb)` inside the property body) for when >1 dependent value makes nested `flatMap` awkward | planned |
+
+## Backlog — Tier 3 (niche, unscheduled)
+
+| Item | What |
+|---|---|
+| T3.6 | targeted PBT — `target($metric)` guiding the search toward maximizing a value (e.g. drive backoff delay to its cap) |
+| T3.7 | function generation (CoArbitrary) — random pure functions for higher-order code (comparators, mappers) |
+| T3.8 | per-example deadline/timeout — catch pathological slow inputs (relevant to `retry`/`bulkhead` timing) |
+
 ## Non-goals (by design, not gaps)
 
 - Testo-only (no PHPUnit/Pest adapter).
-- Attribute-only API (no functional `forAll(...)`).
-- No stateful / model-based (command-sequence) testing.
+- Attribute-only API for the property declaration (no functional `forAll(...)`;
+  an in-body `Gen::draw()` helper in Wave 6 is not the same thing).
+
+(Former non-goal "no stateful / model-based testing" promoted to Wave 4 by the
+2026-07-05 gap analysis.)
 
 ## Status
 
 - `1.1.0` — entire Wave 1 (done, PR #4).
 - `2.0.0` — integrated shrinking + `flatMap` (done, PR #5, released 2026-07-02).
-- `2.1.0` — entire Wave 3 (consumer-driven additions).
+- `2.1.0` — entire Wave 3 (done, PR #6, released 2026-07-05).
+- `2.2.0` — Wave 4, stateful / model-based testing (planned).
+- `2.3.0` — Wave 5, regression ergonomics (planned).
+- `2.4.0` — Wave 6, generator catalog + in-body draw (planned).
+- Backlog — Tier 3 items, unscheduled.
