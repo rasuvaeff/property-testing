@@ -8,6 +8,7 @@ use Rasuvaeff\PropertyTesting\ArbitraryInterface;
 use Rasuvaeff\PropertyTesting\AssumptionSkipped;
 use Rasuvaeff\PropertyTesting\Classify;
 use Rasuvaeff\PropertyTesting\CounterExample;
+use Rasuvaeff\PropertyTesting\CoverageViolationException;
 use Rasuvaeff\PropertyTesting\Property;
 use Rasuvaeff\PropertyTesting\PropertyViolationException;
 use Rasuvaeff\PropertyTesting\Random;
@@ -80,7 +81,11 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
 
         $runs = $this->resolveRuns($property->runs);
         $seed = $this->resolveSeed($property->seed);
+        $verbose = $this->resolveVerbose();
         $random = new Random($seed);
+
+        // Discard requirements a previously aborted property may have left over.
+        Classify::flushRequirements();
 
         $skips = 0;
         $checks = 0;
@@ -91,6 +96,15 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             Classify::beginRun();
             $trees = $this->generate($generators, $parameterNames, $random);
             $arguments = $this->values($trees);
+
+            if ($verbose) {
+                $this->messenger->log(
+                    Messenger::CHANNEL_STDOUT,
+                    sprintf('Property "%s" run %d: %s', $info->name, $run, $this->formatArguments($arguments)),
+                    Level::Info,
+                );
+            }
+
             $result = $next($info->with(arguments: array_values($arguments)));
             $labels = Classify::flushRun();
 
@@ -129,10 +143,73 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         $this->warnOnExcessiveSkips($info->name, $skips, $runs);
         $this->reportClassifications($info->name, $classifications, $checks);
 
+        $violation = $this->coverageViolation($info->name, Classify::flushRequirements(), $classifications, $checks);
+
+        if ($violation instanceof CoverageViolationException) {
+            return new TestResult(
+                info: $info,
+                status: Status::Failed,
+                failure: $violation,
+            );
+        }
+
         return new TestResult(
             info: $info,
             status: Status::Passed,
         );
+    }
+
+    /**
+     * Check the {@see Classify::cover()} requirements against the label counts
+     * of the passing runs; every run passed, but an under-covered label means
+     * the pass is (partially) vacuous and must fail.
+     *
+     * @param array<string, float> $requirements
+     * @param array<string, int> $classifications
+     */
+    private function coverageViolation(
+        string $name,
+        array $requirements,
+        array $classifications,
+        int $checks,
+    ): ?CoverageViolationException {
+        if ($requirements === []) {
+            return null;
+        }
+
+        if ($checks <= 0) {
+            return new CoverageViolationException(sprintf(
+                'Property "%s" has coverage requirements but no successful runs to assess them',
+                $name,
+            ));
+        }
+
+        $unmet = [];
+        foreach ($requirements as $label => $minPercent) {
+            $count = $classifications[$label] ?? 0;
+            $percent = ((float) $count / (float) $checks) * 100.0;
+
+            if ($percent < $minPercent) {
+                $unmet[] = sprintf(
+                    '"%s" %.1f%% < required %.1f%% (%d/%d)',
+                    $label,
+                    $percent,
+                    $minPercent,
+                    $count,
+                    $checks,
+                );
+            }
+        }
+
+        if ($unmet === []) {
+            return null;
+        }
+
+        return new CoverageViolationException(sprintf(
+            'Property "%s" coverage not met: %s',
+            $name,
+            implode('; ', $unmet),
+        ));
     }
 
     /**
@@ -152,6 +229,42 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         }
 
         return (int) $env;
+    }
+
+    /**
+     * `PROPERTY_VERBOSE` (any value except '' and '0') logs every run's
+     * generated arguments — for debugging a property whose failure depends on
+     * inputs you cannot see in the counterexample alone.
+     */
+    private function resolveVerbose(): bool
+    {
+        $env = getenv('PROPERTY_VERBOSE');
+
+        return !in_array($env, [false, '', '0'], true);
+    }
+
+    /**
+     * One compact `name=value` list per run for verbose logging (mirrors the
+     * counterexample rendering of {@see PropertyViolationException}).
+     *
+     * @param array<string, mixed> $arguments
+     */
+    private function formatArguments(array $arguments): string
+    {
+        $pairs = array_map(
+            static fn(mixed $value, mixed $name): string => $name . '=' . match (true) {
+                is_array($value) => '[' . count($value) . ' element(s)]',
+                is_string($value) => '"' . $value . '"',
+                is_bool($value) => $value ? 'true' : 'false',
+                is_null($value) => 'null',
+                is_scalar($value) => (string) $value,
+                default => get_debug_type($value),
+            },
+            $arguments,
+            array_keys($arguments),
+        );
+
+        return implode(', ', $pairs);
     }
 
     /**

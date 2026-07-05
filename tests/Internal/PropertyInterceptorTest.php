@@ -7,6 +7,7 @@ namespace Rasuvaeff\PropertyTesting\Tests\Internal;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Rasuvaeff\PropertyTesting\AssumptionSkipped;
 use Rasuvaeff\PropertyTesting\Classify;
+use Rasuvaeff\PropertyTesting\CoverageViolationException;
 use Rasuvaeff\PropertyTesting\Internal\PropertyInterceptor;
 use Rasuvaeff\PropertyTesting\PropertyViolationException;
 use Testo\Application\Internal\MessengerHub;
@@ -417,6 +418,193 @@ final class PropertyInterceptorTest
 
         Assert::same(count($messages), 1);
         Assert::string($messages[0]->content)->contains('checked 100% (5/5)');
+    }
+
+    public function coverageRequirementMetKeepsThePropertyPassing(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static function (TestInfo $info): TestResult {
+            Classify::cover(true, 'hit', 50.0);
+
+            return new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Passed);
+    }
+
+    public function coverageRequirementUnmetFailsThePassingProperty(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        // Every run passes, but the required label never occurs: the pass is
+        // vacuous and must be reported as a failure.
+        $next = static function (TestInfo $info): TestResult {
+            Classify::cover(false, 'never', 10.0);
+
+            return new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Failed);
+        Assert::instanceOf($result->failure, CoverageViolationException::class);
+        Assert::string($result->failure->getMessage())->contains('"never" 0.0% < required 10.0% (0/5)');
+    }
+
+    public function coverageIsExactAtTheRequiredBoundary(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $calls = 0;
+        // PassingStub runs 5 times; the label occurs on exactly 2 of 5 runs
+        // (40%). A requirement of exactly 40% is met (strictly-below fails).
+        $next = static function (TestInfo $info) use (&$calls): TestResult {
+            ++$calls;
+            Classify::cover($calls <= 2, 'sometimes', 40.0);
+
+            return new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Passed);
+    }
+
+    public function coverageIgnoresDiscardedRunsInTheDenominator(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $calls = 0;
+        // 5 runs: 3 discarded, 2 passing with the label => 100% of checks.
+        $next = static function (TestInfo $info) use (&$calls): TestResult {
+            ++$calls;
+
+            if ($calls <= 3) {
+                return new TestResult(info: $info, status: Status::Error, failure: new AssumptionSkipped());
+            }
+
+            Classify::cover(true, 'hit', 90.0);
+
+            return new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Passed);
+    }
+
+    public function coverageWithoutAnySuccessfulRunFails(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        // Every run is discarded but a requirement was registered: there is no
+        // evidence the labelled case is reachable, so the property must fail.
+        $next = static function (TestInfo $info): TestResult {
+            Classify::cover(true, 'unreached', 10.0);
+
+            return new TestResult(info: $info, status: Status::Error, failure: new AssumptionSkipped());
+        };
+
+        $result = $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Failed);
+        Assert::instanceOf($result->failure, CoverageViolationException::class);
+        Assert::string($result->failure->getMessage())->contains('no successful runs');
+    }
+
+    public function falsificationWinsOverCoverage(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        // A falsified property reports the counterexample, not the coverage.
+        $next = static function (TestInfo $info): TestResult {
+            Classify::cover(false, 'never', 10.0);
+
+            return new TestResult(info: $info, status: Status::Failed, failure: new \RuntimeException('boom'));
+        };
+
+        $result = $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
+
+        Assert::instanceOf($result->failure, PropertyViolationException::class);
+    }
+
+    public function coverageRequirementsDoNotLeakIntoTheNextProperty(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        // First property falsifies with a registered requirement (which is
+        // never assessed); the next property without cover() must pass.
+        $failing = static function (TestInfo $info): TestResult {
+            Classify::cover(false, 'leftover', 99.0);
+
+            return new TestResult(info: $info, status: Status::Failed, failure: new \RuntimeException('boom'));
+        };
+        $interceptor->runTest($this->info(FalsifyingStub::class, 'check'), $failing);
+
+        $passing = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+        $result = $interceptor->runTest($this->info(PassingStub::class, 'check'), $passing);
+
+        Assert::same($result->status, Status::Passed);
+    }
+
+    public function verboseLogsEveryRunsArguments(): void
+    {
+        putenv('PROPERTY_VERBOSE=1');
+
+        try {
+            $messenger = $this->createMessenger();
+            $interceptor = new PropertyInterceptor($messenger);
+            $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+
+            // PassingStub runs 5 times.
+            $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
+            $messages = $messenger->getMessages()->channel(Messenger::CHANNEL_STDOUT);
+
+            Assert::same(count($messages), 5);
+            Assert::string($messages[0]->content)->contains('run 1: x=');
+            Assert::string($messages[4]->content)->contains('run 5: x=');
+        } finally {
+            putenv('PROPERTY_VERBOSE');
+        }
+    }
+
+    public function verboseZeroDisablesTheRunLog(): void
+    {
+        putenv('PROPERTY_VERBOSE=0');
+
+        try {
+            $messenger = $this->createMessenger();
+            $interceptor = new PropertyInterceptor($messenger);
+            $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+
+            $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
+
+            Assert::same(count($messenger->getMessages()->channel(Messenger::CHANNEL_STDOUT)), 0);
+        } finally {
+            putenv('PROPERTY_VERBOSE');
+        }
+    }
+
+    public function verboseRendersEveryArgumentStyle(): void
+    {
+        putenv('PROPERTY_VERBOSE=1');
+
+        try {
+            $messenger = $this->createMessenger();
+            $interceptor = new PropertyInterceptor($messenger);
+            $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+
+            // MixedArgumentsStub generates a string, a bool, a null, an array
+            // and a datetime — one run pins every branch of the formatter.
+            $interceptor->runTest($this->info(MixedArgumentsStub::class, 'check'), $next);
+            $messages = $messenger->getMessages()->channel(Messenger::CHANNEL_STDOUT);
+
+            Assert::same(count($messages), 1);
+            Assert::string($messages[0]->content)->contains('s="fixed"');
+            Assert::string($messages[0]->content)->contains('b=false');
+            Assert::string($messages[0]->content)->contains('n=null');
+            Assert::string($messages[0]->content)->contains('a=[2 element(s)]');
+            Assert::string($messages[0]->content)->contains('d=DateTimeImmutable');
+            Assert::string($messages[0]->content)->contains('i=7');
+        } finally {
+            putenv('PROPERTY_VERBOSE');
+        }
     }
 
     public function reportsNoDistributionWhenNoLabelsRecorded(): void
