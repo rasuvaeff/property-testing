@@ -70,6 +70,7 @@ final class PropertyViolationException extends RuntimeException
             is_bool($value) => $value ? 'true' : 'false',
             is_null($value) => 'null',
             is_scalar($value) => (string) $value,
+            $value instanceof \Stringable => (string) $value,
             default => get_debug_type($value),
         };
     }

@@ -1,7 +1,19 @@
 # Roadmap — rasuvaeff/property-testing
 
 Development plan derived from a consumer-perspective gap analysis. Current
-version: `2.1.0`.
+released version: `2.1.0`; `2.2.0` (Wave 4) in development.
+
+## Release plan (revised 2026-07-07)
+
+The post-`2.1.0` waves ship as **two** minors, not three: the large new
+paradigm is isolated, the two small homogeneous waves are merged.
+
+- **`2.2.0` = Wave 4 only** — stateful / model-based testing. Shipped first so
+  downstream packages (`bulkhead`, `yii3-outbox`, `yii3-idempotency`, cache
+  backends) get it early, and so the sizeable new API stays out of a release
+  mixed with cosmetic additions.
+- **`2.3.0` = Wave 5 + Wave 6 merged** — regression ergonomics plus the
+  generator catalog / in-body draw. Both are small and additive.
 
 ## Guiding split
 
@@ -106,19 +118,25 @@ by single-shot properties: `bulkhead` (concurrency counters), `yii3-feature-flag
 
 | Item | What | Status |
 |---|---|---|
-| T1.1 | command/model-based API: a `Command` interface (precondition, apply-to-model, run-against-SUT, postcondition) + a generator producing valid command sequences that shrink by dropping/simplifying steps | planned |
+| T1.1 | command/model-based API: a `Command` interface (precondition, apply-to-model, run-against-SUT, postcondition) + a generator producing valid command sequences that shrink by dropping/simplifying steps | done |
 
 This **reverses** the former "no stateful testing" non-goal below — the gap
 analysis judged it worth the API surface.
 
-## Wave 5 — `2.3.0` (regression ergonomics)
+Shipped in `2.2.0`: `Command` (`preCondition`/`nextState`/`run`/`postCondition`,
+`\Stringable`), `Gen::commands()` → `CommandSequence` arbitrary, and
+`StateMachine::check()` (skips stale-precondition commands on replay). Shrinking
+removes command blocks down to a single step (isolating a failing middle
+command) then simplifies each command's parameters.
+
+## Wave 5 — `2.3.0` (regression ergonomics) — merged with Wave 6
 
 | Item | What | Status |
 |---|---|---|
 | T1.2 | explicit examples — fixed inputs that always run alongside random ones (`@Example`-style, or an `examples` arg on `#[Property]`); pins a found bug as a permanent case | planned |
 | T1.3 | persist the minimal counterexample of a failing property and auto-replay it first on the next run (analog of Hypothesis's example DB / jqwik samples); opt-in storage path, gitignore-friendly | planned |
 
-## Wave 6 — `2.4.0` (generator catalog + in-body draw)
+## Wave 6 — `2.3.0` (generator catalog + in-body draw) — merged with Wave 5
 
 | Item | What | Status |
 |---|---|---|
@@ -147,7 +165,7 @@ analysis judged it worth the API surface.
 - `1.1.0` — entire Wave 1 (done, PR #4).
 - `2.0.0` — integrated shrinking + `flatMap` (done, PR #5, released 2026-07-02).
 - `2.1.0` — entire Wave 3 (done, PR #6, released 2026-07-05).
-- `2.2.0` — Wave 4, stateful / model-based testing (planned).
-- `2.3.0` — Wave 5, regression ergonomics (planned).
-- `2.4.0` — Wave 6, generator catalog + in-body draw (planned).
+- `2.2.0` — Wave 4, stateful / model-based testing (done, in development).
+- `2.3.0` — Wave 5 + Wave 6 merged: regression ergonomics + generator catalog /
+  in-body draw (planned).
 - Backlog — Tier 3 items, unscheduled.

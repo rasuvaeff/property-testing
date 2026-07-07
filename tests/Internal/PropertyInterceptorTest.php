@@ -82,6 +82,27 @@ final class PropertyInterceptorTest
         Assert::same($counterExample->runsBeforeFailure, 0);
     }
 
+    public function reportsTheFailureOfTheShrunkCounterexampleNotTheOriginal(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        // The failure message encodes the failing value, so the reported failure
+        // reveals which run it came from. Shrinking drives x to 51, and the
+        // reported failure must be that minimal run's, not the original draw's.
+        $next = static fn(TestInfo $info): TestResult => $info->arguments[0] > 50
+            ? new TestResult(info: $info, status: Status::Failed, failure: new \RuntimeException('failed at ' . $info->arguments[0]))
+            : new TestResult(info: $info, status: Status::Passed);
+
+        $result = $interceptor->runTest($this->info(FalsifyingStub::class, 'check'), $next);
+
+        Assert::instanceOf($result->failure, PropertyViolationException::class);
+
+        $counterExample = $result->failure->getCounterExample();
+        Assert::same($counterExample->shrunkArguments['x'], 51);
+        Assert::true($counterExample->shrinkSteps >= 1);
+        Assert::instanceOf($counterExample->failure, \RuntimeException::class);
+        Assert::string($counterExample->failure->getMessage())->contains('failed at 51');
+    }
+
     public function shrinksTheFailingParameterInAMultiParameterProperty(): void
     {
         $interceptor = new PropertyInterceptor($this->createMessenger());
@@ -602,6 +623,25 @@ final class PropertyInterceptorTest
             Assert::string($messages[0]->content)->contains('a=[2 element(s)]');
             Assert::string($messages[0]->content)->contains('d=DateTimeImmutable');
             Assert::string($messages[0]->content)->contains('i=7');
+        } finally {
+            putenv('PROPERTY_VERBOSE');
+        }
+    }
+
+    public function verboseRendersStringableArgumentsViaToString(): void
+    {
+        putenv('PROPERTY_VERBOSE=1');
+
+        try {
+            $messenger = $this->createMessenger();
+            $interceptor = new PropertyInterceptor($messenger);
+            $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+
+            $interceptor->runTest($this->info(StringableArgStub::class, 'check'), $next);
+            $messages = $messenger->getMessages()->channel(Messenger::CHANNEL_STDOUT);
+
+            Assert::same(count($messages), 1);
+            Assert::string($messages[0]->content)->contains('s=STRINGABLE');
         } finally {
             putenv('PROPERTY_VERBOSE');
         }

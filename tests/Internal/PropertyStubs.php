@@ -139,6 +139,24 @@ final class MixedArgumentsStub
     }
 }
 
+final class StringableArgStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'provide')]
+    public function check(mixed $s): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['s' => Gen::constant(new class implements \Stringable {
+            #[\Override]
+            public function __toString(): string
+            {
+                return 'STRINGABLE';
+            }
+        })];
+    }
+}
+
 final class MappedFalsifyingStub
 {
     #[Property(runs: 50, seed: 1, generators: 'provide')]

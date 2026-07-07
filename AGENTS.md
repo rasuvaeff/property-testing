@@ -13,6 +13,13 @@ tree; there is no `shrink(mixed)` method), the `Assume::that()` discard helper,
 the `PropertyViolationException`/`CounterExample` failure carriers, and the
 self-registering `PropertyInterceptor` that drives the run/falsify/shrink loop.
 
+Stateful / model-based testing lives in the `Rasuvaeff\PropertyTesting\StateMachine`
+namespace: the `Command` interface (`preCondition`/`nextState`/`run`/`postCondition`,
+`\Stringable` label), the `CommandSequence` value, the `StateMachine::check()`
+runner, and `PostconditionViolation`. `Gen::commands()` returns the
+`CommandSequenceArbitrary` that generates and shrinks command sequences; it plugs
+into the same `#[Property]` machinery as every other arbitrary.
+
 It is a Testo plugin, not a standalone runner. It depends on Testo's stable
 `@api` surfaces: `TestRunInterceptor`, `TestInfo`, `TestResult`, `Messenger`,
 the `Interceptable`/`FallbackInterceptor`/`InterceptorOptions` attributes.
@@ -93,6 +100,19 @@ make release-check
   source shrinks — do not replace it with ambient randomness.
 - `Shrinkable::shrinks()` re-invokes its closure on every call; children must
   be re-derivable (pure closures over immutable state).
+- Stateful validity is enforced at RUN time, not shrink time.
+  `CommandSequenceArbitrary` generates valid-by-construction sequences (each step
+  respects `preCondition` against the running model) but shrinks by pure list
+  drop/element-shrink WITHOUT re-validating; `StateMachine::check()` skips any
+  command whose precondition a dropped/simplified step invalidated. Do not add
+  precondition re-validation to the arbitrary — the skip-on-replay is the
+  contract (fast-check model), and it keeps shrink candidates cheap and sound.
+- `CommandSequence` and every `Command` are `\Stringable` so counterexamples
+  render as a readable trace; the `PropertyViolationException`/interceptor
+  renderers have a `\Stringable` arm before their `default` (class-name) arm.
+- The interceptor reports the SHRUNK run's failure (`shrink()` returns the last
+  accepted candidate's throwable), not the original draw's — so the `Failure:`
+  line matches the `Shrunk:` arguments. Keep these in sync.
 - Shrinking is a greedy per-parameter tree descent and best-effort minimal,
   not provably minimal (no exhaustive search). For monotone predicates the
   int ladder is an exact binary search.

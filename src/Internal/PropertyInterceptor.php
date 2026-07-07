@@ -116,7 +116,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             }
 
             if ($result->status->isFailure()) {
-                [$shrunk, $shrinkSteps] = $this->shrink($info, $next, $trees, $property->maxShrinks);
+                [$shrunk, $shrinkSteps, $shrunkFailure] = $this->shrink($info, $next, $trees, $property->maxShrinks);
 
                 return new TestResult(
                     info: $info,
@@ -127,7 +127,11 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                         originalArguments: $arguments,
                         shrunkArguments: $shrunk,
                         shrinkSteps: $shrinkSteps,
-                        failure: $result->failure,
+                        // Report the failure of the minimised sequence, not the
+                        // original: for a shrunk counterexample the two can differ
+                        // (e.g. a different failing step), and the developer acts on
+                        // the minimal one. Falls back to the original when nothing shrank.
+                        failure: $shrunkFailure ?? $result->failure,
                         skips: $skips,
                     )),
                 );
@@ -258,6 +262,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                 is_bool($value) => $value ? 'true' : 'false',
                 is_null($value) => 'null',
                 is_scalar($value) => (string) $value,
+                $value instanceof \Stringable => (string) $value,
                 default => get_debug_type($value),
             },
             $arguments,
@@ -395,7 +400,9 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
      * @param array<string, Shrinkable> $trees The failing arguments' shrink trees.
      * @param callable(TestInfo): TestResult $next
      * @param ?int $maxShrinks Cap on accepted shrink steps; null means no cap, 0 disables shrinking.
-     * @return array{0: array<string, mixed>, 1: int} The minimised arguments and the number of accepted shrink steps.
+     * @return array{0: array<string, mixed>, 1: int, 2: ?\Throwable} The minimised arguments, the
+     *         number of accepted shrink steps, and the failure of the last accepted candidate
+     *         (null when nothing shrank).
      */
     private function shrink(
         TestInfo $info,
@@ -405,6 +412,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
     ): array {
         $current = $trees;
         $steps = 0;
+        $acceptedFailure = null;
 
         do {
             $improved = false;
@@ -414,7 +422,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                 // Checking here (before the per-parameter search) makes maxShrinks=0
                 // return the original counterexample with zero accepted steps.
                 if ($maxShrinks !== null && $steps >= $maxShrinks) {
-                    return [$this->values($current), $steps];
+                    return [$this->values($current), $steps, $acceptedFailure];
                 }
 
                 foreach ($current[$name]->shrinks() as $candidate) {
@@ -429,9 +437,11 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                     // parameter. Array union ([$name => ...] + $current) would move
                     // $name to the front and scramble non-leading parameters.
                     $trial = array_replace($current, [$name => $candidate]);
+                    $trialResult = $next($info->with(arguments: array_values($this->values($trial))));
 
-                    if ($this->runFails($info, $next, $this->values($trial))) {
+                    if ($this->isFailingResult($trialResult)) {
                         $current = $trial;
+                        $acceptedFailure = $trialResult->failure;
                         ++$steps;
                         $improved = true;
 
@@ -441,17 +451,15 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             }
         } while ($improved);
 
-        return [$this->values($current), $steps];
+        return [$this->values($current), $steps, $acceptedFailure];
     }
 
     /**
-     * @param array<string, mixed> $arguments
-     * @param callable(TestInfo): TestResult $next
+     * A run counts as a shrink failure when it failed for a real reason — a
+     * discarded run ({@see AssumptionSkipped}) is not a smaller counterexample.
      */
-    private function runFails(TestInfo $base, callable $next, array $arguments): bool
+    private function isFailingResult(TestResult $result): bool
     {
-        $result = $next($base->with(arguments: array_values($arguments)));
-
         if ($result->failure instanceof AssumptionSkipped) {
             return false;
         }
