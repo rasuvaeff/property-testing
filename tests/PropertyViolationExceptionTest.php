@@ -85,6 +85,13 @@ final class PropertyViolationExceptionTest
                 'no' => false,
                 'nothing' => null,
                 'obj' => new \stdClass(),
+                'stringy' => new class implements \Stringable {
+                    #[\Override]
+                    public function __toString(): string
+                    {
+                        return 'CMD';
+                    }
+                },
             ],
             shrunkArguments: ['i' => 0],
         ));
@@ -98,6 +105,7 @@ final class PropertyViolationExceptionTest
         Assert::string($message)->contains('no=false');
         Assert::string($message)->contains('nothing=null');
         Assert::string($message)->contains('obj=stdClass');
+        Assert::string($message)->contains('stringy=CMD');
     }
 
     public function exposesTheCounterExample(): void

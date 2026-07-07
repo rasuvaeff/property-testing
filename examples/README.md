@@ -7,6 +7,7 @@ Runnable scripts demonstrating `rasuvaeff/property-testing`.
 | `basic.php` | A property that holds, one that is falsified, and how the counterexample is shrunk by descending the `Shrinkable` tree (uses generators directly, no runner) | No |
 | `property_test.php` | Canonical `#[Property]` usage as a real Testo test case (run through `vendor/bin/testo`) | No |
 | `generators.php` | `sample`, boundary bias, `uuid`, `datetime`, `dictOf`, `record`, and dependent generation with `flatMap` (uses generators directly, no runner) | No |
+| `state_machine.php` | Stateful / model-based testing: a `Command` interface, `Gen::commands()`, and `StateMachine::check()` driving command sequences against a stack (run through `vendor/bin/testo`) | No |
 
 ## Running
 

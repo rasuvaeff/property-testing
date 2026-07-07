@@ -91,6 +91,7 @@ Gen::flatMap(ArbitraryInterface $inner, Closure $fn)  // FlatMappedArbitrary; $f
 Gen::filter(ArbitraryInterface $inner, Closure $predicate) // FilteredArbitrary, max 100 retries; tree pruned to predicate-satisfying candidates
 Gen::tuple(ArbitraryInterface ...$elements)        // TupleArbitrary, fixed-arity tuple (list), shrinks each position
 Gen::frequency(iterable $pairs)                    // FrequencyArbitrary, weighted [int $weight, ArbitraryInterface] pairs; shrinks within the generating branch
+Gen::commands(mixed $initialModel, array $commandGenerators, int $minLen = 0, int $maxLen = 100) // CommandSequenceArbitrary for stateful/model-based testing; $commandGenerators = list<ArbitraryInterface> each producing a Command; see "Stateful" below
 Gen::sample(ArbitraryInterface $arb, int $count = 10, int $seed = 0)  // list<mixed>: eager debug helper, returns plain values not an arbitrary
 Gen::sampleShrinks(ArbitraryInterface $arb, int $seed = 0, int $limit = 10) // array{value: mixed, shrinks: list<mixed>}: one value + its first shrink candidates (debug custom arbitraries)
 ```
@@ -165,6 +166,48 @@ The failing `TestResult` carries a `Rasuvaeff\PropertyTesting\PropertyViolationE
 with `getCounterExample(): CounterExample` exposing:
 `seed`, `runsBeforeFailure`, `originalArguments`, `shrunkArguments`, `shrinkSteps`, `failure`, `skips`.
 The Testo fallback interceptor is `PropertyInterceptor`.
+
+### Stateful / model-based testing
+
+Test sequences of operations against a simplified model; the failing sequence is
+shrunk by dropping and simplifying steps. Namespace: `Rasuvaeff\PropertyTesting\StateMachine`.
+
+Implement `Command extends \Stringable`:
+
+```php
+interface Command extends \Stringable {
+    public function preCondition(mixed $model): bool;   // may run in this model state? (gates generation + replay-skip)
+    public function nextState(mixed $model): mixed;      // pure model transition; returns NEW model
+    public function run(mixed $model, mixed $system): mixed;   // execute against the SUT; return observed result
+    public function postCondition(mixed $model, mixed $result): bool;  // check result vs PRE-state model; false/throw = falsify
+    public function __toString(): string;                // label for the counterexample trace
+}
+```
+
+- `Gen::commands($initialModel, $commandGenerators, $minLen = 0, $maxLen = 100)`
+  builds valid-by-construction sequences: each step appends a command whose
+  `preCondition` holds in the running model, then advances via `nextState`.
+  Value is a `CommandSequence` (`\Stringable`; `->initialModel`, `->commands`).
+- `StateMachine::check(CommandSequence $sequence, Closure $system): void` — call
+  in the property body. `$system` is a factory returning a FRESH system per run.
+  It replays each command (skipping any whose precondition a shrink invalidated),
+  asserts each `postCondition`, and throws `PostconditionViolation` on failure.
+- Shrinking drops command blocks (down to single commands, isolating a middle
+  step) then simplifies each command's parameters through its own tree.
+
+```php
+#[Property(runs: 200)]
+public function stackMatchesModel(CommandSequence $sequence): void {
+    StateMachine::check($sequence, static fn(): Stack => new Stack());
+}
+/** @return array<string, ArbitraryInterface> */
+private function stackMatchesModelGenerators(): array {
+    return ['sequence' => Gen::commands([], [
+        Gen::map(Gen::intBetween(0, 99), static fn(int $v): Command => new Push($v)),
+        Gen::constant(new Pop()),
+    ])];
+}
+```
 
 ## Example
 

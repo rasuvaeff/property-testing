@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.2.0 — 2026-07-07
+
+Stateful / model-based testing (Wave 4); additive, no BC breaks, seed sequences
+of existing generators are unchanged.
+
+- Add stateful / model-based testing in the new `Rasuvaeff\PropertyTesting\StateMachine`
+  namespace: the `Command` interface (`preCondition`/`nextState`/`run`/`postCondition`,
+  `\Stringable` label), `Gen::commands($initialModel, $commandGenerators, $minLength, $maxLength)`
+  producing a `CommandSequence` arbitrary, and `StateMachine::check($sequence, $systemFactory)`
+  to drive the sequence against a fresh system under test. Generated sequences are
+  valid by construction; shrinking drops command blocks (down to a single command,
+  isolating a failing middle step) and simplifies each command's parameters. A failed
+  postcondition throws `PostconditionViolation` naming the failing step and trace.
+- Render `\Stringable` arguments via `__toString()` in counterexamples and verbose
+  logs (previously objects showed only their class name).
+- Report the failure of the *shrunk* run in the counterexample, not the original
+  draw — the `Failure:` line now matches the minimised `Shrunk:` arguments.
+
 ## 2.1.0 — 2026-07-05
 
 Consumer-driven additions (Wave 3); no BC breaks, seed sequences of existing

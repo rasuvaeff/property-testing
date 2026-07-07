@@ -10,6 +10,7 @@ use Rasuvaeff\PropertyTesting\Arbitrary\ArrayArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\BoolArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\BytesArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\CharsetStringArbitrary;
+use Rasuvaeff\PropertyTesting\Arbitrary\CommandSequenceArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\ConstantArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\DateTimeArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\DictionaryArbitrary;
@@ -389,6 +390,29 @@ final class Gen
     public static function datetime(?DateTimeImmutable $min = null, ?DateTimeImmutable $max = null): DateTimeArbitrary
     {
         return new DateTimeArbitrary($min, $max);
+    }
+
+    /**
+     * A valid {@see \Rasuvaeff\PropertyTesting\StateMachine\Command} sequence for
+     * stateful / model-based testing. Starting from $initialModel, each step draws
+     * a command generator and appends its command when the command's precondition
+     * holds in the running model, advancing the model — so the sequence is valid
+     * by construction. Shrinking drops individual steps and simplifies each command
+     * through its own tree.
+     *
+     * Feed the generated {@see \Rasuvaeff\PropertyTesting\StateMachine\CommandSequence}
+     * to {@see \Rasuvaeff\PropertyTesting\StateMachine\StateMachine::check()} in the
+     * property body, passing a factory that builds a fresh system under test.
+     *
+     * @param list<ArbitraryInterface> $commandGenerators Each must produce a Command.
+     */
+    public static function commands(
+        mixed $initialModel,
+        array $commandGenerators,
+        int $minLength = 0,
+        int $maxLength = 100,
+    ): CommandSequenceArbitrary {
+        return new CommandSequenceArbitrary($initialModel, $commandGenerators, $minLength, $maxLength);
     }
 
     /**
