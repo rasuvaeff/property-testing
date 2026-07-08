@@ -83,6 +83,31 @@ final class RegexCompilerTest
         yield 'dot inside class is literal' => ['[.]', '.'];
         yield 'group then literal' => ['(?:ab)cd', 'abcd'];
         yield 'literal then group' => ['xy(?:ab)', 'xyab'];
+        yield 'empty group' => ['a()b', 'ab'];
+    }
+
+    public function alternationReachesEveryBranch(): void
+    {
+        $values = Gen::sample(RegexCompiler::compile('a|b'), 60, 4);
+
+        Assert::true(in_array('a', $values, true));
+        Assert::true(in_array('b', $values, true));
+    }
+
+    public function dotProducesVariousCharacters(): void
+    {
+        $values = Gen::sample(RegexCompiler::compile('.'), 60, 4);
+
+        // `.` is any printable character, not the literal dot.
+        Assert::true($this->anyMatches($values, '/[^.]/'));
+    }
+
+    public function digitClassCoversBothBounds(): void
+    {
+        $values = Gen::sample(RegexCompiler::compile('[\\d]'), 200, 4);
+
+        Assert::true(in_array('0', $values, true));
+        Assert::true(in_array('9', $values, true));
     }
 
     public function starCanProduceEmptyAndRepeated(): void
@@ -274,6 +299,10 @@ final class RegexCompilerTest
         yield 'reversed range' => ['[z-a]', 'out of order'];
         yield 'trailing backslash' => ['ab\\', 'Trailing backslash'];
         yield 'malformed quantifier' => ['a{2,x}', 'Malformed regex quantifier'];
+        yield 'no comma or brace' => ['a{2x}', 'expected "," or "}"'];
+        yield 'junk after upper bound' => ['a{2,3x}', 'expected "}"'];
+        yield 'question nothing to repeat' => ['?x', 'nothing to repeat'];
+        yield 'brace nothing to repeat' => ['{x', 'nothing to repeat'];
     }
 
     public function anchorsAtBoundariesAreStripped(): void
