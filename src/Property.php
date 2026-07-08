@@ -33,12 +33,16 @@ final readonly class Property implements Interceptable
      *        Defaults to `<testMethod>Generators`.
      * @param ?int $maxShrinks Cap on the number of accepted shrink steps. Null (default) means
      *        no cap. 0 disables shrinking, reporting the original counterexample unchanged.
+     * @param ?string $examples Method name returning iterable<array<mixed>> of fixed positional
+     *        argument tuples, each run (before the random inputs) as an explicit example.
+     *        Defaults to `<testMethod>Examples` when that method exists.
      */
     public function __construct(
         public int $runs = 100,
         public ?int $seed = null,
         public ?string $generators = null,
         public ?int $maxShrinks = null,
+        public ?string $examples = null,
     ) {
         if ($runs < 1) {
             throw new \InvalidArgumentException('Runs must be greater than or equal to 1');

@@ -9,6 +9,7 @@ use Rasuvaeff\PropertyTesting\AssumptionSkipped;
 use Rasuvaeff\PropertyTesting\Classify;
 use Rasuvaeff\PropertyTesting\CounterExample;
 use Rasuvaeff\PropertyTesting\CoverageViolationException;
+use Rasuvaeff\PropertyTesting\ExampleViolationException;
 use Rasuvaeff\PropertyTesting\Property;
 use Rasuvaeff\PropertyTesting\PropertyViolationException;
 use Rasuvaeff\PropertyTesting\Random;
@@ -87,6 +88,61 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         // Discard requirements a previously aborted property may have left over.
         Classify::flushRequirements();
 
+        $exampleFailure = $this->runExamples($reflection, $info, $next, $property);
+        if ($exampleFailure instanceof TestResult) {
+            return $exampleFailure;
+        }
+
+        $storage = SeedStorage::fromEnv();
+        $propertyId = $reflection->getDeclaringClass()->getName() . '::' . $reflection->getName();
+
+        // Opt-in regression replay: re-run a previously recorded failing seed
+        // first (unless the attribute pins its own seed). A reproduced failure is
+        // reported immediately; a seed that no longer fails is forgotten.
+        if ($storage instanceof SeedStorage && $property->seed === null) {
+            $recalled = $storage->recall($propertyId);
+
+            if ($recalled !== null) {
+                $replay = $this->runProperty(new Random($recalled), $recalled, $generators, $parameterNames, $runs, $verbose, $next, $info, $property->maxShrinks);
+
+                if ($replay->failure instanceof PropertyViolationException) {
+                    return $replay;
+                }
+
+                $storage->forget($propertyId);
+            }
+        }
+
+        $result = $this->runProperty($random, $seed, $generators, $parameterNames, $runs, $verbose, $next, $info, $property->maxShrinks);
+
+        if ($storage instanceof SeedStorage && $result->failure instanceof PropertyViolationException) {
+            $storage->remember($propertyId, $seed);
+        }
+
+        return $result;
+    }
+
+    /**
+     * The random-input phase: generate arguments {@see $runs} times, shrink the
+     * first falsifying run into a {@see PropertyViolationException}, otherwise
+     * assess the {@see Classify::cover()} requirements. Runs once per seed, so the
+     * regression-replay phase can re-run it with a recorded seed.
+     *
+     * @param array<string, ArbitraryInterface> $generators
+     * @param list<string> $parameterNames
+     * @param callable(TestInfo): TestResult $next
+     */
+    private function runProperty(
+        Random $random,
+        int $seed,
+        array $generators,
+        array $parameterNames,
+        int $runs,
+        bool $verbose,
+        callable $next,
+        TestInfo $info,
+        ?int $maxShrinks,
+    ): TestResult {
         $skips = 0;
         $checks = 0;
         /** @var array<string, int> $classifications */
@@ -116,7 +172,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             }
 
             if ($result->status->isFailure()) {
-                [$shrunk, $shrinkSteps, $shrunkFailure] = $this->shrink($info, $next, $trees, $property->maxShrinks);
+                [$shrunk, $shrinkSteps, $shrunkFailure] = $this->shrink($info, $next, $trees, $maxShrinks);
 
                 return new TestResult(
                     info: $info,
@@ -388,6 +444,106 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                 ));
             }
         }
+    }
+
+    /**
+     * Runs the fixed examples (if any) before the random inputs, short-circuiting
+     * on the first failure — a pinned example is already minimal, so it is not
+     * shrunk. Returns the failing {@see TestResult}, or null when all pass.
+     *
+     * @param callable(TestInfo): TestResult $next
+     */
+    private function runExamples(\ReflectionMethod $testMethod, TestInfo $info, callable $next, Property $property): ?TestResult
+    {
+        $index = 0;
+
+        foreach ($this->resolveExamples($testMethod, $info, $property) as $arguments) {
+            Classify::beginRun();
+            $result = $next($info->with(arguments: $arguments));
+            Classify::flushRun();
+
+            if (!$result->failure instanceof AssumptionSkipped && $result->status->isFailure()) {
+                return new TestResult(
+                    info: $info,
+                    status: Status::Failed,
+                    failure: new ExampleViolationException($index, $arguments, $result->failure),
+                );
+            }
+
+            ++$index;
+        }
+
+        return null;
+    }
+
+    /**
+     * Resolves the property's explicit examples: the attribute's `examples`
+     * method name, or the `<testMethod>Examples` convention when that method
+     * exists. Each yielded array becomes a list of positional arguments.
+     *
+     * @return list<list<mixed>>
+     */
+    private function resolveExamples(\ReflectionMethod $testMethod, TestInfo $info, Property $property): array
+    {
+        $methodName = $property->examples ?? $testMethod->getName() . 'Examples';
+        $class = $testMethod->getDeclaringClass();
+
+        if (!$class->hasMethod($methodName)) {
+            if ($property->examples !== null) {
+                throw new \InvalidArgumentException(sprintf(
+                    'Property "%s" references examples method "%s" which does not exist on %s',
+                    $testMethod->getName(),
+                    $methodName,
+                    $class->getName(),
+                ));
+            }
+
+            return [];
+        }
+
+        $method = $class->getMethod($methodName);
+
+        /** @var mixed $examples */
+        $examples = $method->isStatic()
+            ? $method->getClosure()()
+            : $method->getClosure($info->caseInfo->instance?->getInstance())();
+
+        if (!is_iterable($examples)) {
+            throw new \InvalidArgumentException(sprintf(
+                'Examples method "%s" must return an iterable, got %s',
+                $methodName,
+                get_debug_type($examples),
+            ));
+        }
+
+        $expectedArity = count($testMethod->getParameters());
+        $typed = [];
+
+        foreach ($examples as $example) {
+            if (!is_array($example)) {
+                throw new \InvalidArgumentException(sprintf(
+                    'Examples method "%s" must yield arrays of positional arguments, got %s',
+                    $methodName,
+                    get_debug_type($example),
+                ));
+            }
+
+            $arguments = array_values($example);
+
+            if (count($arguments) !== $expectedArity) {
+                throw new \InvalidArgumentException(sprintf(
+                    'Example #%d for "%s" has %d argument(s), but the property takes %d',
+                    count($typed),
+                    $testMethod->getName(),
+                    count($arguments),
+                    $expectedArity,
+                ));
+            }
+
+            $typed[] = $arguments;
+        }
+
+        return $typed;
     }
 
     /**

@@ -8,6 +8,7 @@ use Psr\EventDispatcher\EventDispatcherInterface;
 use Rasuvaeff\PropertyTesting\AssumptionSkipped;
 use Rasuvaeff\PropertyTesting\Classify;
 use Rasuvaeff\PropertyTesting\CoverageViolationException;
+use Rasuvaeff\PropertyTesting\ExampleViolationException;
 use Rasuvaeff\PropertyTesting\Internal\PropertyInterceptor;
 use Rasuvaeff\PropertyTesting\PropertyViolationException;
 use Testo\Application\Internal\MessengerHub;
@@ -656,6 +657,250 @@ final class PropertyInterceptorTest
         $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
 
         Assert::same(count($messenger->getMessages()->channel(Messenger::CHANNEL_STDOUT)), 0);
+    }
+
+    public function failingExampleShortCircuitsBeforeRandomRuns(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $calls = 0;
+        $next = static function (TestInfo $info) use (&$calls): TestResult {
+            ++$calls;
+
+            return $info->arguments[0] >= 100
+                ? new TestResult(info: $info, status: Status::Failed, failure: new \RuntimeException('too big'))
+                : new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $interceptor->runTest($this->info(ConventionExampleStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Failed);
+        Assert::instanceOf($result->failure, ExampleViolationException::class);
+        Assert::same($result->failure->getIndex(), 0);
+        Assert::same($result->failure->getArguments(), [100]);
+        // Only the first example ran; the second example and the random runs did not.
+        Assert::same($calls, 1);
+    }
+
+    public function passingExamplesRunFirstThenRandomInputs(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $seen = [];
+        $next = static function (TestInfo $info) use (&$seen): TestResult {
+            $seen[] = $info->arguments[0];
+
+            return new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $interceptor->runTest($this->info(ConventionExampleStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Passed);
+        // Both examples ran first, in order, before the 3 random runs.
+        Assert::same($seen[0], 100);
+        Assert::same($seen[1], 200);
+        Assert::same(count($seen), 5);
+    }
+
+    public function attributeNamesTheExamplesMethod(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => $info->arguments[0] === 5
+            ? new TestResult(info: $info, status: Status::Failed, failure: new \RuntimeException('five'))
+            : new TestResult(info: $info, status: Status::Passed);
+
+        $result = $interceptor->runTest($this->info(NamedExampleStub::class, 'check'), $next);
+
+        Assert::instanceOf($result->failure, ExampleViolationException::class);
+        Assert::same($result->failure->getArguments(), [5]);
+    }
+
+    public function exampleFailureRendersIndexAndArguments(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => $info->arguments[0] >= 100
+            ? new TestResult(info: $info, status: Status::Failed, failure: new \RuntimeException('boom'))
+            : new TestResult(info: $info, status: Status::Passed);
+
+        $result = $interceptor->runTest($this->info(ConventionExampleStub::class, 'check'), $next);
+
+        Assert::instanceOf($result->failure, ExampleViolationException::class);
+        Assert::string($result->failure->getMessage())->contains('Explicit example #0');
+        Assert::string($result->failure->getMessage())->contains('100');
+        Assert::string($result->failure->getMessage())->contains('Failure:');
+    }
+
+    public function discardedExampleIsNotAFailure(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        // The first example (100) is discarded via Assume, not failed, so the
+        // property proceeds and passes.
+        $next = static fn(TestInfo $info): TestResult => $info->arguments[0] >= 100
+            ? new TestResult(info: $info, status: Status::Error, failure: new AssumptionSkipped())
+            : new TestResult(info: $info, status: Status::Passed);
+
+        $result = $interceptor->runTest($this->info(ConventionExampleStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Passed);
+    }
+
+    #[ExpectException(\InvalidArgumentException::class)]
+    public function throwsWhenExampleArityMismatches(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+
+        $interceptor->runTest($this->info(BadArityExampleStub::class, 'check'), $next);
+    }
+
+    #[ExpectException(\InvalidArgumentException::class)]
+    public function throwsWhenNamedExamplesMethodMissing(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+
+        $interceptor->runTest($this->info(MissingExampleMethodStub::class, 'check'), $next);
+    }
+
+    #[ExpectException(\InvalidArgumentException::class)]
+    public function throwsWhenExampleIsNotAnArray(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+
+        $interceptor->runTest($this->info(NonArrayExampleStub::class, 'check'), $next);
+    }
+
+    public function recordsFailingSeedWhenStorageEnabled(): void
+    {
+        $dir = $this->tempStorageDir();
+        putenv('PROPERTY_DB=' . $dir);
+
+        try {
+            $interceptor = new PropertyInterceptor($this->createMessenger());
+            $next = static fn(TestInfo $info): TestResult => new TestResult(
+                info: $info,
+                status: Status::Failed,
+                failure: new \RuntimeException('always'),
+            );
+
+            $result = $interceptor->runTest($this->info(NoSeedFalsifyingStub::class, 'check'), $next);
+
+            Assert::instanceOf($result->failure, PropertyViolationException::class);
+            $file = $dir . '/' . sha1(NoSeedFalsifyingStub::class . '::check') . '.seed';
+            Assert::same(is_file($file), true);
+            Assert::same((int) file_get_contents($file), $result->failure->getCounterExample()->seed);
+        } finally {
+            putenv('PROPERTY_DB');
+            $this->cleanupDir($dir);
+        }
+    }
+
+    public function replaysARecordedSeedFirst(): void
+    {
+        $dir = $this->tempStorageDir();
+        putenv('PROPERTY_DB=' . $dir);
+
+        try {
+            // Pre-seed storage with a recorded failing seed; the replay phase must
+            // reproduce the failure with THAT seed (not a fresh random one).
+            file_put_contents($dir . '/' . sha1(NoSeedFalsifyingStub::class . '::check') . '.seed', '999');
+
+            $interceptor = new PropertyInterceptor($this->createMessenger());
+            $next = static fn(TestInfo $info): TestResult => new TestResult(
+                info: $info,
+                status: Status::Failed,
+                failure: new \RuntimeException('always'),
+            );
+
+            $result = $interceptor->runTest($this->info(NoSeedFalsifyingStub::class, 'check'), $next);
+
+            Assert::instanceOf($result->failure, PropertyViolationException::class);
+            Assert::same($result->failure->getCounterExample()->seed, 999);
+        } finally {
+            putenv('PROPERTY_DB');
+            $this->cleanupDir($dir);
+        }
+    }
+
+    public function forgetsARecordedSeedWhenTheReplayNoLongerFails(): void
+    {
+        $dir = $this->tempStorageDir();
+        putenv('PROPERTY_DB=' . $dir);
+
+        try {
+            $file = $dir . '/' . sha1(NoSeedFalsifyingStub::class . '::check') . '.seed';
+            file_put_contents($file, '999');
+
+            $interceptor = new PropertyInterceptor($this->createMessenger());
+            $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+
+            $result = $interceptor->runTest($this->info(NoSeedFalsifyingStub::class, 'check'), $next);
+
+            Assert::same($result->status, Status::Passed);
+            Assert::same(is_file($file), false);
+        } finally {
+            putenv('PROPERTY_DB');
+            $this->cleanupDir($dir);
+        }
+    }
+
+    public function attributeSeedDisablesReplay(): void
+    {
+        $dir = $this->tempStorageDir();
+        putenv('PROPERTY_DB=' . $dir);
+
+        try {
+            // FalsifyingStub pins seed:1; a stored seed must be ignored so the
+            // pinned reproducibility wins.
+            file_put_contents($dir . '/' . sha1(FalsifyingStub::class . '::check') . '.seed', '999');
+
+            $interceptor = new PropertyInterceptor($this->createMessenger());
+            $next = static fn(TestInfo $info): TestResult => new TestResult(
+                info: $info,
+                status: Status::Failed,
+                failure: new \RuntimeException('always'),
+            );
+
+            $result = $interceptor->runTest($this->info(FalsifyingStub::class, 'check'), $next);
+
+            Assert::instanceOf($result->failure, PropertyViolationException::class);
+            Assert::same($result->failure->getCounterExample()->seed, 1);
+        } finally {
+            putenv('PROPERTY_DB');
+            $this->cleanupDir($dir);
+        }
+    }
+
+    public function storageDisabledWritesNothingAndDoesNotCrash(): void
+    {
+        putenv('PROPERTY_DB');
+
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => new TestResult(
+            info: $info,
+            status: Status::Failed,
+            failure: new \RuntimeException('always'),
+        );
+
+        $result = $interceptor->runTest($this->info(NoSeedFalsifyingStub::class, 'check'), $next);
+
+        Assert::instanceOf($result->failure, PropertyViolationException::class);
+    }
+
+    private function tempStorageDir(): string
+    {
+        $dir = sys_get_temp_dir() . '/prop-db-' . bin2hex(random_bytes(6));
+        mkdir($dir, 0o777, true);
+
+        return $dir;
+    }
+
+    private function cleanupDir(string $dir): void
+    {
+        foreach (glob($dir . '/*') ?: [] as $file) {
+            @unlink($file);
+        }
+
+        @rmdir($dir);
     }
 
     private function info(string $class, string $method): TestInfo

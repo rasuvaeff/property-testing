@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.3.0 — 2026-07-09
+
+Generator catalog, explicit examples and seed persistence (Waves 5–6, excluding
+in-body draw). Additive, no BC breaks; existing seed sequences are unchanged.
+
+- Add domain arbitraries: `Gen::ipv4()`, `Gen::email()`, `Gen::url()`,
+  `Gen::json()` / `Gen::jsonString()`, and `Gen::regex()` /
+  `Gen::stringMatching()`. `regex` compiles a regular-expression subset
+  (literals, `.`, classes `[...]`, `\d\w\s` and negations, quantifiers
+  `* + ? {n} {n,} {n,m}`, alternation, groups) into ordinary combinators, so
+  matches shrink through the existing trees. Unsupported constructs (anchors
+  other than a single leading `^`/trailing `$`, backreferences, lookaround,
+  named/inline groups, flags) throw, naming the construct.
+- Add explicit examples: `#[Property(examples: 'method')]` or a
+  `<testMethod>Examples` convention method returns fixed positional argument
+  tuples, each run before the random inputs and not shrunk. A failing example is
+  reported via `ExampleViolationException`.
+- Add opt-in regression replay: when `PROPERTY_DB` names a directory, a
+  falsified property records its failing seed and re-runs it first on the next
+  run (unless the attribute pins a seed). Only the seed is stored.
+- In-body draw (`Gen::draw()`, roadmap T2.5) is deferred to 2.4.0: it needs a
+  replay-tape shrink mechanism that the per-arbitrary tree model lacks.
+
 ## 2.2.0 — 2026-07-07
 
 Stateful / model-based testing (Wave 4); additive, no BC breaks, seed sequences

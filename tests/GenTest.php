@@ -86,6 +86,94 @@ final class GenTest
         Assert::instanceOf(Gen::dictOf(Gen::stringOf(1, 5), Gen::int()), DictionaryArbitrary::class);
     }
 
+    public function ipv4GeneratesDottedQuads(): void
+    {
+        foreach (Gen::sample(Gen::ipv4(), 30, 3) as $value) {
+            Assert::true(is_string($value) && filter_var($value, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false);
+        }
+    }
+
+    public function emailGeneratesValidAddresses(): void
+    {
+        foreach (Gen::sample(Gen::email(), 30, 3) as $value) {
+            Assert::true(is_string($value) && filter_var($value, FILTER_VALIDATE_EMAIL) !== false);
+        }
+    }
+
+    public function urlGeneratesValidHttpUrls(): void
+    {
+        foreach (Gen::sample(Gen::url(), 30, 3) as $value) {
+            Assert::true(is_string($value) && filter_var($value, FILTER_VALIDATE_URL) !== false);
+        }
+    }
+
+    public function jsonGeneratesEncodableValues(): void
+    {
+        foreach (Gen::sample(Gen::json(), 30, 3) as $value) {
+            Assert::true(json_encode($value) !== false);
+        }
+    }
+
+    public function jsonStringGeneratesParseableJson(): void
+    {
+        foreach (Gen::sample(Gen::jsonString(), 30, 3) as $value) {
+            Assert::true(is_string($value));
+            \assert(is_string($value));
+            json_decode($value, true, 512, JSON_THROW_ON_ERROR);
+        }
+    }
+
+    public function regexAndStringMatchingGenerateMatchingStrings(): void
+    {
+        foreach (['[a-z]{3}', '\\d+', 'foo|bar'] as $pattern) {
+            foreach (Gen::sample(Gen::stringMatching($pattern), 20, 3) as $value) {
+                Assert::true(is_string($value) && preg_match('/^(?:' . $pattern . ')$/', $value) === 1);
+            }
+        }
+    }
+
+    public function ipv4OctetsSpanTheFullRange(): void
+    {
+        $octets = [];
+        foreach (Gen::sample(Gen::ipv4(), 200, 4) as $ip) {
+            if (is_string($ip)) {
+                foreach (explode('.', $ip) as $octet) {
+                    $octets[] = (int) $octet;
+                }
+            }
+        }
+
+        Assert::true(in_array(0, $octets, true));
+        Assert::true(in_array(255, $octets, true));
+    }
+
+    public function jsonProducesEveryLeafTypeAndNesting(): void
+    {
+        $values = Gen::sample(Gen::json(), 400, 4);
+
+        Assert::true($this->anySatisfies($values, static fn(mixed $v): bool => $v === null));
+        Assert::true($this->anySatisfies($values, is_bool(...)));
+        Assert::true($this->anySatisfies($values, is_int(...)));
+        Assert::true($this->anySatisfies($values, is_float(...)));
+        Assert::true($this->anySatisfies($values, is_string(...)));
+        Assert::true($this->anySatisfies($values, is_array(...)));
+    }
+
+    /**
+     * @param list<mixed> $values
+     * @param callable(mixed): bool $predicate
+     */
+    private function anySatisfies(array $values, callable $predicate): bool
+    {
+        foreach ($values as $value) {
+            if ($predicate($value)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function arrayOfAcceptsCustomSizeBounds(): void
     {
         $arbitrary = Gen::arrayOf(Gen::int(), 2, 5);
