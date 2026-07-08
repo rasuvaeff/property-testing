@@ -221,6 +221,29 @@ final class RegexCompilerTest
         Assert::true(in_array('9', $values, true));
     }
 
+    #[DataProvider('multiCharShorthands')]
+    public function shorthandProducesMultipleDistinctCharacters(string $pattern): void
+    {
+        $values = array_filter(Gen::sample(RegexCompiler::compile($pattern), 120, 4), is_string(...));
+        $distinct = array_unique($values);
+
+        // A dropped shorthand arm falls back to a single literal character, so
+        // "at least two distinct characters" pins every shorthand's real set —
+        // including the negated ones whose literal fallback would still match.
+        Assert::true(count($distinct) >= 2);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function multiCharShorthands(): iterable
+    {
+        foreach (['\\d', '\\w', '\\s', '\\D', '\\W', '\\S'] as $shorthand) {
+            yield $shorthand . ' atom' => [$shorthand];
+            yield $shorthand . ' class' => ['[' . $shorthand . ']'];
+        }
+    }
+
     /**
      * @param list<mixed> $values
      */
