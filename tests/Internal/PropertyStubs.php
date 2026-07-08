@@ -186,3 +186,87 @@ final class FlatMapFalsifyingStub
         )];
     }
 }
+
+final class ConventionExampleStub
+{
+    #[Property(runs: 3, seed: 1, generators: 'provide')]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
+    }
+
+    /** @return list<list<int>> */
+    public static function checkExamples(): array
+    {
+        return [[100], [200]];
+    }
+}
+
+final class NamedExampleStub
+{
+    #[Property(runs: 3, seed: 1, generators: 'provide', examples: 'cases')]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
+    }
+
+    /** @return list<list<int>> */
+    public static function cases(): array
+    {
+        return [[5]];
+    }
+}
+
+final class BadArityExampleStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'provide')]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
+    }
+
+    /** @return list<list<int>> */
+    public static function checkExamples(): array
+    {
+        return [[1, 2]];
+    }
+}
+
+final class MissingExampleMethodStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'provide', examples: 'nope')]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
+    }
+}
+
+final class NonArrayExampleStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'provide')]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
+    }
+
+    /** @return list<int> */
+    public static function checkExamples(): array
+    {
+        return [1, 2];
+    }
+}

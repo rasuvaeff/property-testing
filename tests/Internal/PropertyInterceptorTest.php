@@ -8,6 +8,7 @@ use Psr\EventDispatcher\EventDispatcherInterface;
 use Rasuvaeff\PropertyTesting\AssumptionSkipped;
 use Rasuvaeff\PropertyTesting\Classify;
 use Rasuvaeff\PropertyTesting\CoverageViolationException;
+use Rasuvaeff\PropertyTesting\ExampleViolationException;
 use Rasuvaeff\PropertyTesting\Internal\PropertyInterceptor;
 use Rasuvaeff\PropertyTesting\PropertyViolationException;
 use Testo\Application\Internal\MessengerHub;
@@ -656,6 +657,116 @@ final class PropertyInterceptorTest
         $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
 
         Assert::same(count($messenger->getMessages()->channel(Messenger::CHANNEL_STDOUT)), 0);
+    }
+
+    public function failingExampleShortCircuitsBeforeRandomRuns(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $calls = 0;
+        $next = static function (TestInfo $info) use (&$calls): TestResult {
+            ++$calls;
+
+            return $info->arguments[0] >= 100
+                ? new TestResult(info: $info, status: Status::Failed, failure: new \RuntimeException('too big'))
+                : new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $interceptor->runTest($this->info(ConventionExampleStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Failed);
+        Assert::instanceOf($result->failure, ExampleViolationException::class);
+        Assert::same($result->failure->getIndex(), 0);
+        Assert::same($result->failure->getArguments(), [100]);
+        // Only the first example ran; the second example and the random runs did not.
+        Assert::same($calls, 1);
+    }
+
+    public function passingExamplesRunFirstThenRandomInputs(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $seen = [];
+        $next = static function (TestInfo $info) use (&$seen): TestResult {
+            $seen[] = $info->arguments[0];
+
+            return new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $interceptor->runTest($this->info(ConventionExampleStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Passed);
+        // Both examples ran first, in order, before the 3 random runs.
+        Assert::same($seen[0], 100);
+        Assert::same($seen[1], 200);
+        Assert::same(count($seen), 5);
+    }
+
+    public function attributeNamesTheExamplesMethod(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => $info->arguments[0] === 5
+            ? new TestResult(info: $info, status: Status::Failed, failure: new \RuntimeException('five'))
+            : new TestResult(info: $info, status: Status::Passed);
+
+        $result = $interceptor->runTest($this->info(NamedExampleStub::class, 'check'), $next);
+
+        Assert::instanceOf($result->failure, ExampleViolationException::class);
+        Assert::same($result->failure->getArguments(), [5]);
+    }
+
+    public function exampleFailureRendersIndexAndArguments(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => $info->arguments[0] >= 100
+            ? new TestResult(info: $info, status: Status::Failed, failure: new \RuntimeException('boom'))
+            : new TestResult(info: $info, status: Status::Passed);
+
+        $result = $interceptor->runTest($this->info(ConventionExampleStub::class, 'check'), $next);
+
+        Assert::instanceOf($result->failure, ExampleViolationException::class);
+        Assert::string($result->failure->getMessage())->contains('Explicit example #0');
+        Assert::string($result->failure->getMessage())->contains('100');
+        Assert::string($result->failure->getMessage())->contains('Failure:');
+    }
+
+    public function discardedExampleIsNotAFailure(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        // The first example (100) is discarded via Assume, not failed, so the
+        // property proceeds and passes.
+        $next = static fn(TestInfo $info): TestResult => $info->arguments[0] >= 100
+            ? new TestResult(info: $info, status: Status::Error, failure: new AssumptionSkipped())
+            : new TestResult(info: $info, status: Status::Passed);
+
+        $result = $interceptor->runTest($this->info(ConventionExampleStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Passed);
+    }
+
+    #[ExpectException(\InvalidArgumentException::class)]
+    public function throwsWhenExampleArityMismatches(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+
+        $interceptor->runTest($this->info(BadArityExampleStub::class, 'check'), $next);
+    }
+
+    #[ExpectException(\InvalidArgumentException::class)]
+    public function throwsWhenNamedExamplesMethodMissing(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+
+        $interceptor->runTest($this->info(MissingExampleMethodStub::class, 'check'), $next);
+    }
+
+    #[ExpectException(\InvalidArgumentException::class)]
+    public function throwsWhenExampleIsNotAnArray(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+
+        $interceptor->runTest($this->info(NonArrayExampleStub::class, 'check'), $next);
     }
 
     private function info(string $class, string $method): TestInfo

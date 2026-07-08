@@ -9,6 +9,7 @@ use Rasuvaeff\PropertyTesting\AssumptionSkipped;
 use Rasuvaeff\PropertyTesting\Classify;
 use Rasuvaeff\PropertyTesting\CounterExample;
 use Rasuvaeff\PropertyTesting\CoverageViolationException;
+use Rasuvaeff\PropertyTesting\ExampleViolationException;
 use Rasuvaeff\PropertyTesting\Property;
 use Rasuvaeff\PropertyTesting\PropertyViolationException;
 use Rasuvaeff\PropertyTesting\Random;
@@ -86,6 +87,11 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
 
         // Discard requirements a previously aborted property may have left over.
         Classify::flushRequirements();
+
+        $exampleFailure = $this->runExamples($reflection, $info, $next, $property);
+        if ($exampleFailure instanceof TestResult) {
+            return $exampleFailure;
+        }
 
         $skips = 0;
         $checks = 0;
@@ -388,6 +394,106 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                 ));
             }
         }
+    }
+
+    /**
+     * Runs the fixed examples (if any) before the random inputs, short-circuiting
+     * on the first failure — a pinned example is already minimal, so it is not
+     * shrunk. Returns the failing {@see TestResult}, or null when all pass.
+     *
+     * @param callable(TestInfo): TestResult $next
+     */
+    private function runExamples(\ReflectionMethod $testMethod, TestInfo $info, callable $next, Property $property): ?TestResult
+    {
+        $index = 0;
+
+        foreach ($this->resolveExamples($testMethod, $info, $property) as $arguments) {
+            Classify::beginRun();
+            $result = $next($info->with(arguments: $arguments));
+            Classify::flushRun();
+
+            if (!$result->failure instanceof AssumptionSkipped && $result->status->isFailure()) {
+                return new TestResult(
+                    info: $info,
+                    status: Status::Failed,
+                    failure: new ExampleViolationException($index, $arguments, $result->failure),
+                );
+            }
+
+            ++$index;
+        }
+
+        return null;
+    }
+
+    /**
+     * Resolves the property's explicit examples: the attribute's `examples`
+     * method name, or the `<testMethod>Examples` convention when that method
+     * exists. Each yielded array becomes a list of positional arguments.
+     *
+     * @return list<list<mixed>>
+     */
+    private function resolveExamples(\ReflectionMethod $testMethod, TestInfo $info, Property $property): array
+    {
+        $methodName = $property->examples ?? $testMethod->getName() . 'Examples';
+        $class = $testMethod->getDeclaringClass();
+
+        if (!$class->hasMethod($methodName)) {
+            if ($property->examples !== null) {
+                throw new \InvalidArgumentException(sprintf(
+                    'Property "%s" references examples method "%s" which does not exist on %s',
+                    $testMethod->getName(),
+                    $methodName,
+                    $class->getName(),
+                ));
+            }
+
+            return [];
+        }
+
+        $method = $class->getMethod($methodName);
+
+        /** @var mixed $examples */
+        $examples = $method->isStatic()
+            ? $method->getClosure()()
+            : $method->getClosure($info->caseInfo->instance?->getInstance())();
+
+        if (!is_iterable($examples)) {
+            throw new \InvalidArgumentException(sprintf(
+                'Examples method "%s" must return an iterable, got %s',
+                $methodName,
+                get_debug_type($examples),
+            ));
+        }
+
+        $expectedArity = count($testMethod->getParameters());
+        $typed = [];
+
+        foreach ($examples as $example) {
+            if (!is_array($example)) {
+                throw new \InvalidArgumentException(sprintf(
+                    'Examples method "%s" must yield arrays of positional arguments, got %s',
+                    $methodName,
+                    get_debug_type($example),
+                ));
+            }
+
+            $arguments = array_values($example);
+
+            if (count($arguments) !== $expectedArity) {
+                throw new \InvalidArgumentException(sprintf(
+                    'Example #%d for "%s" has %d argument(s), but the property takes %d',
+                    count($typed),
+                    $testMethod->getName(),
+                    count($arguments),
+                    $expectedArity,
+                ));
+            }
+
+            $typed[] = $arguments;
+        }
+
+        return $typed;
     }
 
     /**
