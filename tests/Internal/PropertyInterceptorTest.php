@@ -769,6 +769,140 @@ final class PropertyInterceptorTest
         $interceptor->runTest($this->info(NonArrayExampleStub::class, 'check'), $next);
     }
 
+    public function recordsFailingSeedWhenStorageEnabled(): void
+    {
+        $dir = $this->tempStorageDir();
+        putenv('PROPERTY_DB=' . $dir);
+
+        try {
+            $interceptor = new PropertyInterceptor($this->createMessenger());
+            $next = static fn(TestInfo $info): TestResult => new TestResult(
+                info: $info,
+                status: Status::Failed,
+                failure: new \RuntimeException('always'),
+            );
+
+            $result = $interceptor->runTest($this->info(NoSeedFalsifyingStub::class, 'check'), $next);
+
+            Assert::instanceOf($result->failure, PropertyViolationException::class);
+            $file = $dir . '/' . sha1(NoSeedFalsifyingStub::class . '::check') . '.seed';
+            Assert::same(is_file($file), true);
+            Assert::same((int) file_get_contents($file), $result->failure->getCounterExample()->seed);
+        } finally {
+            putenv('PROPERTY_DB');
+            $this->cleanupDir($dir);
+        }
+    }
+
+    public function replaysARecordedSeedFirst(): void
+    {
+        $dir = $this->tempStorageDir();
+        putenv('PROPERTY_DB=' . $dir);
+
+        try {
+            // Pre-seed storage with a recorded failing seed; the replay phase must
+            // reproduce the failure with THAT seed (not a fresh random one).
+            file_put_contents($dir . '/' . sha1(NoSeedFalsifyingStub::class . '::check') . '.seed', '999');
+
+            $interceptor = new PropertyInterceptor($this->createMessenger());
+            $next = static fn(TestInfo $info): TestResult => new TestResult(
+                info: $info,
+                status: Status::Failed,
+                failure: new \RuntimeException('always'),
+            );
+
+            $result = $interceptor->runTest($this->info(NoSeedFalsifyingStub::class, 'check'), $next);
+
+            Assert::instanceOf($result->failure, PropertyViolationException::class);
+            Assert::same($result->failure->getCounterExample()->seed, 999);
+        } finally {
+            putenv('PROPERTY_DB');
+            $this->cleanupDir($dir);
+        }
+    }
+
+    public function forgetsARecordedSeedWhenTheReplayNoLongerFails(): void
+    {
+        $dir = $this->tempStorageDir();
+        putenv('PROPERTY_DB=' . $dir);
+
+        try {
+            $file = $dir . '/' . sha1(NoSeedFalsifyingStub::class . '::check') . '.seed';
+            file_put_contents($file, '999');
+
+            $interceptor = new PropertyInterceptor($this->createMessenger());
+            $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+
+            $result = $interceptor->runTest($this->info(NoSeedFalsifyingStub::class, 'check'), $next);
+
+            Assert::same($result->status, Status::Passed);
+            Assert::same(is_file($file), false);
+        } finally {
+            putenv('PROPERTY_DB');
+            $this->cleanupDir($dir);
+        }
+    }
+
+    public function attributeSeedDisablesReplay(): void
+    {
+        $dir = $this->tempStorageDir();
+        putenv('PROPERTY_DB=' . $dir);
+
+        try {
+            // FalsifyingStub pins seed:1; a stored seed must be ignored so the
+            // pinned reproducibility wins.
+            file_put_contents($dir . '/' . sha1(FalsifyingStub::class . '::check') . '.seed', '999');
+
+            $interceptor = new PropertyInterceptor($this->createMessenger());
+            $next = static fn(TestInfo $info): TestResult => new TestResult(
+                info: $info,
+                status: Status::Failed,
+                failure: new \RuntimeException('always'),
+            );
+
+            $result = $interceptor->runTest($this->info(FalsifyingStub::class, 'check'), $next);
+
+            Assert::instanceOf($result->failure, PropertyViolationException::class);
+            Assert::same($result->failure->getCounterExample()->seed, 1);
+        } finally {
+            putenv('PROPERTY_DB');
+            $this->cleanupDir($dir);
+        }
+    }
+
+    public function storageDisabledWritesNothingAndDoesNotCrash(): void
+    {
+        putenv('PROPERTY_DB');
+
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => new TestResult(
+            info: $info,
+            status: Status::Failed,
+            failure: new \RuntimeException('always'),
+        );
+
+        $result = $interceptor->runTest($this->info(NoSeedFalsifyingStub::class, 'check'), $next);
+
+        Assert::instanceOf($result->failure, PropertyViolationException::class);
+    }
+
+    private function tempStorageDir(): string
+    {
+        $dir = sys_get_temp_dir() . '/prop-db-' . bin2hex(random_bytes(6));
+        mkdir($dir, 0o777, true);
+
+        return $dir;
+    }
+
+    private function cleanupDir(string $dir): void
+    {
+        foreach (glob($dir . '/*') ?: [] as $file) {
+            @unlink($file);
+        }
+
+        @rmdir($dir);
+    }
+
     private function info(string $class, string $method): TestInfo
     {
         $reflection = new \ReflectionMethod($class, $method);

@@ -93,6 +93,56 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             return $exampleFailure;
         }
 
+        $storage = SeedStorage::fromEnv();
+        $propertyId = $reflection->getDeclaringClass()->getName() . '::' . $reflection->getName();
+
+        // Opt-in regression replay: re-run a previously recorded failing seed
+        // first (unless the attribute pins its own seed). A reproduced failure is
+        // reported immediately; a seed that no longer fails is forgotten.
+        if ($storage instanceof SeedStorage && $property->seed === null) {
+            $recalled = $storage->recall($propertyId);
+
+            if ($recalled !== null) {
+                $replay = $this->runProperty(new Random($recalled), $recalled, $generators, $parameterNames, $runs, $verbose, $next, $info, $property->maxShrinks);
+
+                if ($replay->failure instanceof PropertyViolationException) {
+                    return $replay;
+                }
+
+                $storage->forget($propertyId);
+            }
+        }
+
+        $result = $this->runProperty($random, $seed, $generators, $parameterNames, $runs, $verbose, $next, $info, $property->maxShrinks);
+
+        if ($storage instanceof SeedStorage && $result->failure instanceof PropertyViolationException) {
+            $storage->remember($propertyId, $seed);
+        }
+
+        return $result;
+    }
+
+    /**
+     * The random-input phase: generate arguments {@see $runs} times, shrink the
+     * first falsifying run into a {@see PropertyViolationException}, otherwise
+     * assess the {@see Classify::cover()} requirements. Runs once per seed, so the
+     * regression-replay phase can re-run it with a recorded seed.
+     *
+     * @param array<string, ArbitraryInterface> $generators
+     * @param list<string> $parameterNames
+     * @param callable(TestInfo): TestResult $next
+     */
+    private function runProperty(
+        Random $random,
+        int $seed,
+        array $generators,
+        array $parameterNames,
+        int $runs,
+        bool $verbose,
+        callable $next,
+        TestInfo $info,
+        ?int $maxShrinks,
+    ): TestResult {
         $skips = 0;
         $checks = 0;
         /** @var array<string, int> $classifications */
@@ -122,7 +172,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             }
 
             if ($result->status->isFailure()) {
-                [$shrunk, $shrinkSteps, $shrunkFailure] = $this->shrink($info, $next, $trees, $property->maxShrinks);
+                [$shrunk, $shrinkSteps, $shrunkFailure] = $this->shrink($info, $next, $trees, $maxShrinks);
 
                 return new TestResult(
                     info: $info,
