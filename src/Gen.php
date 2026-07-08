@@ -409,7 +409,7 @@ final class Gen
             static function (mixed $octets): string {
                 \assert(is_array($octets));
 
-                return implode('.', array_map(static fn(mixed $o): string => (string) (is_int($o) ? $o : 0), $octets));
+                return implode('.', array_map(static fn(mixed $o): string => (string) $o, $octets));
             },
         );
     }
@@ -457,7 +457,7 @@ final class Gen
 
                 $path = $segments === []
                     ? ''
-                    : '/' . implode('/', array_map(static fn(mixed $s): string => is_string($s) ? $s : '', $segments));
+                    : '/' . implode('/', array_map(static fn(mixed $s): string => (string) $s, $segments));
 
                 return sprintf('%s://%s.%s%s', $scheme, $host, $tld, $path);
             },

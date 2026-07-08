@@ -1,19 +1,23 @@
 # Roadmap — rasuvaeff/property-testing
 
 Development plan derived from a consumer-perspective gap analysis. Current
-released version: `2.1.0`; `2.2.0` (Wave 4) in development.
+released version: `2.2.0`; `2.3.0` in development.
 
-## Release plan (revised 2026-07-07)
+## Release plan (revised 2026-07-09)
 
-The post-`2.1.0` waves ship as **two** minors, not three: the large new
-paradigm is isolated, the two small homogeneous waves are merged.
+The post-`2.1.0` waves ship as minors.
 
 - **`2.2.0` = Wave 4 only** — stateful / model-based testing. Shipped first so
   downstream packages (`bulkhead`, `yii3-outbox`, `yii3-idempotency`, cache
   backends) get it early, and so the sizeable new API stays out of a release
-  mixed with cosmetic additions.
-- **`2.3.0` = Wave 5 + Wave 6 merged** — regression ergonomics plus the
-  generator catalog / in-body draw. Both are small and additive.
+  mixed with cosmetic additions. **Released 2026-07-07.**
+- **`2.3.0` = Wave 5 + Wave 6 minus T2.5** — explicit examples, seed persistence
+  and the generator catalog (domain arbitraries + `regex`). Small and additive.
+- **`2.4.0` = T2.5 (in-body draw)** — split out. It is NOT a small additive item:
+  in-body draws are dynamic and dependent, and this package's shrink model is a
+  per-arbitrary tree (Hedgehog), not a flat replay tape (fast-check/Hypothesis).
+  Shrinking a variable number of in-body draws needs a replay-tape mechanism the
+  tree model lacks, so it warrants its own release and a careful shrink design.
 
 ## Guiding split
 
@@ -133,15 +137,15 @@ command) then simplifies each command's parameters.
 
 | Item | What | Status |
 |---|---|---|
-| T1.2 | explicit examples — fixed inputs that always run alongside random ones (`@Example`-style, or an `examples` arg on `#[Property]`); pins a found bug as a permanent case | planned |
-| T1.3 | persist the minimal counterexample of a failing property and auto-replay it first on the next run (analog of Hypothesis's example DB / jqwik samples); opt-in storage path, gitignore-friendly | planned |
+| T1.2 | explicit examples — fixed inputs that always run alongside random ones (an `examples` method named via `#[Property(examples: …)]` or the `<testMethod>Examples` convention); pins a found bug as a permanent case | done |
+| T1.3 | persist the failing seed of a property and auto-replay it first on the next run (analog of Hypothesis's example DB / jqwik samples); opt-in via `PROPERTY_DB`, gitignore-friendly. Persists the SEED (not serialized values, which may be objects/closures) | done |
 
-## Wave 6 — `2.3.0` (generator catalog + in-body draw) — merged with Wave 5
+## Wave 6 — `2.3.0` (generator catalog); T2.5 split to `2.4.0`
 
 | Item | What | Status |
 |---|---|---|
-| T2.4 | domain arbitraries: `Gen::regex($pattern)` / `stringMatching`, `email`, `url`, `ipv4`, `json` — removes the documented `Gen::map` workaround (root `AGENTS.md` notes `Gen::stringMatching` does not exist) | planned |
-| T2.5 | in-body dependent draw (`Gen::draw($arb)` inside the property body) for when >1 dependent value makes nested `flatMap` awkward | planned |
+| T2.4 | domain arbitraries: `Gen::regex($pattern)` / `stringMatching`, `email`, `url`, `ipv4`, `json` — removes the documented `Gen::map` workaround (root `AGENTS.md` notes `Gen::stringMatching` does not exist). `regex` compiles a PCRE subset to combinators so matches shrink through existing trees | done |
+| T2.5 | in-body dependent draw (`Gen::draw($arb)` inside the property body) for when >1 dependent value makes nested `flatMap` awkward | deferred to `2.4.0` — fights the tree-shrink model (see release plan) |
 
 ## Backlog — Tier 3 (niche, unscheduled)
 
@@ -165,7 +169,8 @@ command) then simplifies each command's parameters.
 - `1.1.0` — entire Wave 1 (done, PR #4).
 - `2.0.0` — integrated shrinking + `flatMap` (done, PR #5, released 2026-07-02).
 - `2.1.0` — entire Wave 3 (done, PR #6, released 2026-07-05).
-- `2.2.0` — Wave 4, stateful / model-based testing (done, in development).
-- `2.3.0` — Wave 5 + Wave 6 merged: regression ergonomics + generator catalog /
-  in-body draw (planned).
+- `2.2.0` — Wave 4, stateful / model-based testing (done, released 2026-07-07).
+- `2.3.0` — T2.4 (domain arbitraries + `regex`), T1.2 (explicit examples), T1.3
+  (seed persistence + replay). T2.5 split out. (in development)
+- `2.4.0` — T2.5 (in-body draw), pending a shrink design that fits the tree model.
 - Backlog — Tier 3 items, unscheduled.

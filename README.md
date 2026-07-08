@@ -133,6 +133,12 @@ argument is omitted the runner falls back to a method named `<testMethod>Generat
 | `Gen::filter($inner, $predicate)` | `FilteredArbitrary`, `$inner` values satisfying `$predicate` | inner tree, pruning candidates that fail the predicate |
 | `Gen::tuple(...$elements)` | `TupleArbitrary`, fixed-arity tuple, one value per element | each position via its element, arity fixed |
 | `Gen::frequency($pairs)` | `FrequencyArbitrary`, weighted choice over `[weight, arbitrary]` pairs | within the branch that generated the value |
+| `Gen::ipv4()` | IPv4 dotted-quad strings | each octet toward `0` |
+| `Gen::email()` | `local@label.tld` addresses | toward the shortest local/label and first TLD |
+| `Gen::url()` | `http(s)://host.tld[/path]` URLs | toward `http://a.com` |
+| `Gen::json($maxDepth)` | a JSON-encodable value (null/bool/int/float/string/list/object) | within the generated structure |
+| `Gen::jsonString($maxDepth)` | the `json_encode` text of `Gen::json()` | through the value's tree |
+| `Gen::regex($pattern)` / `Gen::stringMatching($pattern)` | strings matching a regex subset (compiled to combinators) | shorter/simpler matches (via the compiled trees) |
 
 Numeric generators (`int*`, `float*`) are **boundary-biased**: roughly one draw in
 five returns an in-range edge value (`0`, `±1`, `min`, `max` for ints; `0.0` or
@@ -250,6 +256,40 @@ CI:
 | `PROPERTY_RUNS` | Positive integer that overrides every property's run count (dial runs up in CI). |
 | `PROPERTY_SEED` | Integer seed used for any property whose attribute omits `seed` (replay a whole suite). An explicit attribute `seed` still wins. |
 | `PROPERTY_VERBOSE` | Any value except `''`/`0` logs every run's generated arguments — see exactly what a replayed seed feeds the property. |
+| `PROPERTY_DB` | Directory path enabling regression replay (below). Unset means the feature is off and nothing is written. |
+
+### Replaying the last failure
+
+Set `PROPERTY_DB` to a directory and a falsified property records the seed that
+failed. On the next run that seed is re-run **first** (unless the attribute pins
+its own `seed`): a still-failing seed is reported immediately for fast feedback,
+and a seed that no longer fails is forgotten. Only the seed is stored — never the
+generated values, which may be objects or closures — so re-running the seed
+reproduces the same draw. Storage is one small file per property
+(`<sha1(id)>.seed`); add the directory to `.gitignore`.
+
+### Explicit examples
+
+Fixed inputs pin a found bug as a permanent case that runs on every invocation,
+alongside the random ones. Declare a `<testMethod>Examples` method (or name one
+via `#[Property(examples: 'method')]`) returning positional argument tuples; each
+runs **before** the random inputs and is reported verbatim (not shrunk — it is
+already the minimal case you pinned) via `ExampleViolationException`.
+
+```php
+#[Test]
+#[Property(generators: 'ints')]
+public function additionCommutes(int $a, int $b): void
+{
+    Assert::same($a + $b, $b + $a);
+}
+
+/** @return list<array{int, int}> */
+public static function additionCommutesExamples(): array
+{
+    return [[0, 0], [PHP_INT_MAX, 1]]; // regressions that must always run
+}
+```
 
 ### Checking the distribution
 

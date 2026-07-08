@@ -74,6 +74,45 @@ final class SeedStorageTest
         }
     }
 
+    public function recallRejectsDigitsWithANonNumericSuffix(): void
+    {
+        $dir = $this->tempDir();
+
+        try {
+            file_put_contents($dir . '/' . sha1('X::y') . '.seed', '12abc');
+
+            Assert::same((new SeedStorage($dir))->recall('X::y'), null);
+        } finally {
+            $this->cleanup($dir);
+        }
+    }
+
+    public function recallRejectsDigitsWithANonNumericPrefix(): void
+    {
+        $dir = $this->tempDir();
+
+        try {
+            file_put_contents($dir . '/' . sha1('X::y') . '.seed', 'abc12');
+
+            Assert::same((new SeedStorage($dir))->recall('X::y'), null);
+        } finally {
+            $this->cleanup($dir);
+        }
+    }
+
+    public function recallTrimsSurroundingWhitespace(): void
+    {
+        $dir = $this->tempDir();
+
+        try {
+            file_put_contents($dir . '/' . sha1('X::y') . '.seed', "  42\n");
+
+            Assert::same((new SeedStorage($dir))->recall('X::y'), 42);
+        } finally {
+            $this->cleanup($dir);
+        }
+    }
+
     public function rememberCreatesTheDirectory(): void
     {
         $base = $this->tempDir();

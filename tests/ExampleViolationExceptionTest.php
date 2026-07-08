@@ -49,6 +49,16 @@ final class ExampleViolationExceptionTest
         Assert::string($message)->contains('stdClass');
     }
 
+    public function boolArgumentsRenderTrueAndFalseDistinctly(): void
+    {
+        $trueMessage = (new ExampleViolationException(0, [true]))->getMessage();
+        $falseMessage = (new ExampleViolationException(0, [false]))->getMessage();
+
+        Assert::string($trueMessage)->contains('true');
+        Assert::same(str_contains($trueMessage, 'false'), false);
+        Assert::string($falseMessage)->contains('false');
+    }
+
     public function chainsTheUnderlyingFailure(): void
     {
         $cause = new \RuntimeException('boom');

@@ -120,6 +120,12 @@ final class RegexCompiler
 
         [$min, $max] = $bounds;
 
+        // A `{0}` / `{0,0}` quantifier means the atom never appears — an empty
+        // string, not a zero-length repetition ArrayArbitrary would reject.
+        if ($max === 0) {
+            return new ConstantArbitrary('');
+        }
+
         return new MappedArbitrary(new ArrayArbitrary($atom, $min, $max), self::joiner());
     }
 

@@ -20,6 +20,14 @@ runner, and `PostconditionViolation`. `Gen::commands()` returns the
 `CommandSequenceArbitrary` that generates and shrinks command sequences; it plugs
 into the same `#[Property]` machinery as every other arbitrary.
 
+The `2.3.0` additions: domain arbitraries on `Gen` (`ipv4`/`email`/`url`/`json`/
+`jsonString`, and `regex`/`stringMatching` compiled by the internal
+`RegexCompiler` — a PCRE-subset recursive-descent compiler to combinators);
+explicit examples (`#[Property(examples: …)]` / `<testMethod>Examples`, failing
+via `ExampleViolationException`); and opt-in seed persistence/replay via the
+internal `SeedStorage` (`PROPERTY_DB`). In-body draw (`Gen::draw()`) is NOT here
+— it is deferred to `2.4.0` because it fights the per-arbitrary tree shrink model.
+
 It is a Testo plugin, not a standalone runner. It depends on Testo's stable
 `@api` surfaces: `TestRunInterceptor`, `TestInfo`, `TestResult`, `Messenger`,
 the `Interceptable`/`FallbackInterceptor`/`InterceptorOptions` attributes.

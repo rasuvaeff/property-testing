@@ -38,7 +38,7 @@ Runtime deps: `ext-mbstring`, `ext-random`, `testo/testo ^0.10.25 || ^1.0`.
 ```php
 use Rasuvaeff\PropertyTesting\Property;
 
-#[Property(runs: 100, seed: null, generators: null, maxShrinks: null)]
+#[Property(runs: 100, seed: null, generators: null, maxShrinks: null, examples: null)]
 ```
 
 - `runs` (int, default 100): number of random inputs to try. Must be >= 1.
@@ -48,6 +48,16 @@ use Rasuvaeff\PropertyTesting\Property;
   `array<string, ArbitraryInterface>`. Defaults to `<testMethod>Generators`.
 - `maxShrinks` (?int, default null): cap on accepted shrink steps. Null = no cap.
   0 = disable shrinking (report the original counterexample). Must be >= 0.
+- `examples` (?string, default null): method name returning
+  `iterable<array<mixed>>` of fixed positional argument tuples, each run BEFORE
+  the random inputs and NOT shrunk. Defaults to `<testMethod>Examples` when that
+  method exists. A failing example -> `ExampleViolationException`.
+
+Env: `PROPERTY_RUNS` (override run count), `PROPERTY_SEED` (seed when the
+attribute omits it), `PROPERTY_VERBOSE` (log each run's args), `PROPERTY_DB`
+(directory enabling regression replay: a falsified property records its seed and
+re-runs it first next time — seed only, not values; unless the attribute pins a
+seed).
 
 The runner generates `runs` random argument sets, invokes the test through
 Testo's pipeline, and on the first failure shrinks the counterexample to a
@@ -92,6 +102,14 @@ Gen::filter(ArbitraryInterface $inner, Closure $predicate) // FilteredArbitrary,
 Gen::tuple(ArbitraryInterface ...$elements)        // TupleArbitrary, fixed-arity tuple (list), shrinks each position
 Gen::frequency(iterable $pairs)                    // FrequencyArbitrary, weighted [int $weight, ArbitraryInterface] pairs; shrinks within the generating branch
 Gen::commands(mixed $initialModel, array $commandGenerators, int $minLen = 0, int $maxLen = 100) // CommandSequenceArbitrary for stateful/model-based testing; $commandGenerators = list<ArbitraryInterface> each producing a Command; see "Stateful" below
+Gen::ipv4()                            // dotted-quad IPv4 strings; each octet shrinks to 0
+Gen::email()                           // local@label.tld addresses; shrinks to shortest local/label + first TLD
+Gen::url()                             // http(s)://host.tld[/path]; shrinks to http://a.com
+Gen::json(int $maxDepth = 3)           // JSON-encodable value (null/bool/int/float/string/list/object)
+Gen::jsonString(int $maxDepth = 3)     // json_encode() text of Gen::json()
+Gen::regex(string $pattern, int $maxRepeat = 8)          // strings matching a regex SUBSET, compiled to combinators (shrinks through them)
+Gen::stringMatching(string $pattern, int $maxRepeat = 8) // alias of regex()
+// regex subset: literals, ., [..] classes (ranges, negation, \d\w\s + negations), \d\w\s\D\W\S\t\n\r, quantifiers * + ? {n} {n,} {n,m}, alternation |, groups (..)/(?:..). A single leading ^ / trailing $ is a no-op. Anchors elsewhere, backreferences, lookaround, named/inline groups, flags -> throw naming the construct.
 Gen::sample(ArbitraryInterface $arb, int $count = 10, int $seed = 0)  // list<mixed>: eager debug helper, returns plain values not an arbitrary
 Gen::sampleShrinks(ArbitraryInterface $arb, int $seed = 0, int $limit = 10) // array{value: mixed, shrinks: list<mixed>}: one value + its first shrink candidates (debug custom arbitraries)
 ```

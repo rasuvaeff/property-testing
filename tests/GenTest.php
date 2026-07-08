@@ -132,6 +132,48 @@ final class GenTest
         }
     }
 
+    public function ipv4OctetsSpanTheFullRange(): void
+    {
+        $octets = [];
+        foreach (Gen::sample(Gen::ipv4(), 200, 4) as $ip) {
+            if (is_string($ip)) {
+                foreach (explode('.', $ip) as $octet) {
+                    $octets[] = (int) $octet;
+                }
+            }
+        }
+
+        Assert::true(in_array(0, $octets, true));
+        Assert::true(in_array(255, $octets, true));
+    }
+
+    public function jsonProducesEveryLeafTypeAndNesting(): void
+    {
+        $values = Gen::sample(Gen::json(), 400, 4);
+
+        Assert::true($this->anySatisfies($values, static fn(mixed $v): bool => $v === null));
+        Assert::true($this->anySatisfies($values, is_bool(...)));
+        Assert::true($this->anySatisfies($values, is_int(...)));
+        Assert::true($this->anySatisfies($values, is_float(...)));
+        Assert::true($this->anySatisfies($values, is_string(...)));
+        Assert::true($this->anySatisfies($values, is_array(...)));
+    }
+
+    /**
+     * @param list<mixed> $values
+     * @param callable(mixed): bool $predicate
+     */
+    private function anySatisfies(array $values, callable $predicate): bool
+    {
+        foreach ($values as $value) {
+            if ($predicate($value)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function arrayOfAcceptsCustomSizeBounds(): void
     {
         $arbitrary = Gen::arrayOf(Gen::int(), 2, 5);
