@@ -27,6 +27,7 @@ use Rasuvaeff\PropertyTesting\Arbitrary\StringArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\TupleArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\UniqueArrayArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\UuidArbitrary;
+use Rasuvaeff\PropertyTesting\Internal\RegexCompiler;
 
 /**
  * Facade with static factories for the built-in {@see ArbitraryInterface}s.
@@ -41,6 +42,9 @@ use Rasuvaeff\PropertyTesting\Arbitrary\UuidArbitrary;
  */
 final class Gen
 {
+    private const string ALPHA = 'abcdefghijklmnopqrstuvwxyz';
+    private const string ALNUM = 'abcdefghijklmnopqrstuvwxyz0123456789';
+
     private function __construct()
     {
         // Static facade; not instantiable.
@@ -390,6 +394,138 @@ final class Gen
     public static function datetime(?DateTimeImmutable $min = null, ?DateTimeImmutable $max = null): DateTimeArbitrary
     {
         return new DateTimeArbitrary($min, $max);
+    }
+
+    /**
+     * IPv4 dotted-quad address strings (`"0.0.0.0"`..`"255.255.255.255"`). Each
+     * octet shrinks toward 0 through its own integer tree.
+     */
+    public static function ipv4(): MappedArbitrary
+    {
+        $octet = new IntArbitrary(0, 255);
+
+        return new MappedArbitrary(
+            new TupleArbitrary($octet, $octet, $octet, $octet),
+            static function (mixed $octets): string {
+                \assert(is_array($octets));
+
+                return implode('.', array_map(static fn(mixed $o): string => (string) (is_int($o) ? $o : 0), $octets));
+            },
+        );
+    }
+
+    /**
+     * Syntactically valid `local@label.tld` email addresses over a lowercase
+     * alphanumeric alphabet and a small TLD set. Shrinks toward the shortest
+     * local part / label and the first TLD.
+     */
+    public static function email(): MappedArbitrary
+    {
+        return new MappedArbitrary(
+            new TupleArbitrary(
+                new CharsetStringArbitrary(self::ALNUM, 1, 16),
+                new CharsetStringArbitrary(self::ALNUM, 1, 16),
+                new OneOfArbitrary('com', 'org', 'net', 'io', 'dev'),
+            ),
+            static function (mixed $parts): string {
+                \assert(is_array($parts));
+                [$local, $label, $tld] = $parts;
+                \assert(is_string($local) && is_string($label) && is_string($tld));
+
+                return sprintf('%s@%s.%s', $local, $label, $tld);
+            },
+        );
+    }
+
+    /**
+     * HTTP/HTTPS URLs `scheme://host.tld[/segment...]` over a lowercase
+     * alphanumeric alphabet. Shrinks toward `http://a.com` (no path).
+     */
+    public static function url(): MappedArbitrary
+    {
+        return new MappedArbitrary(
+            new TupleArbitrary(
+                new OneOfArbitrary('http', 'https'),
+                new CharsetStringArbitrary(self::ALNUM, 1, 16),
+                new OneOfArbitrary('com', 'org', 'net', 'io', 'dev'),
+                new ArrayArbitrary(new CharsetStringArbitrary(self::ALNUM, 1, 8), 0, 3),
+            ),
+            static function (mixed $parts): string {
+                \assert(is_array($parts));
+                [$scheme, $host, $tld, $segments] = $parts;
+                \assert(is_string($scheme) && is_string($host) && is_string($tld) && is_array($segments));
+
+                $path = $segments === []
+                    ? ''
+                    : '/' . implode('/', array_map(static fn(mixed $s): string => is_string($s) ? $s : '', $segments));
+
+                return sprintf('%s://%s.%s%s', $scheme, $host, $tld, $path);
+            },
+        );
+    }
+
+    /**
+     * A JSON-encodable value — null, bool, int, float, string, or nested
+     * lists/objects thereof — bounded to $maxDepth levels of nesting. Produces
+     * the decoded PHP value; use {@see jsonString()} for the encoded text.
+     */
+    public static function json(int $maxDepth = 3): ArbitraryInterface
+    {
+        $leaf = new FrequencyArbitrary([
+            [1, new ConstantArbitrary(null)],
+            [1, new BoolArbitrary()],
+            [1, new IntArbitrary(-1000, 1000)],
+            [1, new FloatArbitrary(-1000.0, 1000.0)],
+            [1, new CharsetStringArbitrary(self::ALNUM . ' ', 0, 12)],
+        ]);
+
+        return self::recursive(
+            $leaf,
+            static fn(ArbitraryInterface $inner): ArbitraryInterface => new FrequencyArbitrary([
+                [1, new ArrayArbitrary($inner, 0, 4)],
+                [1, new DictionaryArbitrary(new CharsetStringArbitrary(self::ALPHA, 1, 8), $inner, 0, 4)],
+            ]),
+            $maxDepth,
+        );
+    }
+
+    /**
+     * The JSON text of {@see json()} (`json_encode` of each generated value),
+     * for exercising JSON parsers and decoders.
+     */
+    public static function jsonString(int $maxDepth = 3): MappedArbitrary
+    {
+        return new MappedArbitrary(
+            self::json($maxDepth),
+            static fn(mixed $value): string => (string) json_encode($value),
+        );
+    }
+
+    /**
+     * Strings matching a regular-expression subset. The pattern is compiled to
+     * ordinary combinators, so matches shrink toward shorter/simpler strings.
+     *
+     * Supported: literals, `.`, character classes `[...]` (ranges, negation,
+     * `\d\w\s` and their negations), the escapes `\d\w\s\D\W\S\t\n\r` plus
+     * `\`-escaped metacharacters, quantifiers `* + ? {n} {n,} {n,m}`,
+     * alternation `|`, and groups `(...)` / `(?:...)`. A single leading `^` and
+     * trailing `$` are accepted as no-ops. Anchors elsewhere, backreferences,
+     * lookaround, named/inline groups, and flags throw an
+     * {@see \InvalidArgumentException} naming the construct.
+     *
+     * @param int $maxRepeat Upper bound generation uses for unbounded quantifiers (`*`, `+`, `{n,}`).
+     */
+    public static function regex(string $pattern, int $maxRepeat = 8): ArbitraryInterface
+    {
+        return RegexCompiler::compile($pattern, $maxRepeat);
+    }
+
+    /**
+     * Alias of {@see regex()} for parity with fast-check/Hypothesis naming.
+     */
+    public static function stringMatching(string $pattern, int $maxRepeat = 8): ArbitraryInterface
+    {
+        return self::regex($pattern, $maxRepeat);
     }
 
     /**
