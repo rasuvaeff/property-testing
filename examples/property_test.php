@@ -40,6 +40,30 @@ final class ListReversalProperties
     }
 
     /**
+     * In-body draw: values whose domain depends on data already in scope are
+     * drawn inside the body with Gen::draw() — here a slice's bounds depend on
+     * the list AND on each other, which nested flatMap would make awkward.
+     * Drawn values shrink together with the parameters and are reported as
+     * draw#N pseudo-arguments in a counterexample.
+     */
+    #[Property(runs: 200)]
+    public function everySliceIsContainedInTheList(array $xs): void
+    {
+        $from = Gen::draw(Gen::intBetween(0, count($xs)));
+        $to = Gen::draw(Gen::intBetween($from, count($xs)));
+
+        foreach (array_slice($xs, $from, $to - $from) as $item) {
+            Assert::true(in_array($item, $xs, true));
+        }
+    }
+
+    /** @return array<string, \Rasuvaeff\PropertyTesting\ArbitraryInterface> */
+    private function everySliceIsContainedInTheListGenerators(): array
+    {
+        return ['xs' => Gen::nonEmptyArrayOf(Gen::intBetween(-100, 100))];
+    }
+
+    /**
      * A fixed seed makes a failing run reproducible: pass the seed reported in
      * the failure message back through the attribute to replay the exact inputs.
      */

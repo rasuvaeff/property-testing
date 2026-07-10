@@ -27,6 +27,7 @@ use Rasuvaeff\PropertyTesting\Arbitrary\StringArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\TupleArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\UniqueArrayArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\UuidArbitrary;
+use Rasuvaeff\PropertyTesting\Internal\DrawContext;
 use Rasuvaeff\PropertyTesting\Internal\RegexCompiler;
 
 /**
@@ -354,6 +355,37 @@ final class Gen
     public static function filter(ArbitraryInterface $inner, Closure $predicate): FilteredArbitrary
     {
         return new FilteredArbitrary($inner, $predicate);
+    }
+
+    /**
+     * In-body dependent draw: generates one value from $arbitrary inside the
+     * property body — for when several dependent values make nested
+     * {@see flatMap()} awkward. The domain may depend on anything already in
+     * scope, including previously drawn values:
+     *
+     * ```php
+     * #[Property(runs: 200)]
+     * public function sliceIsContained(array $xs): void
+     * {
+     *     $from = Gen::draw(Gen::intBetween(0, count($xs)));
+     *     $to = Gen::draw(Gen::intBetween($from, count($xs)));
+     *     // ... assertions on array_slice($xs, $from, $to - $from) ...
+     * }
+     * ```
+     *
+     * Drawn values shrink together with the parameters: the runner records
+     * every draw on a replay tape, shrinks each recorded draw through its own
+     * tree, and re-runs the body with the tape replayed by position. A run
+     * that draws past the tape's end (control flow changed under a smaller
+     * prefix) generates the extra values anew. Counterexamples report draws
+     * as `draw#1`, `draw#2`, ... alongside the named parameters.
+     *
+     * Only valid while the property runner executes the body; anywhere else
+     * it throws.
+     */
+    public static function draw(ArbitraryInterface $arbitrary): mixed
+    {
+        return DrawContext::draw($arbitrary);
     }
 
     /**

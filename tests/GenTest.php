@@ -760,4 +760,10 @@ final class GenTest
         Assert::same($minSize, 1);
         Assert::same($maxSize, 100);
     }
+
+    #[ExpectException(\RuntimeException::class)]
+    public function drawOutsideAPropertyRunThrows(): void
+    {
+        Gen::draw(Gen::int());
+    }
 }

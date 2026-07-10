@@ -110,6 +110,7 @@ Gen::jsonString(int $maxDepth = 3)     // json_encode() text of Gen::json()
 Gen::regex(string $pattern, int $maxRepeat = 8)          // strings matching a regex SUBSET, compiled to combinators (shrinks through them)
 Gen::stringMatching(string $pattern, int $maxRepeat = 8) // alias of regex()
 // regex subset: literals, ., [..] classes (ranges, negation, \d\w\s + negations), \d\w\s\D\W\S\t\n\r, quantifiers * + ? {n} {n,} {n,m}, alternation |, groups (..)/(?:..). A single leading ^ / trailing $ is a no-op. Anchors elsewhere, backreferences, lookaround, named/inline groups, flags -> throw naming the construct.
+Gen::draw(ArbitraryInterface $arb)     // mixed: in-body dependent draw — ONLY inside a property body (throws elsewhere); see "In-body draws" below
 Gen::sample(ArbitraryInterface $arb, int $count = 10, int $seed = 0)  // list<mixed>: eager debug helper, returns plain values not an arbitrary
 Gen::sampleShrinks(ArbitraryInterface $arb, int $seed = 0, int $limit = 10) // array{value: mixed, shrinks: list<mixed>}: one value + its first shrink candidates (debug custom arbitraries)
 ```
@@ -125,6 +126,33 @@ Gen::flatMap(
     ),
 );
 ```
+
+### In-body draws: `Gen::draw()`
+
+For several dependent values where nested `flatMap` gets awkward — the domain
+may depend on parameters, previous draws, or intermediate results:
+
+```php
+#[Property(runs: 200)]
+public function sliceIsContained(array $xs): void
+{
+    $from = Gen::draw(Gen::intBetween(0, count($xs)));
+    $to = Gen::draw(Gen::intBetween($from, count($xs))); // depends on $from
+    // ... assertions ...
+}
+```
+
+- Drawn values shrink together with the parameters (replay tape: each draw is
+  recorded and shrunk through its own tree; the body is re-run with the tape
+  replayed by position).
+- Counterexamples report draws as `draw#1`, `draw#2`, ... next to the named
+  parameters; `PROPERTY_VERBOSE` logs them per run.
+- A replayed draw is NOT re-validated against the new arbitrary when a shrunk
+  parameter changes control flow (fast-check `gen()` model) — assert what the
+  body requires, do not rely on the range after shrinking.
+- With draws present, accepted shrink steps are capped at 1000 (`maxShrinks`
+  wins when set) to guarantee termination.
+- Prefer `flatMap` for a single dependent value.
 
 ### Shrink trees: `Shrinkable`
 

@@ -6,6 +6,7 @@ namespace Rasuvaeff\PropertyTesting\Tests;
 
 use Rasuvaeff\PropertyTesting\PropertyViolationException;
 use Rasuvaeff\PropertyTesting\Tests\Fixture\AssumeDiscardFixture;
+use Rasuvaeff\PropertyTesting\Tests\Fixture\DrawPropertyFixture;
 use Rasuvaeff\PropertyTesting\Tests\Fixture\FalsifyingPropertyFixture;
 use Testo\Assert;
 use Testo\Codecov\CoversNothing;
@@ -53,6 +54,22 @@ final class PropertyRunnerE2ETest
         // and renders a "Failure:" line, so the developer sees what broke.
         Assert::same($result->failure->getPrevious(), $result->failure->getCounterExample()->failure);
         Assert::string($result->failure->getMessage())->contains('Failure:');
+    }
+
+    public function inBodyDrawsShrinkThroughTheRealRunner(): void
+    {
+        $result = TestRunner::runTest([DrawPropertyFixture::class, 'everyDrawnIndexIsSmall']);
+
+        Assert::true($result->status->isFailure());
+        Assert::instanceOf($result->failure, PropertyViolationException::class);
+
+        $counterExample = $result->failure->getCounterExample();
+        // The drawn index shrinks to the smallest still-failing value (4) and
+        // the parameter to its lower bound; the report renders the draw as a
+        // `draw#N` pseudo-argument next to the named parameter.
+        Assert::same($counterExample->shrunkArguments['draw#1'], 4);
+        Assert::same($counterExample->shrunkArguments['size'], 10);
+        Assert::string($result->failure->getMessage())->contains('draw#1');
     }
 
     public function assumeDiscardsRunsThroughTheRealRunner(): void

@@ -1,7 +1,7 @@
 # Roadmap — rasuvaeff/property-testing
 
 Development plan derived from a consumer-perspective gap analysis. Current
-released version: `2.2.0`; `2.3.0` in development.
+released version: `2.3.0`; `2.4.0` in development.
 
 ## Release plan (revised 2026-07-09)
 
@@ -145,7 +145,17 @@ command) then simplifies each command's parameters.
 | Item | What | Status |
 |---|---|---|
 | T2.4 | domain arbitraries: `Gen::regex($pattern)` / `stringMatching`, `email`, `url`, `ipv4`, `json` — removes the documented `Gen::map` workaround (root `AGENTS.md` notes `Gen::stringMatching` does not exist). `regex` compiles a PCRE subset to combinators so matches shrink through existing trees | done |
-| T2.5 | in-body dependent draw (`Gen::draw($arb)` inside the property body) for when >1 dependent value makes nested `flatMap` awkward | deferred to `2.4.0` — fights the tree-shrink model (see release plan) |
+| T2.5 | in-body dependent draw (`Gen::draw($arb)` inside the property body) for when >1 dependent value makes nested `flatMap` awkward | done (`2.4.0`) |
+
+T2.5 shipped in `2.4.0` with a replay-tape design on top of the tree model
+(fast-check's `gen()` approach): every in-body draw is recorded as a
+`Shrinkable` on a tape; shrinking walks tape positions like extra parameters,
+re-running the body with the tape replayed by position. Draws past the tape's
+end (control flow changed under a smaller prefix) generate anew and the
+now-unreachable tail is dropped. A replayed node is NOT re-validated against
+the new arbitrary. Because an accepted candidate can regrow the tape with
+fresh trees, accepted shrink steps are capped (1000) when draws are present —
+the per-arbitrary finite-tree termination argument alone no longer applies.
 
 ## Backlog — Tier 3 (niche, unscheduled)
 
@@ -171,6 +181,6 @@ command) then simplifies each command's parameters.
 - `2.1.0` — entire Wave 3 (done, PR #6, released 2026-07-05).
 - `2.2.0` — Wave 4, stateful / model-based testing (done, released 2026-07-07).
 - `2.3.0` — T2.4 (domain arbitraries + `regex`), T1.2 (explicit examples), T1.3
-  (seed persistence + replay). T2.5 split out. (in development)
-- `2.4.0` — T2.5 (in-body draw), pending a shrink design that fits the tree model.
+  (seed persistence + replay). T2.5 split out. (done, released 2026-07-09)
+- `2.4.0` — T2.5 (in-body draw via a replay tape over the tree model). (done)
 - Backlog — Tier 3 items, unscheduled.

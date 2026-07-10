@@ -25,8 +25,13 @@ The `2.3.0` additions: domain arbitraries on `Gen` (`ipv4`/`email`/`url`/`json`/
 `RegexCompiler` — a PCRE-subset recursive-descent compiler to combinators);
 explicit examples (`#[Property(examples: …)]` / `<testMethod>Examples`, failing
 via `ExampleViolationException`); and opt-in seed persistence/replay via the
-internal `SeedStorage` (`PROPERTY_DB`). In-body draw (`Gen::draw()`) is NOT here
-— it is deferred to `2.4.0` because it fights the per-arbitrary tree shrink model.
+internal `SeedStorage` (`PROPERTY_DB`).
+
+The `2.4.0` addition: in-body dependent draw — `Gen::draw($arb)` inside the
+property body, backed by the internal `DrawContext` replay tape (fast-check's
+`gen()` model layered over the tree shrink model). Draws are recorded as
+`Shrinkable`s, shrunk like extra parameters, and replayed by position on every
+shrink trial; counterexamples report them as `draw#N` pseudo-arguments.
 
 It is a Testo plugin, not a standalone runner. It depends on Testo's stable
 `@api` surfaces: `TestRunInterceptor`, `TestInfo`, `TestResult`, `Messenger`,
@@ -84,12 +89,25 @@ make release-check
   global `mt_srand`/`mt_rand`. Two `Random` instances with the same seed produce
   identical sequences regardless of intervening random calls — this is what makes
   reported seeds reproducible inside a busy test runner.
-- Generators are value objects (`final readonly`). Two types hold mutable state:
-  `Random` (advances its engine on each draw) and `Classify` (a process-local
-  static buffer of the current run's distribution labels). `Classify` is the
-  body↔runner channel for `classify`/`collect`; the interceptor clears it via
-  `beginRun()` and drains it via `flushRun()` each run, so it is never shared
-  concurrently (property runs are sequential).
+- Generators are value objects (`final readonly`). Three types hold mutable
+  state: `Random` (advances its engine on each draw), `Classify` (a
+  process-local static buffer of the current run's distribution labels) and
+  `DrawContext` (the process-local replay tape for `Gen::draw()`). `Classify`
+  is the body↔runner channel for `classify`/`collect`; the interceptor clears
+  it via `beginRun()` and drains it via `flushRun()` each run, so it is never
+  shared concurrently (property runs are sequential). `DrawContext` follows
+  the same discipline: `arm()` before every body execution, `disarm()` after
+  (plus a defensive disarm at the start of each property).
+- In-body draw shrinking is replay-tape-based and intentionally does NOT
+  re-validate replayed nodes: a shrunk parameter can change control flow so a
+  draw position meets a different (narrower) arbitrary, and the tape still
+  serves the recorded node as-is (fast-check `gen()` model). Draws past the
+  tape's end generate anew from the run's `Random`; an accepted trial's
+  actually-used draws become the next tape (this is what truncates unreachable
+  tails). Because a regrown tape carries fresh trees, the finite-tree
+  termination argument alone does not bound the descent — the interceptor caps
+  accepted steps via `MAX_DRAW_SHRINK_STEPS` whenever the tape is non-empty.
+  Do not remove the cap or add re-validation to the replay.
 - `Classify` carries a second static: coverage requirements from `cover()`,
   scoped per PROPERTY (not per run). The interceptor drains them once after
   the run loop via `flushRequirements()` and defensively before it — a

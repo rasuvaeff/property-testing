@@ -187,6 +187,72 @@ final class FlatMapFalsifyingStub
     }
 }
 
+final class DrawFalsifyingStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'provide')]
+    public function check(): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return [];
+    }
+}
+
+final class ParamAndDrawFalsifyingStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'provide')]
+    public function check(int $n): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['n' => Gen::intBetween(11, 100)];
+    }
+}
+
+final class DrawCountStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'provide')]
+    public function check(int $n): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['n' => Gen::intBetween(2, 5)];
+    }
+}
+
+final class DrawMaxShrinksDisabledStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'provide', maxShrinks: 0)]
+    public function check(): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return [];
+    }
+}
+
+final class DrawExampleStub
+{
+    #[Property(runs: 2, seed: 1, generators: 'provide')]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
+    }
+
+    /** @return list<list<int>> */
+    public static function checkExamples(): array
+    {
+        return [[5]];
+    }
+}
+
 final class ConventionExampleStub
 {
     #[Property(runs: 3, seed: 1, generators: 'provide')]
