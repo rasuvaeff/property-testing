@@ -48,6 +48,15 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
      */
     private const float SKIP_RATE_WARNING_THRESHOLD = 0.9;
 
+    /**
+     * Cap on accepted shrink steps once in-body draws are on the tape. An
+     * accepted candidate can change the body's control flow and regrow the
+     * tape with fresh trees, so tree depth alone no longer bounds the descent;
+     * the cap guarantees termination. An explicit {@see Property::$maxShrinks}
+     * still wins.
+     */
+    private const int MAX_DRAW_SHRINK_STEPS = 1000;
+
     public function __construct(
         private Messenger $messenger,
     ) {}
@@ -85,10 +94,12 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         $verbose = $this->resolveVerbose();
         $random = new Random($seed);
 
-        // Discard requirements a previously aborted property may have left over.
+        // Discard requirements and a draw tape a previously aborted property may
+        // have left over.
         Classify::flushRequirements();
+        DrawContext::disarm();
 
-        $exampleFailure = $this->runExamples($reflection, $info, $next, $property);
+        $exampleFailure = $this->runExamples($reflection, $info, $next, $property, $seed);
         if ($exampleFailure instanceof TestResult) {
             return $exampleFailure;
         }
@@ -161,8 +172,18 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                 );
             }
 
+            DrawContext::arm($random);
             $result = $next($info->with(arguments: array_values($arguments)));
+            $draws = DrawContext::disarm();
             $labels = Classify::flushRun();
+
+            if ($verbose && $draws !== []) {
+                $this->messenger->log(
+                    Messenger::CHANNEL_STDOUT,
+                    sprintf('Property "%s" run %d draws: %s', $info->name, $run, $this->formatArguments($this->drawArguments($draws))),
+                    Level::Info,
+                );
+            }
 
             // A discarded run is neither a failure nor a check.
             if ($result->failure instanceof AssumptionSkipped) {
@@ -172,7 +193,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             }
 
             if ($result->status->isFailure()) {
-                [$shrunk, $shrinkSteps, $shrunkFailure] = $this->shrink($info, $next, $trees, $maxShrinks);
+                [$shrunk, $shrunkDraws, $shrinkSteps, $shrunkFailure] = $this->shrink($info, $next, $trees, $draws, $random, $maxShrinks);
 
                 return new TestResult(
                     info: $info,
@@ -180,8 +201,8 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                     failure: new PropertyViolationException(new CounterExample(
                         seed: $seed,
                         runsBeforeFailure: $checks,
-                        originalArguments: $arguments,
-                        shrunkArguments: $shrunk,
+                        originalArguments: array_merge($arguments, $this->drawArguments($draws)),
+                        shrunkArguments: array_merge($shrunk, $shrunkDraws),
                         shrinkSteps: $shrinkSteps,
                         // Report the failure of the minimised sequence, not the
                         // original: for a shrunk counterexample the two can differ
@@ -453,13 +474,18 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
      *
      * @param callable(TestInfo): TestResult $next
      */
-    private function runExamples(\ReflectionMethod $testMethod, TestInfo $info, callable $next, Property $property): ?TestResult
+    private function runExamples(\ReflectionMethod $testMethod, TestInfo $info, callable $next, Property $property, int $seed): ?TestResult
     {
         $index = 0;
+        // Examples may call Gen::draw(); their draws come from a dedicated
+        // deterministic stream so the random phase's sequence is untouched.
+        $random = new Random($seed);
 
         foreach ($this->resolveExamples($testMethod, $info, $property) as $arguments) {
             Classify::beginRun();
+            DrawContext::arm($random);
             $result = $next($info->with(arguments: $arguments));
+            DrawContext::disarm();
             Classify::flushRun();
 
             if (!$result->failure instanceof AssumptionSkipped && $result->status->isFailure()) {
@@ -553,20 +579,34 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
      * a full pass produces no improvement. Termination is guaranteed by the
      * {@see ArbitraryInterface} contract: every branch of a shrink tree is finite.
      *
+     * In-body draws shrink through a replay tape walked like extra parameters:
+     * each trial re-runs the body with the modified tape, and the draws that
+     * trial actually used (the replayed prefix plus a freshly generated suffix,
+     * when control flow changed) become the tape of the next round on
+     * acceptance. Because an accepted candidate can regrow the tape with fresh
+     * trees, the finite-tree argument no longer bounds the descent — with a
+     * non-empty tape the accepted steps are additionally capped by
+     * {@see self::MAX_DRAW_SHRINK_STEPS}.
+     *
      * @param array<string, Shrinkable> $trees The failing arguments' shrink trees.
+     * @param list<Shrinkable> $tape The failing run's recorded in-body draws.
      * @param callable(TestInfo): TestResult $next
      * @param ?int $maxShrinks Cap on accepted shrink steps; null means no cap, 0 disables shrinking.
-     * @return array{0: array<string, mixed>, 1: int, 2: ?\Throwable} The minimised arguments, the
-     *         number of accepted shrink steps, and the failure of the last accepted candidate
-     *         (null when nothing shrank).
+     * @return array{0: array<string, mixed>, 1: array<string, mixed>, 2: int, 3: ?\Throwable} The
+     *         minimised arguments, the minimised draws (as `draw#N` pseudo-arguments), the number
+     *         of accepted shrink steps, and the failure of the last accepted candidate (null when
+     *         nothing shrank).
      */
     private function shrink(
         TestInfo $info,
         callable $next,
         array $trees,
+        array $tape,
+        Random $random,
         ?int $maxShrinks,
     ): array {
         $current = $trees;
+        $currentTape = $tape;
         $steps = 0;
         $acceptedFailure = null;
 
@@ -577,8 +617,8 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                 // Stop before accepting any further candidate once the cap is hit.
                 // Checking here (before the per-parameter search) makes maxShrinks=0
                 // return the original counterexample with zero accepted steps.
-                if ($maxShrinks !== null && $steps >= $maxShrinks) {
-                    return [$this->values($current), $steps, $acceptedFailure];
+                if ($this->capReached($maxShrinks, $currentTape, $steps)) {
+                    return [$this->values($current), $this->drawArguments($currentTape), $steps, $acceptedFailure];
                 }
 
                 foreach ($current[$name]->shrinks() as $candidate) {
@@ -593,10 +633,11 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                     // parameter. Array union ([$name => ...] + $current) would move
                     // $name to the front and scramble non-leading parameters.
                     $trial = array_replace($current, [$name => $candidate]);
-                    $trialResult = $next($info->with(arguments: array_values($this->values($trial))));
+                    [$trialResult, $recorded] = $this->trial($info, $next, $trial, $currentTape, $random);
 
                     if ($this->isFailingResult($trialResult)) {
                         $current = $trial;
+                        $currentTape = $recorded;
                         $acceptedFailure = $trialResult->failure;
                         ++$steps;
                         $improved = true;
@@ -605,9 +646,90 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                     }
                 }
             }
+
+            // Walk the tape positions like extra parameters. The bound is re-read
+            // every iteration (a while, NOT a hoisted-count for): an accepted
+            // candidate truncates the tape when the body draws fewer values under
+            // the smaller prefix.
+            $position = 0;
+
+            while ($position < count($currentTape)) {
+                if ($this->capReached($maxShrinks, $currentTape, $steps)) {
+                    return [$this->values($current), $this->drawArguments($currentTape), $steps, $acceptedFailure];
+                }
+
+                foreach ($currentTape[$position]->shrinks() as $candidate) {
+                    if ($candidate->value === $currentTape[$position]->value) {
+                        continue;
+                    }
+
+                    $trialTape = array_replace($currentTape, [$position => $candidate]);
+                    [$trialResult, $recorded] = $this->trial($info, $next, $current, $trialTape, $random);
+
+                    if ($this->isFailingResult($trialResult)) {
+                        $currentTape = $recorded;
+                        $acceptedFailure = $trialResult->failure;
+                        ++$steps;
+                        $improved = true;
+
+                        break;
+                    }
+                }
+
+                ++$position;
+            }
         } while ($improved);
 
-        return [$this->values($current), $steps, $acceptedFailure];
+        return [$this->values($current), $this->drawArguments($currentTape), $steps, $acceptedFailure];
+    }
+
+    /**
+     * One shrink trial: run the body with the candidate arguments while the
+     * draw context replays $tape, and report the result together with the
+     * draws the body actually used.
+     *
+     * @param array<string, Shrinkable> $trees
+     * @param list<Shrinkable> $tape
+     * @param callable(TestInfo): TestResult $next
+     * @return array{0: TestResult, 1: list<Shrinkable>}
+     */
+    private function trial(TestInfo $info, callable $next, array $trees, array $tape, Random $random): array
+    {
+        DrawContext::arm($random, $tape);
+        $result = $next($info->with(arguments: array_values($this->values($trees))));
+
+        return [$result, DrawContext::disarm()];
+    }
+
+    /**
+     * Whether shrinking must stop before accepting another candidate. The cap
+     * is re-derived from the CURRENT tape: a body that drew nothing on the
+     * original run can still start drawing once a shrunk parameter changes its
+     * control flow, and from that point the draw cap must engage.
+     *
+     * @param list<Shrinkable> $tape
+     */
+    private function capReached(?int $maxShrinks, array $tape, int $steps): bool
+    {
+        $cap = $maxShrinks ?? ($tape === [] ? null : self::MAX_DRAW_SHRINK_STEPS);
+
+        return $cap !== null && $steps >= $cap;
+    }
+
+    /**
+     * Render in-body draws as pseudo-arguments (`draw#1`, `draw#2`, ...) for
+     * counterexample reporting. `#` cannot occur in a PHP parameter name, so
+     * the keys never collide with real parameters.
+     *
+     * @param list<Shrinkable> $draws
+     * @return array<string, mixed>
+     */
+    private function drawArguments(array $draws): array
+    {
+        return array_combine(
+            array_map(static fn(int $index): string => 'draw#' . ($index + 1), array_keys($draws)),
+            array_map(static fn(Shrinkable $draw): mixed => $draw->value, $draws),
+        );
     }
 
     /**

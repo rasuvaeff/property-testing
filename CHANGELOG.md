@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.4.0 — 2026-07-10
+
+In-body dependent draw (T2.5). Additive, no BC breaks; existing seed sequences
+are unchanged (a property that never calls `Gen::draw()` generates exactly the
+same values as before).
+
+- Add `Gen::draw($arbitrary)` — generate a value inside the property body when
+  several dependent values make nested `flatMap` awkward. The domain may depend
+  on parameters, previous draws, or intermediate results.
+- Drawn values shrink together with the parameters via a replay tape: every
+  draw is recorded as a `Shrinkable`, shrunk through its own tree, and the body
+  is re-run with the tape replayed by position. Draws past the tape's end
+  (control flow changed under a smaller prefix) are generated anew; draws the
+  smaller run no longer reaches are dropped.
+- Counterexamples report draws as `draw#1`, `draw#2`, ... next to the named
+  parameters; `PROPERTY_VERBOSE` additionally logs each run's draws.
+- With draws present, accepted shrink steps are capped at 1000 (an explicit
+  `maxShrinks` still wins) — a regrown tape carries fresh trees, so the
+  finite-tree termination argument alone no longer applies.
+- `Gen::draw()` outside a property run throws a `RuntimeException`. Explicit
+  examples may draw too (their draws come from a dedicated deterministic
+  stream).
+
 ## 2.3.0 — 2026-07-09
 
 Generator catalog, explicit examples and seed persistence (Waves 5–6, excluding

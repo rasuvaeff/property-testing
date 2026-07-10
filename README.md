@@ -168,6 +168,47 @@ private function sliceGenerators(): array
 }
 ```
 
+### In-body draws (`Gen::draw`)
+
+When several dependent values make nested `flatMap` awkward, draw them inside
+the property body with `Gen::draw()`. The domain may depend on anything already
+in scope — parameters, previous draws, intermediate results:
+
+```php
+#[Property(runs: 200)]
+public function sliceIsContainedInTheList(array $xs): void
+{
+    $from = Gen::draw(Gen::intBetween(0, count($xs)));
+    $to = Gen::draw(Gen::intBetween($from, count($xs))); // depends on $from
+
+    foreach (array_slice($xs, $from, $to - $from) as $item) {
+        Assert::true(in_array($item, $xs, true));
+    }
+}
+```
+
+Drawn values shrink together with the parameters. The runner records every
+draw on a replay tape; when the property fails, it shrinks each recorded draw
+through its own tree and re-runs the body with the tape replayed by position.
+A shrunk parameter can change the body's control flow: draws past the tape's
+end are generated anew, and draws the smaller run no longer reaches are
+dropped. Counterexamples report draws as `draw#1`, `draw#2`, ... next to the
+named parameters (and `PROPERTY_VERBOSE` logs them per run).
+
+Two things to know:
+
+- A replayed draw is served by position and is **not** re-validated against
+  the (possibly narrower) arbitrary of the new control flow — the same model
+  as fast-check's `gen()`. Assert what the body actually requires rather than
+  relying on the draw's range after shrinking.
+- Because the tape can regrow during shrinking, the finite-tree termination
+  argument no longer applies on its own; with draws present, accepted shrink
+  steps are capped (1000 by default, `maxShrinks` still wins when set).
+
+`Gen::draw()` is only valid while the runner executes a property body;
+anywhere else it throws. Prefer `flatMap` for a single dependent value — it
+keeps the whole domain visible in the generators method.
+
 ### `Assume::that()`
 
 Discards the current run when a precondition does not hold. Discarded runs are

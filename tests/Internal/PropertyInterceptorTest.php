@@ -9,6 +9,7 @@ use Rasuvaeff\PropertyTesting\AssumptionSkipped;
 use Rasuvaeff\PropertyTesting\Classify;
 use Rasuvaeff\PropertyTesting\CoverageViolationException;
 use Rasuvaeff\PropertyTesting\ExampleViolationException;
+use Rasuvaeff\PropertyTesting\Gen;
 use Rasuvaeff\PropertyTesting\Internal\PropertyInterceptor;
 use Rasuvaeff\PropertyTesting\PropertyViolationException;
 use Testo\Application\Internal\MessengerHub;
@@ -157,6 +158,139 @@ final class PropertyInterceptorTest
 
         Assert::instanceOf($result->failure, PropertyViolationException::class);
         Assert::same($result->failure->getCounterExample()->shrunkArguments['x'], 4);
+    }
+
+    public function drawnValueFalsifiesAndShrinksToItsMinimum(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        // The body draws from [51, 100] and fails for every drawn value, so the
+        // minimal still-failing draw is the range's lower bound, 51.
+        $next = static function (TestInfo $info): TestResult {
+            $value = Gen::draw(Gen::intBetween(51, 100));
+
+            return $value > 50
+                ? new TestResult(info: $info, status: Status::Failed, failure: new \RuntimeException('draw>50'))
+                : new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $interceptor->runTest($this->info(DrawFalsifyingStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Failed);
+        Assert::instanceOf($result->failure, PropertyViolationException::class);
+
+        $counterExample = $result->failure->getCounterExample();
+        Assert::true($counterExample->originalArguments['draw#1'] > 50);
+        Assert::same($counterExample->shrunkArguments['draw#1'], 51);
+    }
+
+    public function shrinksParametersAndDrawsTogether(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        // Both the parameter (from [11, 100]) and the draw (from [6, 50]) satisfy
+        // the failure condition on every run; shrinking must minimise both to
+        // their lower bounds independently.
+        $next = static function (TestInfo $info): TestResult {
+            $n = $info->arguments[0];
+            $drawn = Gen::draw(Gen::intBetween(6, 50));
+
+            return ($n > 10 && $drawn > 5)
+                ? new TestResult(info: $info, status: Status::Failed, failure: new \RuntimeException('n>10 && drawn>5'))
+                : new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $interceptor->runTest($this->info(ParamAndDrawFalsifyingStub::class, 'check'), $next);
+
+        Assert::instanceOf($result->failure, PropertyViolationException::class);
+
+        $counterExample = $result->failure->getCounterExample();
+        Assert::same($counterExample->shrunkArguments['n'], 11);
+        Assert::same($counterExample->shrunkArguments['draw#1'], 6);
+    }
+
+    public function acceptedPrefixShrinkTruncatesTheTape(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        // The body draws $n values and the property always fails. Shrinking
+        // drives n to its minimum (2); replaying the shorter run drops the
+        // now-unused tail draws from the tape, and the remaining draws shrink
+        // to 0 through their own trees.
+        $next = static function (TestInfo $info): TestResult {
+            $n = $info->arguments[0];
+
+            for ($i = 0; $i < $n; ++$i) {
+                Gen::draw(Gen::intBetween(0, 100));
+            }
+
+            return new TestResult(info: $info, status: Status::Failed, failure: new \RuntimeException('always fails'));
+        };
+
+        $result = $interceptor->runTest($this->info(DrawCountStub::class, 'check'), $next);
+
+        Assert::instanceOf($result->failure, PropertyViolationException::class);
+
+        $counterExample = $result->failure->getCounterExample();
+        Assert::same($counterExample->shrunkArguments['n'], 2);
+        Assert::same($counterExample->shrunkArguments['draw#1'], 0);
+        Assert::same($counterExample->shrunkArguments['draw#2'], 0);
+        Assert::false(array_key_exists('draw#3', $counterExample->shrunkArguments));
+    }
+
+    public function drawsAreReproducibleForAFixedSeed(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static function (TestInfo $info): TestResult {
+            $value = Gen::draw(Gen::intBetween(51, 100));
+
+            return $value > 50
+                ? new TestResult(info: $info, status: Status::Failed, failure: new \RuntimeException('draw>50'))
+                : new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $first = $interceptor->runTest($this->info(DrawFalsifyingStub::class, 'check'), $next);
+        $second = $interceptor->runTest($this->info(DrawFalsifyingStub::class, 'check'), $next);
+
+        Assert::instanceOf($first->failure, PropertyViolationException::class);
+        Assert::instanceOf($second->failure, PropertyViolationException::class);
+        Assert::same($first->failure->getCounterExample()->originalArguments, $second->failure->getCounterExample()->originalArguments);
+        Assert::same($first->failure->getCounterExample()->shrunkArguments, $second->failure->getCounterExample()->shrunkArguments);
+    }
+
+    public function maxShrinksZeroDisablesDrawShrinking(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static function (TestInfo $info): TestResult {
+            Gen::draw(Gen::intBetween(51, 100));
+
+            return new TestResult(info: $info, status: Status::Failed, failure: new \RuntimeException('always fails'));
+        };
+
+        $result = $interceptor->runTest($this->info(DrawMaxShrinksDisabledStub::class, 'check'), $next);
+
+        Assert::instanceOf($result->failure, PropertyViolationException::class);
+
+        $counterExample = $result->failure->getCounterExample();
+        Assert::same($counterExample->shrinkSteps, 0);
+        Assert::same($counterExample->shrunkArguments, $counterExample->originalArguments);
+    }
+
+    public function examplesMayDrawValues(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $calls = 0;
+        $next = static function (TestInfo $info) use (&$calls): TestResult {
+            ++$calls;
+            $value = Gen::draw(Gen::intBetween(1, 10));
+
+            Assert::true($value >= 1 && $value <= 10);
+
+            return new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $interceptor->runTest($this->info(DrawExampleStub::class, 'check'), $next);
+
+        // One pinned example plus two random runs, all drawing successfully.
+        Assert::same($calls, 3);
+        Assert::same($result->status, Status::Passed);
     }
 
     public function flatMapCounterexampleIsReproducibleForAFixedSeed(): void
