@@ -85,6 +85,11 @@ make release-check
 - Attribute arguments are constant expressions in PHP. Generators CANNOT be
   passed inline to `#[Property]`; they must come from a named method returning
   `array<string, ArbitraryInterface>` keyed by parameter name.
+- Generators/examples methods must be **public static** (public when the body
+  needs `$this`): their only call site is this package's reflection, so
+  rector's `RemoveUnusedPrivateMethodRector` (deadCode set) deletes private
+  ones. Public methods are safe — no dead-code rule touches them, and Testo
+  does not treat non-void-returning methods as tests.
 - `Random` uses an object-scoped `\Random\Randomizer` (MT19937 engine), NOT PHP's
   global `mt_srand`/`mt_rand`. Two `Random` instances with the same seed produce
   identical sequences regardless of intervening random calls — this is what makes

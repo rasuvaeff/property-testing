@@ -23,7 +23,7 @@ final class GenPropertyTest
     }
 
     /** @return array<string, ArbitraryInterface> */
-    private function intBetweenGeneratesValuesInsideTheConfiguredRangeGenerators(): array
+    public static function intBetweenGeneratesValuesInsideTheConfiguredRangeGenerators(): array
     {
         return ['value' => Gen::intBetween(-100, 100)];
     }
@@ -37,7 +37,7 @@ final class GenPropertyTest
     }
 
     /** @return array<string, ArbitraryInterface> */
-    private function stringOfGeneratesStringsInsideTheConfiguredLengthRangeGenerators(): array
+    public static function stringOfGeneratesStringsInsideTheConfiguredLengthRangeGenerators(): array
     {
         return ['value' => Gen::stringOf(2, 8)];
     }
@@ -52,7 +52,7 @@ final class GenPropertyTest
     }
 
     /** @return array<string, ArbitraryInterface> */
-    private function arrayOfGeneratesListsWhoseElementsComeFromTheInnerGeneratorGenerators(): array
+    public static function arrayOfGeneratesListsWhoseElementsComeFromTheInnerGeneratorGenerators(): array
     {
         return ['values' => Gen::arrayOf(Gen::intBetween(1, 3))];
     }
@@ -67,7 +67,7 @@ final class GenPropertyTest
     }
 
     /** @return array<string, ArbitraryInterface> */
-    private function dictOfGeneratesMapsWithKeysAndValuesFromTheirGeneratorsGenerators(): array
+    public static function dictOfGeneratesMapsWithKeysAndValuesFromTheirGeneratorsGenerators(): array
     {
         return ['map' => Gen::dictOf(Gen::stringOf(1, 5), Gen::intBetween(1, 3))];
     }
@@ -81,7 +81,7 @@ final class GenPropertyTest
     }
 
     /** @return array<string, ArbitraryInterface> */
-    private function recordGeneratesEveryFieldWithinItsDomainGenerators(): array
+    public static function recordGeneratesEveryFieldWithinItsDomainGenerators(): array
     {
         return ['record' => Gen::record([
             'age' => Gen::intBetween(0, 120),
@@ -99,7 +99,7 @@ final class GenPropertyTest
     }
 
     /** @return array<string, ArbitraryInterface> */
-    private function flatMapKeepsTheDependentValueInsideTheSourceDomainGenerators(): array
+    public static function flatMapKeepsTheDependentValueInsideTheSourceDomainGenerators(): array
     {
         return ['pair' => Gen::flatMap(
             Gen::intBetween(1, 20),
@@ -117,7 +117,7 @@ final class GenPropertyTest
     }
 
     /** @return array<string, ArbitraryInterface> */
-    private function mapTransformsEveryGeneratedValueGenerators(): array
+    public static function mapTransformsEveryGeneratedValueGenerators(): array
     {
         return ['even' => Gen::map(Gen::intBetween(0, 100), static fn(int $x): int => $x * 2)];
     }
@@ -129,7 +129,7 @@ final class GenPropertyTest
     }
 
     /** @return array<string, ArbitraryInterface> */
-    private function stringFromStaysInsideItsAlphabetGenerators(): array
+    public static function stringFromStaysInsideItsAlphabetGenerators(): array
     {
         return ['identifier' => Gen::stringFrom('abcdefghijklmnopqrstuvwxyz_', 1, 16)];
     }
@@ -146,7 +146,7 @@ final class GenPropertyTest
     }
 
     /** @return array<string, ArbitraryInterface> */
-    private function coverEnforcesTheDistributionOfAPassingPropertyGenerators(): array
+    public static function coverEnforcesTheDistributionOfAPassingPropertyGenerators(): array
     {
         return ['n' => Gen::intBetween(0, 1000)];
     }

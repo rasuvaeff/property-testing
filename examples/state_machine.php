@@ -150,7 +150,7 @@ final class StackStateMachineProperties
     }
 
     /** @return array<string, ArbitraryInterface> */
-    private function stackBehavesLikeItsModelGenerators(): array
+    public static function stackBehavesLikeItsModelGenerators(): array
     {
         return [
             'sequence' => Gen::commands([], [

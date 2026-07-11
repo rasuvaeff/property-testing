@@ -16,6 +16,10 @@ Runtime deps: `ext-mbstring`, `ext-random`, `testo/testo ^0.10.25 || ^1.0`.
 - Attribute args are constant expressions in PHP, so generators CANNOT be passed
   inline to `#[Property]`. Always name a method returning
   `array<string, ArbitraryInterface>` keyed by parameter name.
+- Declare generators/examples methods `public static` (`public` if the body needs
+  `$this`). They are invoked via reflection only, so Rector's dead-code set
+  deletes private ones (`RemoveUnusedPrivateMethodRector`); public is safe and
+  never becomes a test (non-void return).
 - The plugin self-registers via `#[FallbackInterceptor]` on the `#[Property]`
   attribute — no registration in `testo.php` is needed.
 - `Random` uses an object-scoped MT19937 engine (`\Random\Randomizer`), independent
@@ -247,7 +251,7 @@ public function stackMatchesModel(CommandSequence $sequence): void {
     StateMachine::check($sequence, static fn(): Stack => new Stack());
 }
 /** @return array<string, ArbitraryInterface> */
-private function stackMatchesModelGenerators(): array {
+public static function stackMatchesModelGenerators(): array {
     return ['sequence' => Gen::commands([], [
         Gen::map(Gen::intBetween(0, 99), static fn(int $v): Command => new Push($v)),
         Gen::constant(new Pop()),
@@ -276,7 +280,7 @@ final class SortPropertyTest
     }
 
     /** @return array<string, \Rasuvaeff\PropertyTesting\ArbitraryInterface> */
-    private function sortedThenSortedIsIdempotentGenerators(): array
+    public static function sortedThenSortedIsIdempotentGenerators(): array
     {
         return ['xs' => Gen::arrayOf(Gen::intBetween(-100, 100))];
     }

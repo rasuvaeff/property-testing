@@ -64,7 +64,7 @@ final class RetryPolicyPropertyTest
     }
 
     /** @return array<string, \Rasuvaeff\PropertyTesting\ArbitraryInterface> */
-    private function delayGenerators(): array
+    public static function delayGenerators(): array
     {
         return [
             'maxAttempts' => Gen::intBetween(1, 50),
@@ -96,6 +96,12 @@ PHP attribute arguments must be constant expressions, so `#[Given('x', Gen::int(
 is not expressible. Instead name a method that returns
 `array<string, ArbitraryInterface>` keyed by parameter name. When the `generators`
 argument is omitted the runner falls back to a method named `<testMethod>Generators`.
+
+Declare generators (and examples) methods `public static` — or `public` if the
+body needs `$this`. Their only call site is this package's reflection, so
+static analysis sees them as unused: Rector's dead-code set deletes private
+ones (`RemoveUnusedPrivateMethodRector`). Public methods are safe, and Testo
+never treats a non-void-returning method as a test.
 
 ### Generators
 
@@ -156,7 +162,7 @@ the run's seed), then the dependent value shrinks with the source held fixed.
 
 ```php
 /** @return array<string, ArbitraryInterface> */
-private function sliceGenerators(): array
+public static function sliceGenerators(): array
 {
     return ['pair' => Gen::flatMap(
         Gen::nonEmptyArrayOf(Gen::int()),
@@ -460,7 +466,7 @@ final class StackModelTest
     }
 
     /** @return array<string, \Rasuvaeff\PropertyTesting\ArbitraryInterface> */
-    private function stackBehavesLikeItsModelGenerators(): array
+    public static function stackBehavesLikeItsModelGenerators(): array
     {
         return ['sequence' => Gen::commands([], [
             Gen::map(Gen::intBetween(0, 99), static fn(int $v): Command => new Push($v)),
