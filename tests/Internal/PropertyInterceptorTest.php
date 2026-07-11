@@ -598,7 +598,8 @@ final class PropertyInterceptorTest
         $next = static function (TestInfo $info): TestResult {
             Classify::cover(false, 'never', 10.0);
 
-            return new TestResult(info: $info, status: Status::Passed);
+            return (new TestResult(info: $info, status: Status::Passed))
+                ->withAttribute('per-run', 'kept');
         };
 
         $result = $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
@@ -606,6 +607,7 @@ final class PropertyInterceptorTest
         Assert::same($result->status, Status::Failed);
         Assert::instanceOf($result->failure, CoverageViolationException::class);
         Assert::string($result->failure->getMessage())->contains('"never" 0.0% < required 10.0% (0/5)');
+        Assert::same($result->getAttribute('per-run'), 'kept');
     }
 
     public function coverageIsExactAtTheRequiredBoundary(): void
@@ -1035,6 +1037,61 @@ final class PropertyInterceptorTest
         }
 
         @rmdir($dir);
+    }
+
+    public function passedPropertyCarriesPerRunAttributesOnAggregateResult(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $run = 0;
+        // Mimics downstream per-run interceptors (e.g. codecov attaching its
+        // CoverageResult): every run's result carries attributes the aggregate
+        // must not lose — otherwise the property test vanishes from per-test
+        // coverage and Infection never selects it for mutants.
+        $next = static function (TestInfo $info) use (&$run): TestResult {
+            ++$run;
+            $result = (new TestResult(info: $info, status: Status::Passed))
+                ->withAttribute('coverage', 'run-' . $run);
+
+            return $run === 1 ? $result->withAttribute('only-first-run', true) : $result;
+        };
+
+        $result = $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Passed);
+        // Merged run-by-run: last write per key wins…
+        Assert::same($result->getAttribute('coverage'), 'run-5');
+        // …and a key written by an earlier run only is still preserved.
+        Assert::true($result->getAttribute('only-first-run'));
+    }
+
+    public function falsifiedPropertyCarriesPerRunAttributesOnAggregateResult(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => ($info->arguments[0] > 50
+            ? new TestResult(info: $info, status: Status::Failed, failure: new \RuntimeException('x>50'))
+            : new TestResult(info: $info, status: Status::Passed))
+            ->withAttribute('coverage', 'collected');
+
+        $result = $interceptor->runTest($this->info(FalsifyingStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Failed);
+        Assert::instanceOf($result->failure, PropertyViolationException::class);
+        Assert::same($result->getAttribute('coverage'), 'collected');
+    }
+
+    public function failedExampleCarriesRunAttributesOnAggregateResult(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => ($info->arguments[0] >= 100
+            ? new TestResult(info: $info, status: Status::Failed, failure: new \RuntimeException('too big'))
+            : new TestResult(info: $info, status: Status::Passed))
+            ->withAttribute('coverage', 'example-run');
+
+        $result = $interceptor->runTest($this->info(ConventionExampleStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Failed);
+        Assert::instanceOf($result->failure, ExampleViolationException::class);
+        Assert::same($result->getAttribute('coverage'), 'example-run');
     }
 
     private function info(string $class, string $method): TestInfo

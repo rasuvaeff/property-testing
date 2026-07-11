@@ -158,6 +158,17 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         $checks = 0;
         /** @var array<string, int> $classifications */
         $classifications = [];
+        /**
+         * Downstream interceptors attach per-run attributes to each run's
+         * TestResult — e.g. Testo's codecov plugin stores its CoverageResult
+         * there. The aggregate result this method returns must carry them,
+         * otherwise the property test vanishes from per-test coverage and
+         * consumers like Infection never select it for mutants. Merged
+         * run-by-run (last write per key wins).
+         *
+         * @var array<non-empty-string, mixed> $runAttributes
+         */
+        $runAttributes = [];
 
         for ($run = 1; $run <= $runs; ++$run) {
             Classify::beginRun();
@@ -175,6 +186,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             DrawContext::arm($random);
             $result = $next($info->with(arguments: array_values($arguments)));
             $draws = DrawContext::disarm();
+            $runAttributes = array_merge($runAttributes, $result->attributes);
             $labels = Classify::flushRun();
 
             if ($verbose && $draws !== []) {
@@ -211,6 +223,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                         failure: $shrunkFailure ?? $result->failure,
                         skips: $skips,
                     )),
+                    attributes: $runAttributes,
                 );
             }
 
@@ -231,12 +244,14 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                 info: $info,
                 status: Status::Failed,
                 failure: $violation,
+                attributes: $runAttributes,
             );
         }
 
         return new TestResult(
             info: $info,
             status: Status::Passed,
+            attributes: $runAttributes,
         );
     }
 
@@ -493,6 +508,9 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                     info: $info,
                     status: Status::Failed,
                     failure: new ExampleViolationException($index, $arguments, $result->failure),
+                    // Keep the failing run's attributes (e.g. codecov's
+                    // CoverageResult) on the aggregate result — see runProperty().
+                    attributes: $result->attributes,
                 );
             }
 
