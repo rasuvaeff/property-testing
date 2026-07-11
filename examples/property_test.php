@@ -34,7 +34,7 @@ final class ListReversalProperties
     }
 
     /** @return array<string, \Rasuvaeff\PropertyTesting\ArbitraryInterface> */
-    private function reversingTwiceRestoresTheListGenerators(): array
+    public static function reversingTwiceRestoresTheListGenerators(): array
     {
         return ['xs' => Gen::arrayOf(Gen::intBetween(-100, 100))];
     }
@@ -58,7 +58,7 @@ final class ListReversalProperties
     }
 
     /** @return array<string, \Rasuvaeff\PropertyTesting\ArbitraryInterface> */
-    private function everySliceIsContainedInTheListGenerators(): array
+    public static function everySliceIsContainedInTheListGenerators(): array
     {
         return ['xs' => Gen::nonEmptyArrayOf(Gen::intBetween(-100, 100))];
     }
@@ -74,7 +74,7 @@ final class ListReversalProperties
     }
 
     /** @return array<string, \Rasuvaeff\PropertyTesting\ArbitraryInterface> */
-    private function sumGenerators(): array
+    public static function sumGenerators(): array
     {
         return [
             'a' => Gen::intBetween(0, 1_000_000),
