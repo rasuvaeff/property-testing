@@ -139,6 +139,14 @@ make release-check
 - The interceptor reports the SHRUNK run's failure (`shrink()` returns the last
   accepted candidate's throwable), not the original draw's — so the `Failure:`
   line matches the `Shrunk:` arguments. Keep these in sync.
+- **Aggregate results must carry per-run `TestResult` attributes.** Downstream
+  interceptors attach per-run attributes to each `$next()` result — Testo
+  codecov's `CoverageResult` among them (its interceptor is innermost, order
+  `PHP_INT_MAX`). Every `TestResult` the interceptor constructs (pass,
+  falsified, coverage violation, failing example) must pass the merged
+  `$runAttributes` along; a bare `new TestResult(info, status)` makes property
+  tests vanish from per-test coverage and Infection then never runs them
+  against mutants.
 - Shrinking is a greedy per-parameter tree descent and best-effort minimal,
   not provably minimal (no exhaustive search). For monotone predicates the
   int ladder is an exact binary search.

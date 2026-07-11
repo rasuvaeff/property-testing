@@ -11,6 +11,16 @@ In-body dependent draw (T2.5). Additive, no BC breaks; existing seed sequences
 are unchanged (a property that never calls `Gen::draw()` generates exactly the
 same values as before).
 
+- Fix: aggregate property results now carry the per-run `TestResult`
+  attributes (merged run-by-run, last write per key wins) on all paths —
+  passed, falsified, coverage violation and failing explicit example.
+  Previously the interceptor returned a bare `TestResult`, dropping
+  attributes attached by downstream interceptors — notably Testo codecov's
+  `CoverageResult`, so property tests were missing from per-test coverage
+  (`<covered by>`), and mutation-testing tools like Infection never selected
+  them when running mutants: mutants on lines covered only by property tests
+  escaped silently.
+
 - Add `Gen::draw($arbitrary)` — generate a value inside the property body when
   several dependent values make nested `flatMap` awkward. The domain may depend
   on parameters, previous draws, or intermediate results.
