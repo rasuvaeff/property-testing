@@ -8,6 +8,8 @@
 [![PHP](https://img.shields.io/packagist/dependency-v/rasuvaeff/property-testing/php)](https://packagist.org/packages/rasuvaeff/property-testing)
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE.md)
 
+[Русская версия](README.ru.md)
+
 Property-based testing for PHP 8.3+, built as a plugin for the
 [Testo](https://github.com/php-testo/testo) testing framework. Generate hundreds
 of random inputs per test, find the failing one, and shrink it to a minimal
