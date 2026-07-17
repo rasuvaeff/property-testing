@@ -10,6 +10,8 @@ use Rasuvaeff\PropertyTesting\Classify;
 use Rasuvaeff\PropertyTesting\CounterExample;
 use Rasuvaeff\PropertyTesting\CoverageViolationException;
 use Rasuvaeff\PropertyTesting\ExampleViolationException;
+use Rasuvaeff\PropertyTesting\GaveUpException;
+use Rasuvaeff\PropertyTesting\GenerationExhausted;
 use Rasuvaeff\PropertyTesting\Property;
 use Rasuvaeff\PropertyTesting\PropertyViolationException;
 use Rasuvaeff\PropertyTesting\Random;
@@ -172,7 +174,21 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
 
         for ($run = 1; $run <= $runs; ++$run) {
             Classify::beginRun();
-            $trees = $this->generate($generators, $parameterNames, $random);
+
+            try {
+                $trees = $this->generate($generators, $parameterNames, $random);
+            } catch (GenerationExhausted $exhausted) {
+                // A generator could not produce a valid value (e.g. Gen::filter()
+                // whose predicate rejected every draw). Report it as a clean
+                // failure rather than let it crash the run as an uncaught error.
+                return new TestResult(
+                    info: $info,
+                    status: Status::Failed,
+                    failure: $exhausted,
+                    attributes: $runAttributes,
+                );
+            }
+
             $arguments = $this->values($trees);
 
             if ($verbose) {
@@ -237,7 +253,32 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         $this->warnOnExcessiveSkips($info->name, $skips, $runs);
         $this->reportClassifications($info->name, $classifications, $checks);
 
-        $violation = $this->coverageViolation($info->name, Classify::flushRequirements(), $classifications, $checks);
+        $requirements = Classify::flushRequirements();
+
+        // No successful check: the body asserted nothing, so a "pass" would be
+        // vacuous — report a failure instead of a silent green. When a coverage
+        // requirement was registered, say specifically that it cannot be assessed;
+        // otherwise it is a plain give-up.
+        if ($checks === 0 && $runs > 0) {
+            return new TestResult(
+                info: $info,
+                status: Status::Failed,
+                failure: $requirements === []
+                    ? new GaveUpException(sprintf(
+                        'Property "%s" made no successful check: all %d run(s) were discarded (Assume::that / filter-discard). '
+                        . 'Narrow or construct the generators so inputs are valid by construction.',
+                        $info->name,
+                        $runs,
+                    ))
+                    : new CoverageViolationException(sprintf(
+                        'Property "%s" has coverage requirements but no successful runs to assess them',
+                        $info->name,
+                    )),
+                attributes: $runAttributes,
+            );
+        }
+
+        $violation = $this->coverageViolation($info->name, $requirements, $classifications, $checks);
 
         if ($violation instanceof CoverageViolationException) {
             return new TestResult(
@@ -258,7 +299,9 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
     /**
      * Check the {@see Classify::cover()} requirements against the label counts
      * of the passing runs; every run passed, but an under-covered label means
-     * the pass is (partially) vacuous and must fail.
+     * the pass is (partially) vacuous and must fail. Called only with at least
+     * one successful check (the zero-check case is handled by the caller), so the
+     * denominator is always positive.
      *
      * @param array<string, float> $requirements
      * @param array<string, int> $classifications
@@ -271,13 +314,6 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
     ): ?CoverageViolationException {
         if ($requirements === []) {
             return null;
-        }
-
-        if ($checks <= 0) {
-            return new CoverageViolationException(sprintf(
-                'Property "%s" has coverage requirements but no successful runs to assess them',
-                $name,
-            ));
         }
 
         $unmet = [];
@@ -348,15 +384,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
     private function formatArguments(array $arguments): string
     {
         $pairs = array_map(
-            static fn(mixed $value, mixed $name): string => $name . '=' . match (true) {
-                is_array($value) => '[' . count($value) . ' element(s)]',
-                is_string($value) => '"' . $value . '"',
-                is_bool($value) => $value ? 'true' : 'false',
-                is_null($value) => 'null',
-                is_scalar($value) => (string) $value,
-                $value instanceof \Stringable => (string) $value,
-                default => get_debug_type($value),
-            },
+            static fn(mixed $value, mixed $name): string => $name . '=' . ValueRenderer::render($value),
             $arguments,
             array_keys($arguments),
         );

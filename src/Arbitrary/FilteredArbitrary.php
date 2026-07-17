@@ -6,6 +6,7 @@ namespace Rasuvaeff\PropertyTesting\Arbitrary;
 
 use Closure;
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
+use Rasuvaeff\PropertyTesting\GenerationExhausted;
 use Rasuvaeff\PropertyTesting\Random;
 use Rasuvaeff\PropertyTesting\Shrinkable;
 
@@ -13,10 +14,12 @@ use Rasuvaeff\PropertyTesting\Shrinkable;
  * Generates values from a delegate arbitrary, retrying until a predicate holds.
  *
  * Filtering is bounded: after {@see self::MAX_ATTEMPTS} consecutive rejections
- * the generator gives up and returns the last generated value. Use
+ * the generator throws {@see GenerationExhausted} rather than yield a value that
+ * fails the predicate — a property never receives an out-of-domain input. Use
  * {@see \Rasuvaeff\PropertyTesting\Assume::that()} inside the property when the
- * rejection rate is high, which skips discarded runs cleanly instead of
- * burning random budget here.
+ * rejection rate is high, which skips discarded runs cleanly, or
+ * {@see \Rasuvaeff\PropertyTesting\Gen::flatMap()} to construct dependent values
+ * without filtering at all.
  *
  * Shrinking walks the inner value's tree, keeping only branches whose value
  * satisfies the predicate (a rejected candidate's subtree is pruned with it).
@@ -38,18 +41,19 @@ final readonly class FilteredArbitrary implements ArbitraryInterface
     #[\Override]
     public function generate(Random $random): Shrinkable
     {
-        $attempt = 0;
-
-        do {
+        for ($attempt = 0; $attempt < self::MAX_ATTEMPTS; ++$attempt) {
             $shrinkable = $this->inner->generate($random);
 
             if (($this->predicate)($shrinkable->value)) {
                 return $this->filtered($shrinkable);
             }
-            ++$attempt;
-        } while ($attempt < self::MAX_ATTEMPTS);
+        }
 
-        return $this->filtered($shrinkable);
+        throw new GenerationExhausted(
+            'Gen::filter()',
+            self::MAX_ATTEMPTS,
+            'the predicate rejected every generated value; widen the source arbitrary, raise the attempt budget, or build dependent values with Gen::flatMap() instead of filtering',
+        );
     }
 
     private function filtered(Shrinkable $shrinkable): Shrinkable

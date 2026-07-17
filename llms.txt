@@ -26,6 +26,13 @@ Runtime deps: `ext-mbstring`, `ext-random`, `testo/testo ^0.10.25 || ^1.0`.
   of PHP's global `mt_rand` state, so seeded runs are reproducible regardless of
   other random calls in the process.
 - Do NOT use generated values for cryptography (MT19937 is a PRNG, not a CSPRNG).
+- A generator NEVER yields an out-of-domain value: `Gen::filter()` and sized
+  collections throw `GenerationExhausted` when they cannot satisfy their
+  predicate/minimum within their attempt budget. Construct dependent values with
+  `Gen::flatMap()`/`Gen::draw()` instead of filtering broadly.
+- A property that discards EVERY run (all `Assume::that(false)` / filter-discards)
+  made no successful check and FAILS with `GaveUpException` — a vacuous green is
+  not allowed.
 - Shrinking is integrated (since 2.0): `generate(Random)` returns a `Shrinkable`
   (value + lazy tree of smaller candidates). There is NO `shrink(mixed)` method.
   Greedy per-parameter descent; best-effort minimal, not provably minimal.
@@ -87,7 +94,7 @@ Gen::bytes(int $minLen = 0, int $maxLen = 100) // BytesArbitrary: raw bytes 0..2
 Gen::arrayOf(ArbitraryInterface $el, int $min = 0, int $max = 100)    // ArrayArbitrary, lists
 Gen::nonEmptyArrayOf(ArbitraryInterface $el, int $max = 100)  // ArrayArbitrary, size >= 1
 Gen::uniqueArrayOf(ArbitraryInterface $el, int $min = 0, int $max = 100) // UniqueArrayArbitrary: pairwise-distinct lists; may settle for fewer than drawn when the element space runs dry (never below min — throws)
-Gen::dictOf(ArbitraryInterface $key, ArbitraryInterface $value, int $min = 0, int $max = 100) // DictionaryArbitrary, keys int|string, colliding keys overwrite
+Gen::dictOf(ArbitraryInterface $key, ArbitraryInterface $value, int $min = 0, int $max = 100) // DictionaryArbitrary, distinct keys int|string; may settle for fewer than drawn when the key space runs dry (never below min — throws GenerationExhausted)
 Gen::record(array $shape)               // RecordArbitrary, fixed-shape map ['field' => ArbitraryInterface, ...]
 Gen::oneOf(mixed ...$values)           // OneOfArbitrary, one value; shrinks toward EARLIER-listed distinct values (put simpler first)
 Gen::elements(array $values)           // OneOfArbitrary, one value from an array (array form of oneOf)
@@ -102,10 +109,10 @@ Gen::recursive(ArbitraryInterface $leaf, Closure $wrap, int $maxDepth = 3) // bo
 Gen::nullable(ArbitraryInterface $inner)      // NullableArbitrary, null or inner value
 Gen::map(ArbitraryInterface $inner, Closure $fn)   // MappedArbitrary; shrinks through the inner tree, re-applying $fn (pure!)
 Gen::flatMap(ArbitraryInterface $inner, Closure $fn)  // FlatMappedArbitrary; $fn(mixed): ArbitraryInterface — dependent generators; shrinks source (dependent regenerated from seed) then dependent value
-Gen::filter(ArbitraryInterface $inner, Closure $predicate) // FilteredArbitrary, max 100 retries; tree pruned to predicate-satisfying candidates
+Gen::filter(ArbitraryInterface $inner, Closure $predicate) // FilteredArbitrary, max 100 retries then throws GenerationExhausted (never yields an out-of-domain value); tree pruned to predicate-satisfying candidates
 Gen::tuple(ArbitraryInterface ...$elements)        // TupleArbitrary, fixed-arity tuple (list), shrinks each position
 Gen::frequency(iterable $pairs)                    // FrequencyArbitrary, weighted [int $weight, ArbitraryInterface] pairs; shrinks within the generating branch
-Gen::commands(mixed $initialModel, array $commandGenerators, int $minLen = 0, int $maxLen = 100) // CommandSequenceArbitrary for stateful/model-based testing; $commandGenerators = list<ArbitraryInterface> each producing a Command; see "Stateful" below
+Gen::commands(mixed $initialModel, array $commandGenerators, int $minLen = 0, int $maxLen = 100) // CommandSequenceArbitrary for stateful/model-based testing; $commandGenerators = list<ArbitraryInterface> each producing a Command; a sequence shorter than $minLen (no applicable command) throws GenerationExhausted; see "Stateful" below
 Gen::ipv4()                            // dotted-quad IPv4 strings; each octet shrinks to 0
 Gen::email()                           // local@label.tld addresses; shrinks to shortest local/label + first TLD
 Gen::url()                             // http(s)://host.tld[/path]; shrinks to http://a.com
@@ -208,7 +215,9 @@ Assume::that($cap >= $baseSeconds);
 ```
 
 Throws `AssumptionSkipped` when false; the runner treats the run as discarded
-(neither failure nor success). Warns when >90% of runs are discarded.
+(neither failure nor success). Warns when >90% of runs are discarded. If EVERY
+run is discarded the property has no successful check and FAILS with
+`GaveUpException` (a vacuous pass is not allowed).
 
 ### Inspecting failures
 

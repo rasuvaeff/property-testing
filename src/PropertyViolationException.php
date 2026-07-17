@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\PropertyTesting;
 
+use Rasuvaeff\PropertyTesting\Internal\ValueRenderer;
 use RuntimeException;
 
 /**
@@ -54,24 +55,11 @@ final class PropertyViolationException extends RuntimeException
     private function format(array $arguments): string
     {
         $pairs = array_map(
-            static fn(mixed $value, mixed $name): string => $name . '=' . self::scalar($value),
+            static fn(mixed $value, mixed $name): string => $name . '=' . ValueRenderer::render($value),
             $arguments,
             array_keys($arguments),
         );
 
         return implode(', ', $pairs);
-    }
-
-    private static function scalar(mixed $value): string
-    {
-        return match (true) {
-            is_array($value) => '[' . count($value) . ' element(s)]',
-            is_string($value) => '"' . $value . '"',
-            is_bool($value) => $value ? 'true' : 'false',
-            is_null($value) => 'null',
-            is_scalar($value) => (string) $value,
-            $value instanceof \Stringable => (string) $value,
-            default => get_debug_type($value),
-        };
     }
 }

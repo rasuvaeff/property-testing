@@ -118,9 +118,17 @@ make release-check
   the run loop via `flushRequirements()` and defensively before it — a
   falsified property returns early and would otherwise leak its requirements
   into the next one.
-- `Gen::filter()` retries up to 100 times then yields the last value; prefer
-  `Assume::that()` in the property body when the rejection rate is high. For
-  dependent domains use `Gen::flatMap()` instead of filtering.
+- `Gen::filter()` retries up to 100 times then throws `GenerationExhausted`
+  (never yields a value that fails the predicate); the interceptor catches it at
+  the generation step and reports a clean failure. Prefer `Assume::that()` in the
+  property body when the rejection rate is high, or `Gen::flatMap()` for
+  dependent domains instead of filtering.
+- Sized collections guarantee their minimum: `dictOf`/`uniqueArrayOf` (distinct
+  keys/elements) and `commands` (applicable steps) throw `GenerationExhausted`
+  when the drawn minimum is unreachable, never returning a too-small value.
+- A property with zero successful checks (every run discarded) FAILS with
+  `GaveUpException` — a vacuous green is not allowed. `runs` still means
+  iterations, not required successful checks (that model is a future change).
 - `yield from` inside a generator that already `yield`ed causes integer-key
   collisions (later values overwrite earlier ones). Spread inner shrink
   candidates with an explicit `foreach` + `yield`, not `yield from`.

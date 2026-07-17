@@ -42,7 +42,7 @@ final class ExampleViolationExceptionTest
         Assert::string($message)->contains('true');
         Assert::string($message)->contains('false');
         Assert::string($message)->contains('null');
-        Assert::string($message)->contains('[2 element(s)]');
+        Assert::string($message)->contains('[1, 2]');
         Assert::string($message)->contains('7');
         Assert::string($message)->contains('3.5');
         Assert::string($message)->contains('STR');

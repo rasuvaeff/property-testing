@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Rasuvaeff\PropertyTesting\Arbitrary;
 
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
+use Rasuvaeff\PropertyTesting\GenerationExhausted;
 use Rasuvaeff\PropertyTesting\Random;
 use Rasuvaeff\PropertyTesting\Shrinkable;
 
@@ -16,14 +17,22 @@ use Rasuvaeff\PropertyTesting\Shrinkable;
  *
  * Keys must be PHP array keys (int or string); a key arbitrary that produces
  * anything else is a configuration error and throws. Generation draws a size,
- * then that many keys followed by that many values, so seeded runs are
- * reproducible. Because colliding keys overwrite (last value wins), the
- * resulting map may be smaller than the drawn size.
+ * then draws distinct keys (each paired with a value) up to an attempt budget,
+ * so seeded runs are reproducible. When the key space runs out of fresh keys the
+ * map may be smaller than the drawn size, but it is NEVER smaller than
+ * {@see $minSize}: an unreachable minimum throws {@see GenerationExhausted}
+ * rather than hand the property a too-small map.
  *
  * @api
  */
 final readonly class DictionaryArbitrary implements ArbitraryInterface
 {
+    /**
+     * Draws per requested key before giving up (guards a key space too small to
+     * fill the drawn size with distinct keys).
+     */
+    private const int MAX_ATTEMPTS_PER_KEY = 10;
+
     public function __construct(
         private ArbitraryInterface $key,
         private ArbitraryInterface $value,
@@ -50,34 +59,45 @@ final readonly class DictionaryArbitrary implements ArbitraryInterface
             return $this->tree([]);
         }
 
-        $indices = range(1, $size);
+        // Draw distinct keys (skipping collisions), each paired with a value, up
+        // to a bounded budget so a too-small key space cannot loop forever.
+        /** @var array<array-key, Shrinkable> $entries */
+        $entries = [];
+        $budget = $size * self::MAX_ATTEMPTS_PER_KEY;
 
-        // Draw keys, then values, building each list via array_map so the map is
-        // assembled with array_combine instead of per-key mixed assignment.
-        // array_combine keeps the last value on a key collision.
-        $keys = array_map(
-            function (int $i) use ($random): int|string {
-                /** @var mixed $key */
-                $key = $this->key->generate($random)->value;
+        while (count($entries) < $size && $budget > 0) {
+            --$budget;
 
-                if (!is_int($key) && !is_string($key)) {
-                    throw new \InvalidArgumentException(sprintf(
-                        'Dictionary key arbitrary must produce int or string keys, got %s',
-                        get_debug_type($key),
-                    ));
-                }
+            /** @var mixed $key */
+            $key = $this->key->generate($random)->value;
 
-                return $key;
-            },
-            $indices,
-        );
+            if (!is_int($key) && !is_string($key)) {
+                throw new \InvalidArgumentException(sprintf(
+                    'Dictionary key arbitrary must produce int or string keys, got %s',
+                    get_debug_type($key),
+                ));
+            }
 
-        $values = array_map(
-            fn(int $i): Shrinkable => $this->value->generate($random),
-            $indices,
-        );
+            if (array_key_exists($key, $entries)) {
+                continue;
+            }
 
-        return $this->tree(array_combine($keys, $values));
+            $entries[$key] = $this->value->generate($random);
+        }
+
+        if (count($entries) < $this->minSize) {
+            throw new GenerationExhausted(
+                'Gen::dictOf()',
+                $size * self::MAX_ATTEMPTS_PER_KEY,
+                sprintf(
+                    'only %d distinct key(s) for a minimum size of %d; the key arbitrary\'s value space is too small',
+                    count($entries),
+                    $this->minSize,
+                ),
+            );
+        }
+
+        return $this->tree($entries);
     }
 
     /**

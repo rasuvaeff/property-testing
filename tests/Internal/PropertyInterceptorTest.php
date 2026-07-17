@@ -9,6 +9,7 @@ use Rasuvaeff\PropertyTesting\AssumptionSkipped;
 use Rasuvaeff\PropertyTesting\Classify;
 use Rasuvaeff\PropertyTesting\CoverageViolationException;
 use Rasuvaeff\PropertyTesting\ExampleViolationException;
+use Rasuvaeff\PropertyTesting\GaveUpException;
 use Rasuvaeff\PropertyTesting\Gen;
 use Rasuvaeff\PropertyTesting\Internal\PropertyInterceptor;
 use Rasuvaeff\PropertyTesting\PropertyViolationException;
@@ -349,7 +350,7 @@ final class PropertyInterceptorTest
         Assert::same($counterExample->skips, 1);
     }
 
-    public function warnsWhenAssumptionsDiscardMoreThanNinetyPercentOfRuns(): void
+    public function warnsAndGivesUpWhenEveryRunIsDiscarded(): void
     {
         $messenger = $this->createMessenger();
         $interceptor = new PropertyInterceptor($messenger);
@@ -362,7 +363,10 @@ final class PropertyInterceptorTest
         $result = $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
         $messages = $messenger->getMessages()->channel(Messenger::CHANNEL_STDERR);
 
-        Assert::same($result->status, Status::Passed);
+        // The high-discard warning still fires, but zero successful checks is now
+        // a failure (a vacuous pass), not a silent green.
+        Assert::same($result->status, Status::Failed);
+        Assert::instanceOf($result->failure, GaveUpException::class);
         Assert::same(count($messages), 1);
         Assert::string($messages[0]->content)->contains('discarded 5 of 5 runs');
     }
@@ -370,11 +374,13 @@ final class PropertyInterceptorTest
     public function discardsRunsViaAssumeWithoutCountingAsFailure(): void
     {
         $interceptor = new PropertyInterceptor($this->createMessenger());
-        $next = static function (TestInfo $info): TestResult {
-            $value = $info->arguments[0];
+        $calls = 0;
+        // Discard the first run, pass the rest: a discarded run is neither a
+        // failure nor a check, and the surviving checks keep the property green.
+        $next = static function (TestInfo $info) use (&$calls): TestResult {
+            ++$calls;
 
-            // Keep only runs where the generated value is exactly 5; discard the rest.
-            if ($value !== 5) {
+            if ($calls === 1) {
                 return new TestResult(info: $info, status: Status::Error, failure: new AssumptionSkipped());
             }
 
@@ -757,8 +763,8 @@ final class PropertyInterceptorTest
             Assert::string($messages[0]->content)->contains('s="fixed"');
             Assert::string($messages[0]->content)->contains('b=false');
             Assert::string($messages[0]->content)->contains('n=null');
-            Assert::string($messages[0]->content)->contains('a=[2 element(s)]');
-            Assert::string($messages[0]->content)->contains('d=DateTimeImmutable');
+            Assert::string($messages[0]->content)->contains('a=[1, 2]');
+            Assert::string($messages[0]->content)->contains('d=1970-01-01');
             Assert::string($messages[0]->content)->contains('i=7');
         } finally {
             putenv('PROPERTY_VERBOSE');

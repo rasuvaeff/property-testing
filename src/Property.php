@@ -21,7 +21,7 @@ use Testo\Pipeline\Attribute\Interceptable;
  *
  * @api
  */
-#[\Attribute(\Attribute::TARGET_METHOD | \Attribute::TARGET_FUNCTION)]
+#[\Attribute(\Attribute::TARGET_METHOD)]
 #[FallbackInterceptor(PropertyInterceptor::class)]
 final readonly class Property implements Interceptable
 {
