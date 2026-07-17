@@ -44,14 +44,14 @@ final class ValueRenderer
 
     private static function float(float $value): string
     {
-        return match (true) {
-            is_nan($value) => 'NAN',
-            is_infinite($value) => $value > 0 ? 'INF' : '-INF',
-            // Distinguish negative zero, which (string) collapses to "0". Use
-            // fdiv() (the `/` operator throws DivisionByZeroError on a zero float).
-            $value === 0.0 && fdiv(1.0, $value) === -INF => '-0.0',
-            default => (string) $value,
-        };
+        // (string) already yields 'NAN', 'INF' and '-INF'; only negative zero
+        // needs help — it collapses to "0". Detect it with fdiv() (the `/`
+        // operator throws DivisionByZeroError on a zero divisor).
+        if ($value === 0.0 && fdiv(1.0, $value) === -INF) {
+            return '-0.0';
+        }
+
+        return (string) $value;
     }
 
     private static function string(string $value): string
@@ -64,10 +64,20 @@ final class ValueRenderer
         }
 
         if (mb_strlen($value, 'UTF-8') > self::MAX_STRING) {
-            return sprintf('"%s…" (%d chars)', mb_substr($value, 0, self::MAX_STRING, 'UTF-8'), mb_strlen($value, 'UTF-8'));
+            return sprintf('"%s…" (%d chars)', self::escape(mb_substr($value, 0, self::MAX_STRING, 'UTF-8')), mb_strlen($value, 'UTF-8'));
         }
 
-        return '"' . $value . '"';
+        return '"' . self::escape($value) . '"';
+    }
+
+    /**
+     * Escape the quote, backslash and control characters so a value containing
+     * `"`, newlines or tabs stays on one unambiguous line instead of breaking the
+     * counterexample across lines. Multibyte (>= 0x80) bytes are left untouched.
+     */
+    private static function escape(string $value): string
+    {
+        return addcslashes($value, "\0..\37\"\\\177");
     }
 
     /**
@@ -138,7 +148,7 @@ final class ValueRenderer
             return $value::class . ' {*recursion*}';
         }
 
-        $properties = get_object_vars($value);
+        $properties = self::objectProperties($value);
         if ($properties === []) {
             return $value::class . ' {}';
         }
@@ -167,5 +177,36 @@ final class ValueRenderer
         }
 
         return $value::class . ' {' . implode(', ', $rendered) . '}';
+    }
+
+    /**
+     * All non-static instance properties, including private and protected ones
+     * (typical of constructor-promoted DTOs) that {@see get_object_vars()} would
+     * hide when called from outside the class. Uninitialised typed properties are
+     * shown as a marker rather than read (which would throw).
+     *
+     * @return array<string, mixed>
+     */
+    private static function objectProperties(object $value): array
+    {
+        $instanceProperties = array_filter(
+            (new \ReflectionObject($value))->getProperties(),
+            static fn(\ReflectionProperty $property): bool => !$property->isStatic(),
+        );
+
+        // Built via array_combine (not per-key assignment) so the mixed property
+        // values do not trip Psalm's MixedAssignment at errorLevel 1.
+        return array_combine(
+            array_map(
+                static fn(\ReflectionProperty $property): string => $property->getName(),
+                $instanceProperties,
+            ),
+            array_map(
+                static fn(\ReflectionProperty $property): mixed => $property->isInitialized($value)
+                    ? $property->getValue($value)
+                    : '<uninitialized>',
+                $instanceProperties,
+            ),
+        );
     }
 }

@@ -26,11 +26,13 @@ below are bug fixes, but observable — review if you relied on the old behaviou
   now signal an unreachable minimum with `GenerationExhausted`.
   `Gen::uniqueArrayOf()` previously threw `InvalidArgumentException` for this case
   — the type changed to `GenerationExhausted` (extends `RuntimeException`).
-- **Counterexamples render nested values.** Arrays and simple objects are shown
+- **Counterexamples render nested values.** Arrays and objects are shown
   recursively (bounded depth/width/length, special floats and binary strings
   labelled, object cycles guarded) instead of `[N element(s)]` / a bare class
   name — in `PropertyViolationException`, `ExampleViolationException` and the
-  verbose run log.
+  verbose run log. Object rendering includes private/protected properties (real
+  DTOs), and strings escape quotes, newlines and control characters so a value
+  stays on one unambiguous line.
 - Removed the unsupported `Attribute::TARGET_FUNCTION` from `#[Property]`; it only
   ever ran on methods.
 
