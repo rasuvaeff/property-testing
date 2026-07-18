@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Rasuvaeff\PropertyTesting\Arbitrary;
 
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
+use Rasuvaeff\PropertyTesting\GenerationExhausted;
 use Rasuvaeff\PropertyTesting\Random;
 use Rasuvaeff\PropertyTesting\Shrinkable;
 use Rasuvaeff\PropertyTesting\StateMachine\Command;
@@ -101,6 +102,18 @@ final readonly class CommandSequenceArbitrary implements ArbitraryInterface
             $commands[] = $picked;
             /** @var mixed $model */
             $model = $command->nextState($model);
+        }
+
+        if (count($commands) < $this->minLength) {
+            throw new GenerationExhausted(
+                'Gen::commands()',
+                self::MAX_PICK_ATTEMPTS,
+                sprintf(
+                    'only %d of a minimum %d command(s) applied to the model; no applicable command was found to reach the minimum length',
+                    count($commands),
+                    $this->minLength,
+                ),
+            );
         }
 
         return $this->tree($commands);

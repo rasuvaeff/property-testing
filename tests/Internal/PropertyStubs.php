@@ -25,6 +25,30 @@ final class PassingStub
     }
 }
 
+final class DiscardBudgetStub
+{
+    #[Property(runs: 5, seed: 1, generators: 'provide', maxDiscards: 3)]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
+    }
+}
+
+final class DefaultDiscardBudgetStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'provide')]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
+    }
+}
+
 final class ConventionStub
 {
     #[Property(runs: 3, seed: 1)]

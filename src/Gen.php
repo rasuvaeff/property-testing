@@ -166,7 +166,8 @@ final class Gen
      * Lists of pairwise-distinct elements (strict comparison) drawn from
      * $element. Element shrinking keeps the list distinct; the result may be
      * smaller than the drawn size when the element space runs out of fresh
-     * values (but never below $minSize, which throws instead).
+     * values, but never below $minSize — an unreachable minimum throws
+     * {@see GenerationExhausted}.
      */
     public static function uniqueArrayOf(ArbitraryInterface $element, int $minSize = 0, int $maxSize = 100): UniqueArrayArbitrary
     {
@@ -175,8 +176,9 @@ final class Gen
 
     /**
      * Associative arrays (maps) with keys from $key and values from $value.
-     * Keys must be int or string; colliding keys overwrite, so the result may
-     * be smaller than the drawn size.
+     * Keys must be int or string; only distinct keys are kept, so the result
+     * may be smaller than the drawn size when the key space runs out, but never
+     * below $minSize — an unreachable minimum throws {@see GenerationExhausted}.
      */
     public static function dictOf(ArbitraryInterface $key, ArbitraryInterface $value, int $minSize = 0, int $maxSize = 100): DictionaryArbitrary
     {
@@ -566,7 +568,8 @@ final class Gen
      * a command generator and appends its command when the command's precondition
      * holds in the running model, advancing the model — so the sequence is valid
      * by construction. Shrinking drops individual steps and simplifies each command
-     * through its own tree.
+     * through its own tree. A sequence shorter than $minLength (no applicable
+     * command reached it) throws {@see GenerationExhausted}.
      *
      * Feed the generated {@see \Rasuvaeff\PropertyTesting\StateMachine\CommandSequence}
      * to {@see \Rasuvaeff\PropertyTesting\StateMachine\StateMachine::check()} in the

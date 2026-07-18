@@ -6,6 +6,7 @@ namespace Rasuvaeff\PropertyTesting\Tests\StateMachine;
 
 use Rasuvaeff\PropertyTesting\Arbitrary\CommandSequenceArbitrary;
 use Rasuvaeff\PropertyTesting\Gen;
+use Rasuvaeff\PropertyTesting\GenerationExhausted;
 use Rasuvaeff\PropertyTesting\Random;
 use Rasuvaeff\PropertyTesting\StateMachine\CommandSequence;
 use Rasuvaeff\PropertyTesting\StateMachine\PostconditionViolation;
@@ -124,6 +125,17 @@ final class CommandSequenceArbitraryTest
 
         Assert::instanceOf($sequence, CommandSequence::class);
         Assert::same(count($sequence->commands), 1);
+    }
+
+    #[ExpectException(GenerationExhausted::class)]
+    public function throwsGenerationExhaustedWhenMinLengthUnreachable(): void
+    {
+        // Pop never applies to the empty model, so no command can be appended —
+        // the minimum length of 1 is unreachable and generation is exhausted
+        // rather than returning a too-short sequence.
+        $arbitrary = Gen::commands([], [Gen::constant(new PopCommand())], minLength: 1, maxLength: 5);
+
+        $arbitrary->generate(new Random(1));
     }
 
     public function shrinkCanRemoveDownToExactlyMinLength(): void

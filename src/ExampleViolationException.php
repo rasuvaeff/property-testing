@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\PropertyTesting;
 
+use Rasuvaeff\PropertyTesting\Internal\ValueRenderer;
 use RuntimeException;
 
 /**
@@ -26,7 +27,7 @@ final class ExampleViolationException extends RuntimeException
         private readonly array $arguments,
         ?\Throwable $failure = null,
     ) {
-        $message = sprintf('Explicit example #%d failed: [%s]', $index, self::format($arguments));
+        $message = sprintf('Explicit example #%d failed: [%s]', $index, $this->format($arguments));
 
         if ($failure instanceof \Throwable) {
             $message .= sprintf("\n  Failure:  %s", $failure->getMessage());
@@ -51,18 +52,10 @@ final class ExampleViolationException extends RuntimeException
     /**
      * @param list<mixed> $arguments
      */
-    private static function format(array $arguments): string
+    private function format(array $arguments): string
     {
         return implode(', ', array_map(
-            static fn(mixed $value): string => match (true) {
-                is_array($value) => '[' . count($value) . ' element(s)]',
-                is_string($value) => '"' . $value . '"',
-                is_bool($value) => $value ? 'true' : 'false',
-                is_null($value) => 'null',
-                is_scalar($value) => (string) $value,
-                $value instanceof \Stringable => (string) $value,
-                default => get_debug_type($value),
-            },
+            ValueRenderer::render(...),
             $arguments,
         ));
     }

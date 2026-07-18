@@ -8,6 +8,7 @@ use Rasuvaeff\PropertyTesting\Arbitrary\BoolArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\DictionaryArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\IntArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\StringArbitrary;
+use Rasuvaeff\PropertyTesting\GenerationExhausted;
 use Rasuvaeff\PropertyTesting\Random;
 use Rasuvaeff\PropertyTesting\Tests\Support\Trees;
 use Testo\Assert;
@@ -179,6 +180,14 @@ final class DictionaryArbitraryTest
         foreach (array_keys($dictionary) as $key) {
             Assert::true(is_int($key));
         }
+    }
+
+    #[ExpectException(GenerationExhausted::class)]
+    public function throwsWhenTheKeySpaceCannotReachTheMinimumSize(): void
+    {
+        // Two possible keys can never fill a minimum of 5 distinct keys —
+        // generation is exhausted instead of silently under-filling the map.
+        (new DictionaryArbitrary(new IntArbitrary(1, 2), new IntArbitrary(), 5, 8))->generate(new Random(1));
     }
 
     #[ExpectException(\InvalidArgumentException::class)]

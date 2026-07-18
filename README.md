@@ -123,7 +123,7 @@ never treats a non-void-returning method as a test.
 | `Gen::arrayOf($element, $min, $max)` | `ArrayArbitrary`, lists of `$element`, size 0..100 by default | toward `[]`, then by length, then each element |
 | `Gen::nonEmptyArrayOf($element, $max)` | `ArrayArbitrary`, non-empty lists | by length (never below 1), then each element |
 | `Gen::uniqueArrayOf($element, $min, $max)` | `UniqueArrayArbitrary`, lists of pairwise-distinct elements | like `arrayOf`, but element candidates colliding with another element are skipped |
-| `Gen::dictOf($key, $value, $min, $max)` | `DictionaryArbitrary`, maps with keys from `$key` (int/string) and values from `$value`, size 0..100 by default | toward `[]`, then by size, then each value (keys fixed) |
+| `Gen::dictOf($key, $value, $min, $max)` | `DictionaryArbitrary`, maps with distinct keys from `$key` (int/string) and values from `$value`, size 0..100 by default | toward `[]`, then by size, then each value (keys fixed) |
 | `Gen::record($shape)` | `RecordArbitrary`, fixed-shape map `['field' => $arb, ...]` | each field via its arbitrary, key set fixed |
 | `Gen::elements($array)` | `OneOfArbitrary`, one value from an array (array form of `oneOf`) | toward earlier-listed distinct values |
 | `Gen::enum(SomeEnum::class)` | `OneOfArbitrary` over the enum's cases | toward earlier-declared cases (declare simpler cases first) |
@@ -138,7 +138,7 @@ never treats a non-void-returning method as a test.
 | `Gen::nullable($inner)` | `NullableArbitrary`, `null` or an `$inner` value | prefers `null`, then the inner tree |
 | `Gen::map($inner, $fn)` | `MappedArbitrary`, `$inner` transformed by `$fn` | through the inner tree, re-applying `$fn` |
 | `Gen::flatMap($inner, $fn)` | `FlatMappedArbitrary`, dependent generator returned by `$fn($innerValue)` | source value first (dependent value regenerated), then the dependent tree |
-| `Gen::filter($inner, $predicate)` | `FilteredArbitrary`, `$inner` values satisfying `$predicate` | inner tree, pruning candidates that fail the predicate |
+| `Gen::filter($inner, $predicate)` | `FilteredArbitrary`, `$inner` values satisfying `$predicate` (throws `GenerationExhausted` after 100 rejected draws — never yields an out-of-domain value) | inner tree, pruning candidates that fail the predicate |
 | `Gen::tuple(...$elements)` | `TupleArbitrary`, fixed-arity tuple, one value per element | each position via its element, arity fixed |
 | `Gen::frequency($pairs)` | `FrequencyArbitrary`, weighted choice over `[weight, arbitrary]` pairs | within the branch that generated the value |
 | `Gen::ipv4()` | IPv4 dotted-quad strings | each octet toward `0` |
@@ -152,6 +152,12 @@ Numeric generators (`int*`, `float*`) are **boundary-biased**: roughly one draw 
 five returns an in-range edge value (`0`, `±1`, `min`, `max` for ints; `0.0` or
 `min` for floats), where bugs cluster, instead of a uniform one. Shrinking is
 unaffected.
+
+Sized generators guarantee their **minimum**: `uniqueArrayOf`/`dictOf` (distinct
+elements/keys) and `commands` (applicable steps) may fall short of the *drawn*
+size when the value space runs out, but never fall below `$min` — an unreachable
+minimum throws `GenerationExhausted` rather than hand the property a too-small
+value.
 
 ### Dependent generators (`flatMap`)
 
@@ -219,14 +225,27 @@ keeps the whole domain visible in the generators method.
 
 ### `Assume::that()`
 
-Discards the current run when a precondition does not hold. Discarded runs are
-neither failures nor successful checks. Prefer it over `Gen::filter()` when the
-rejection rate is low; when more than 90% of runs are discarded the runner warns
-that the generators are likely misconfigured.
+Discards the current attempt when a precondition does not hold. `runs` is the
+number of successful checks, so discarded attempts are replaced. Prefer
+`Assume::that()` over `Gen::filter()` when the rejection rate is low; when more
+than 90% of attempts are discarded the runner warns that the generators are
+likely misconfigured.
 
 ```php
 Assume::that($cap >= $baseSeconds);
 ```
+
+Retries are bounded by `maxDiscards` (default: `runs * 10`). Exceeding the budget
+fails with `GaveUpException`, whose public fields report required and successful
+runs, discarded attempts, total attempts and the budget. Override it when a
+legitimate domain is sparse:
+
+```php
+#[Property(runs: 200, maxDiscards: 5_000)]
+```
+
+Construct valid inputs (`Gen::flatMap()` / `Gen::draw()`) instead of raising the
+budget when the relationship can be encoded directly.
 
 ### Bounding shrink work
 
@@ -375,8 +394,9 @@ public function holds(int $n): void
 }
 ```
 
-Discarded runs (`Assume::that()`) are excluded from the denominator. A property
-whose runs are all discarded fails its coverage requirements outright.
+Discarded attempts (`Assume::that()`) are excluded from the denominator and
+replaced until all requested successful runs complete. Exceeding `maxDiscards`
+fails with `GaveUpException` (see `Assume::that()`).
 
 ### Sampling a generator
 
@@ -396,6 +416,19 @@ that a custom arbitrary shrinks the way you intended.
 Gen::sampleShrinks(Gen::intBetween(0, 100), seed: 1);
 // ['value' => 87, 'shrinks' => [0, 44, 66, 77, 82, 85, 86]]
 ```
+
+### Exporting a counterexample
+
+`CounterExample::toArray()` and `toJson()` expose a normalized representation
+for reporters and CI artifacts, including nested DTO state and recursion
+markers. To pin a shrunk scalar/array/enum case as a regression example:
+
+```php
+$code = $violation->getCounterExample()->toExamplesCode('holdsExamples');
+```
+
+The generated method yields arguments in parameter order. Unsupported runtime
+objects throw `LogicException` instead of producing code that cannot run.
 
 ### Recipes
 

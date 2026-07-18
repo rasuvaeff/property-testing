@@ -125,7 +125,7 @@ final class RegexCompilerTest
     public function characterClassGeneratesOnlyItsMembers(string $pattern, string $allowedRegex): void
     {
         foreach (Gen::sample(RegexCompiler::compile($pattern), 50, 4) as $value) {
-            Assert::true(is_string($value) && preg_match('/^' . $allowedRegex . '$/', $value) === 1, (string) var_export($value, true));
+            Assert::true(is_string($value) && preg_match('/^' . $allowedRegex . '$/', $value) === 1, var_export($value, true));
         }
     }
 
@@ -147,7 +147,7 @@ final class RegexCompilerTest
     public function shorthandAtomAndClassMatch(string $pattern, string $allowedRegex): void
     {
         foreach (Gen::sample(RegexCompiler::compile($pattern), 60, 4) as $value) {
-            Assert::true(is_string($value) && preg_match('/^' . $allowedRegex . '$/', $value) === 1, (string) var_export($value, true));
+            Assert::true(is_string($value) && preg_match('/^' . $allowedRegex . '$/', $value) === 1, var_export($value, true));
         }
     }
 
@@ -200,7 +200,7 @@ final class RegexCompilerTest
         // dropping a range/item from `word()` would remove one of these.
         Assert::true($this->anyMatches($values, '/[a-z]/'));
         Assert::true($this->anyMatches($values, '/[A-Z]/'));
-        Assert::true($this->anyMatches($values, '/[0-9]/'));
+        Assert::true($this->anyMatches($values, '/\d/'));
         Assert::true(in_array('_', $values, true));
     }
 

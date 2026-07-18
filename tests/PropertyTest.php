@@ -22,16 +22,18 @@ final class PropertyTest
         Assert::null($property->seed);
         Assert::null($property->generators);
         Assert::null($property->maxShrinks);
+        Assert::null($property->maxDiscards);
     }
 
     public function retainsConstructorArguments(): void
     {
-        $property = new Property(runs: 250, seed: 42, generators: 'provide', maxShrinks: 5);
+        $property = new Property(runs: 250, seed: 42, generators: 'provide', maxShrinks: 5, maxDiscards: 20);
 
         Assert::same($property->runs, 250);
         Assert::same($property->seed, 42);
         Assert::same($property->generators, 'provide');
         Assert::same($property->maxShrinks, 5);
+        Assert::same($property->maxDiscards, 20);
     }
 
     public function acceptsZeroMaxShrinks(): void
@@ -54,5 +56,11 @@ final class PropertyTest
     public function rejectsNegativeMaxShrinks(): void
     {
         new Property(maxShrinks: -1);
+    }
+
+    #[ExpectException(\InvalidArgumentException::class)]
+    public function rejectsNegativeMaxDiscards(): void
+    {
+        new Property(maxDiscards: -1);
     }
 }

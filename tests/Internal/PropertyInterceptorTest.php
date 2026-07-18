@@ -9,6 +9,7 @@ use Rasuvaeff\PropertyTesting\AssumptionSkipped;
 use Rasuvaeff\PropertyTesting\Classify;
 use Rasuvaeff\PropertyTesting\CoverageViolationException;
 use Rasuvaeff\PropertyTesting\ExampleViolationException;
+use Rasuvaeff\PropertyTesting\GaveUpException;
 use Rasuvaeff\PropertyTesting\Gen;
 use Rasuvaeff\PropertyTesting\Internal\PropertyInterceptor;
 use Rasuvaeff\PropertyTesting\PropertyViolationException;
@@ -349,7 +350,7 @@ final class PropertyInterceptorTest
         Assert::same($counterExample->skips, 1);
     }
 
-    public function warnsWhenAssumptionsDiscardMoreThanNinetyPercentOfRuns(): void
+    public function warnsAndGivesUpWhenEveryRunIsDiscarded(): void
     {
         $messenger = $this->createMessenger();
         $interceptor = new PropertyInterceptor($messenger);
@@ -359,22 +360,48 @@ final class PropertyInterceptorTest
             failure: new AssumptionSkipped(),
         );
 
-        $result = $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
+        $result = $interceptor->runTest($this->info(DiscardBudgetStub::class, 'check'), $next);
         $messages = $messenger->getMessages()->channel(Messenger::CHANNEL_STDERR);
 
-        Assert::same($result->status, Status::Passed);
+        Assert::same($result->status, Status::Failed);
+        Assert::instanceOf($result->failure, GaveUpException::class);
+        Assert::same($result->failure->requiredRuns, 5);
+        Assert::same($result->failure->successfulRuns, 0);
+        Assert::same($result->failure->discardedRuns, 4);
+        Assert::same($result->failure->attempts, 4);
+        Assert::same($result->failure->maxDiscards, 3);
         Assert::same(count($messages), 1);
-        Assert::string($messages[0]->content)->contains('discarded 5 of 5 runs');
+        Assert::string($messages[0]->content)->contains('discarded 4 of 4 attempt(s)');
+    }
+
+    public function defaultDiscardBudgetIsTenTimesTheRequiredRuns(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $calls = 0;
+        $next = static function (TestInfo $info) use (&$calls): TestResult {
+            ++$calls;
+
+            return new TestResult(info: $info, status: Status::Error, failure: new AssumptionSkipped());
+        };
+
+        $result = $interceptor->runTest($this->info(DefaultDiscardBudgetStub::class, 'check'), $next);
+
+        Assert::instanceOf($result->failure, GaveUpException::class);
+        Assert::same($result->failure->maxDiscards, 10);
+        Assert::same($result->failure->discardedRuns, 11);
+        Assert::same($calls, 11);
     }
 
     public function discardsRunsViaAssumeWithoutCountingAsFailure(): void
     {
         $interceptor = new PropertyInterceptor($this->createMessenger());
-        $next = static function (TestInfo $info): TestResult {
-            $value = $info->arguments[0];
+        $calls = 0;
+        // Discard the first run, pass the rest: a discarded run is neither a
+        // failure nor a check, and the surviving checks keep the property green.
+        $next = static function (TestInfo $info) use (&$calls): TestResult {
+            ++$calls;
 
-            // Keep only runs where the generated value is exactly 5; discard the rest.
-            if ($value !== 5) {
+            if ($calls === 1) {
                 return new TestResult(info: $info, status: Status::Error, failure: new AssumptionSkipped());
             }
 
@@ -384,6 +411,7 @@ final class PropertyInterceptorTest
         $result = $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
 
         Assert::same($result->status, Status::Passed);
+        Assert::same($calls, 6);
     }
 
     public function passesThroughWhenMethodHasNoPropertyAttribute(): void
@@ -632,7 +660,8 @@ final class PropertyInterceptorTest
     {
         $interceptor = new PropertyInterceptor($this->createMessenger());
         $calls = 0;
-        // 5 runs: 3 discarded, 2 passing with the label => 100% of checks.
+        // Three attempts are discarded, then all five required successful checks
+        // carry the label => 100% of checks.
         $next = static function (TestInfo $info) use (&$calls): TestResult {
             ++$calls;
 
@@ -648,6 +677,7 @@ final class PropertyInterceptorTest
         $result = $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
 
         Assert::same($result->status, Status::Passed);
+        Assert::same($calls, 8);
     }
 
     public function coverageWithoutAnySuccessfulRunFails(): void
@@ -661,11 +691,11 @@ final class PropertyInterceptorTest
             return new TestResult(info: $info, status: Status::Error, failure: new AssumptionSkipped());
         };
 
-        $result = $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
+        $result = $interceptor->runTest($this->info(DiscardBudgetStub::class, 'check'), $next);
 
         Assert::same($result->status, Status::Failed);
-        Assert::instanceOf($result->failure, CoverageViolationException::class);
-        Assert::string($result->failure->getMessage())->contains('no successful runs');
+        Assert::instanceOf($result->failure, GaveUpException::class);
+        Assert::same($result->failure->successfulRuns, 0);
     }
 
     public function falsificationWinsOverCoverage(): void
@@ -715,8 +745,8 @@ final class PropertyInterceptorTest
             $messages = $messenger->getMessages()->channel(Messenger::CHANNEL_STDOUT);
 
             Assert::same(count($messages), 5);
-            Assert::string($messages[0]->content)->contains('run 1: x=');
-            Assert::string($messages[4]->content)->contains('run 5: x=');
+            Assert::string($messages[0]->content)->contains('attempt 1: x=');
+            Assert::string($messages[4]->content)->contains('attempt 5: x=');
         } finally {
             putenv('PROPERTY_VERBOSE');
         }
@@ -757,8 +787,8 @@ final class PropertyInterceptorTest
             Assert::string($messages[0]->content)->contains('s="fixed"');
             Assert::string($messages[0]->content)->contains('b=false');
             Assert::string($messages[0]->content)->contains('n=null');
-            Assert::string($messages[0]->content)->contains('a=[2 element(s)]');
-            Assert::string($messages[0]->content)->contains('d=DateTimeImmutable');
+            Assert::string($messages[0]->content)->contains('a=[1, 2]');
+            Assert::string($messages[0]->content)->contains('d=1970-01-01');
             Assert::string($messages[0]->content)->contains('i=7');
         } finally {
             putenv('PROPERTY_VERBOSE');

@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.5.0 — 2026-07-18
+
+Correctness release. Generators never hand a property an out-of-domain value,
+and a property that checks nothing no longer passes silently. Behaviour changes
+below are bug fixes, but observable — review if you relied on the old behaviour.
+
+- **`Gen::filter()` now throws `GenerationExhausted`** (new `@api` exception)
+  after 100 rejected draws, instead of returning the last (predicate-failing)
+  value. The interceptor catches it at the generation step and reports a clean
+  failure. Exhaustion can be transient (a satisfiable-but-rare predicate) — widen
+  the source, raise the budget, or use `Gen::flatMap()` for dependent domains.
+- **`runs` now means successful checks.** Discarded attempts do not consume the
+  requested run count. The new trailing `Property::$maxDiscards` option bounds
+  retries (default: `runs * 10`); exceeding it fails with `GaveUpException`,
+  which exposes required/successful/discarded/attempt counts.
+- **Sized collections guarantee their minimum.** `Gen::dictOf()` now keeps
+  distinct keys (was: colliding keys overwrite) and `Gen::commands()` throws when
+  no applicable command reaches `$minLength`; both, plus `Gen::uniqueArrayOf()`,
+  now signal an unreachable minimum with `GenerationExhausted`.
+  `Gen::uniqueArrayOf()` previously threw `InvalidArgumentException` for this case
+  — the type changed to `GenerationExhausted` (extends `RuntimeException`).
+- **Counterexamples render nested values.** Arrays and objects are shown
+  recursively (bounded depth/width/length, special floats and binary strings
+  labelled, object cycles guarded) instead of `[N element(s)]` / a bare class
+  name — in `PropertyViolationException`, `ExampleViolationException` and the
+  verbose run log. Object rendering includes private/protected properties (real
+  DTOs across their inheritance chain), and strings, map keys and `Stringable`
+  output are escaped and bounded so a value stays on one unambiguous line.
+  `CounterExample::toArray()` / `toJson()` provide machine-readable output;
+  `toExamplesCode()` produces a runnable examples-method fragment for values
+  that PHP can represent directly.
+- Removed the unsupported `Attribute::TARGET_FUNCTION` from `#[Property]`; it only
+  ever ran on methods.
+
 ## 2.4.0 — 2026-07-11
 
 In-body dependent draw (T2.5). Additive, no BC breaks; existing seed sequences

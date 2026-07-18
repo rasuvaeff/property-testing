@@ -7,6 +7,7 @@ namespace Rasuvaeff\PropertyTesting\Tests\Arbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\FilteredArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\IntArbitrary;
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
+use Rasuvaeff\PropertyTesting\GenerationExhausted;
 use Rasuvaeff\PropertyTesting\Random;
 use Rasuvaeff\PropertyTesting\Shrinkable;
 use Rasuvaeff\PropertyTesting\Tests\Support\Trees;
@@ -76,18 +77,22 @@ final class FilteredArbitraryTest
         }
     }
 
-    public function givesUpAfterTheRetryBudgetAndReturnsTheLastValue(): void
+    public function throwsGenerationExhaustedWhenThePredicateNeverHolds(): void
     {
-        // An unsatisfiable predicate must terminate (bounded retries) and return
-        // the last generated value rather than looping forever.
+        // An unsatisfiable predicate must terminate (bounded retries) and fail
+        // loudly rather than hand back an out-of-domain value.
         $arbitrary = new FilteredArbitrary(
             new IntArbitrary(1, 100),
             static fn(int $x): bool => false,
         );
 
-        $value = $arbitrary->generate(new Random(1))->value;
-
-        Assert::true($value >= 1 && $value <= 100);
+        try {
+            $arbitrary->generate(new Random(1));
+            Assert::fail('expected a GenerationExhausted');
+        } catch (GenerationExhausted $e) {
+            Assert::same($e->attempts, 100);
+            Assert::same($e->arbitrary, 'Gen::filter()');
+        }
     }
 
     public function drawsExactlyTheRetryBudgetBeforeGivingUp(): void
@@ -106,7 +111,11 @@ final class FilteredArbitraryTest
             }
         };
 
-        (new FilteredArbitrary($inner, static fn(mixed $x): bool => false))->generate(new Random(1));
+        try {
+            (new FilteredArbitrary($inner, static fn(mixed $x): bool => false))->generate(new Random(1));
+        } catch (GenerationExhausted) {
+            // Expected — we only care about the sampling count here.
+        }
 
         Assert::same($inner->calls, 100);
     }

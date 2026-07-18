@@ -26,6 +26,13 @@ Runtime deps: `ext-mbstring`, `ext-random`, `testo/testo ^0.10.25 || ^1.0`.
   of PHP's global `mt_rand` state, so seeded runs are reproducible regardless of
   other random calls in the process.
 - Do NOT use generated values for cryptography (MT19937 is a PRNG, not a CSPRNG).
+- A generator NEVER yields an out-of-domain value: `Gen::filter()` and sized
+  collections throw `GenerationExhausted` when they cannot satisfy their
+  predicate/minimum within their attempt budget. Construct dependent values with
+  `Gen::flatMap()`/`Gen::draw()` instead of filtering broadly.
+- `Property::$runs` means successful checks. `Assume::that(false)` discards an
+  attempt without consuming a run. Retries stop at `maxDiscards` (default
+  `runs * 10`) and fail with a structured `GaveUpException`.
 - Shrinking is integrated (since 2.0): `generate(Random)` returns a `Shrinkable`
   (value + lazy tree of smaller candidates). There is NO `shrink(mixed)` method.
   Greedy per-parameter descent; best-effort minimal, not provably minimal.
@@ -42,10 +49,10 @@ Runtime deps: `ext-mbstring`, `ext-random`, `testo/testo ^0.10.25 || ^1.0`.
 ```php
 use Rasuvaeff\PropertyTesting\Property;
 
-#[Property(runs: 100, seed: null, generators: null, maxShrinks: null, examples: null)]
+#[Property(runs: 100, seed: null, generators: null, maxShrinks: null, examples: null, maxDiscards: null)]
 ```
 
-- `runs` (int, default 100): number of random inputs to try. Must be >= 1.
+- `runs` (int, default 100): number of successful random inputs to check. Must be >= 1.
 - `seed` (?int, default null): fixed seed for reproducibility. Omit for a random
   seed (reported in the failure message).
 - `generators` (?string, default null): method name returning
@@ -56,6 +63,8 @@ use Rasuvaeff\PropertyTesting\Property;
   `iterable<array<mixed>>` of fixed positional argument tuples, each run BEFORE
   the random inputs and NOT shrunk. Defaults to `<testMethod>Examples` when that
   method exists. A failing example -> `ExampleViolationException`.
+- `maxDiscards` (?int, default null): discard budget; null resolves to
+  `runs * 10`. Exceeding it -> `GaveUpException`. Must be >= 0.
 
 Env: `PROPERTY_RUNS` (override run count), `PROPERTY_SEED` (seed when the
 attribute omits it), `PROPERTY_VERBOSE` (log each run's args), `PROPERTY_DB`
@@ -87,7 +96,7 @@ Gen::bytes(int $minLen = 0, int $maxLen = 100) // BytesArbitrary: raw bytes 0..2
 Gen::arrayOf(ArbitraryInterface $el, int $min = 0, int $max = 100)    // ArrayArbitrary, lists
 Gen::nonEmptyArrayOf(ArbitraryInterface $el, int $max = 100)  // ArrayArbitrary, size >= 1
 Gen::uniqueArrayOf(ArbitraryInterface $el, int $min = 0, int $max = 100) // UniqueArrayArbitrary: pairwise-distinct lists; may settle for fewer than drawn when the element space runs dry (never below min — throws)
-Gen::dictOf(ArbitraryInterface $key, ArbitraryInterface $value, int $min = 0, int $max = 100) // DictionaryArbitrary, keys int|string, colliding keys overwrite
+Gen::dictOf(ArbitraryInterface $key, ArbitraryInterface $value, int $min = 0, int $max = 100) // DictionaryArbitrary, distinct keys int|string; may settle for fewer than drawn when the key space runs dry (never below min — throws GenerationExhausted)
 Gen::record(array $shape)               // RecordArbitrary, fixed-shape map ['field' => ArbitraryInterface, ...]
 Gen::oneOf(mixed ...$values)           // OneOfArbitrary, one value; shrinks toward EARLIER-listed distinct values (put simpler first)
 Gen::elements(array $values)           // OneOfArbitrary, one value from an array (array form of oneOf)
@@ -102,10 +111,10 @@ Gen::recursive(ArbitraryInterface $leaf, Closure $wrap, int $maxDepth = 3) // bo
 Gen::nullable(ArbitraryInterface $inner)      // NullableArbitrary, null or inner value
 Gen::map(ArbitraryInterface $inner, Closure $fn)   // MappedArbitrary; shrinks through the inner tree, re-applying $fn (pure!)
 Gen::flatMap(ArbitraryInterface $inner, Closure $fn)  // FlatMappedArbitrary; $fn(mixed): ArbitraryInterface — dependent generators; shrinks source (dependent regenerated from seed) then dependent value
-Gen::filter(ArbitraryInterface $inner, Closure $predicate) // FilteredArbitrary, max 100 retries; tree pruned to predicate-satisfying candidates
+Gen::filter(ArbitraryInterface $inner, Closure $predicate) // FilteredArbitrary, max 100 retries then throws GenerationExhausted (never yields an out-of-domain value); tree pruned to predicate-satisfying candidates
 Gen::tuple(ArbitraryInterface ...$elements)        // TupleArbitrary, fixed-arity tuple (list), shrinks each position
 Gen::frequency(iterable $pairs)                    // FrequencyArbitrary, weighted [int $weight, ArbitraryInterface] pairs; shrinks within the generating branch
-Gen::commands(mixed $initialModel, array $commandGenerators, int $minLen = 0, int $maxLen = 100) // CommandSequenceArbitrary for stateful/model-based testing; $commandGenerators = list<ArbitraryInterface> each producing a Command; see "Stateful" below
+Gen::commands(mixed $initialModel, array $commandGenerators, int $minLen = 0, int $maxLen = 100) // CommandSequenceArbitrary for stateful/model-based testing; $commandGenerators = list<ArbitraryInterface> each producing a Command; a sequence shorter than $minLen (no applicable command) throws GenerationExhausted; see "Stateful" below
 Gen::ipv4()                            // dotted-quad IPv4 strings; each octet shrinks to 0
 Gen::email()                           // local@label.tld addresses; shrinks to shortest local/label + first TLD
 Gen::url()                             // http(s)://host.tld[/path]; shrinks to http://a.com
@@ -207,14 +216,19 @@ use Rasuvaeff\PropertyTesting\Assume;
 Assume::that($cap >= $baseSeconds);
 ```
 
-Throws `AssumptionSkipped` when false; the runner treats the run as discarded
-(neither failure nor success). Warns when >90% of runs are discarded.
+Throws `AssumptionSkipped` when false; the runner treats the attempt as discarded
+(neither failure nor success) and retries until `runs` successful checks finish.
+Warns when >90% of attempts are discarded. Exceeding `maxDiscards` fails with a
+`GaveUpException` exposing required/successful/discarded/attempt counts.
 
 ### Inspecting failures
 
 The failing `TestResult` carries a `Rasuvaeff\PropertyTesting\PropertyViolationException`
 with `getCounterExample(): CounterExample` exposing:
 `seed`, `runsBeforeFailure`, `originalArguments`, `shrunkArguments`, `shrinkSteps`, `failure`, `skips`.
+`CounterExample::toArray()` / `toJson()` return normalized machine-readable data;
+`toExamplesCode(string $method = 'propertyExamples')` emits runnable PHP for
+scalar/array/enum arguments and rejects unsupported objects.
 The Testo fallback interceptor is `PropertyInterceptor`.
 
 ### Stateful / model-based testing

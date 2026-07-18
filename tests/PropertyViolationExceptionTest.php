@@ -100,7 +100,7 @@ final class PropertyViolationExceptionTest
 
         Assert::string($message)->contains('i=7');
         Assert::string($message)->contains('s="hi"');
-        Assert::string($message)->contains('list=[3 element(s)]');
+        Assert::string($message)->contains('list=[1, 2, 3]');
         Assert::string($message)->contains('yes=true');
         Assert::string($message)->contains('no=false');
         Assert::string($message)->contains('nothing=null');

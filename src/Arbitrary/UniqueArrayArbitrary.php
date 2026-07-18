@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Rasuvaeff\PropertyTesting\Arbitrary;
 
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
+use Rasuvaeff\PropertyTesting\GenerationExhausted;
 use Rasuvaeff\PropertyTesting\Random;
 use Rasuvaeff\PropertyTesting\Shrinkable;
 
@@ -18,8 +19,8 @@ use Rasuvaeff\PropertyTesting\Shrinkable;
  * bounded: after {@see self::MAX_ATTEMPTS_PER_ELEMENT} attempts per requested
  * element the generator settles for the distinct elements found so far — the
  * result may be smaller than the drawn size, mirroring dictOf's key-collision
- * behaviour. An element space too small to reach the minimum size is a
- * configuration error and throws.
+ * behaviour. An element space too small to reach the minimum size throws
+ * {@see GenerationExhausted} rather than hand the property a too-small list.
  *
  * @api
  */
@@ -69,11 +70,15 @@ final readonly class UniqueArrayArbitrary implements ArbitraryInterface
         }
 
         if (count($elements) < $this->minSize) {
-            throw new \InvalidArgumentException(sprintf(
-                'Element arbitrary produced only %d distinct value(s), fewer than the minimum size %d',
-                count($elements),
-                $this->minSize,
-            ));
+            throw new GenerationExhausted(
+                'Gen::uniqueArrayOf()',
+                $size * self::MAX_ATTEMPTS_PER_ELEMENT,
+                sprintf(
+                    'only %d distinct value(s) for a minimum size of %d; the element space is too small',
+                    count($elements),
+                    $this->minSize,
+                ),
+            );
         }
 
         return $this->tree($elements);

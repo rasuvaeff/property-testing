@@ -32,4 +32,48 @@ final readonly class CounterExample
         public ?\Throwable $failure = null,
         public int $skips = 0,
     ) {}
+
+    /**
+     * Machine-readable representation suitable for reporters and serialization.
+     *
+     * @return array<string, mixed>
+     */
+    public function toArray(): array
+    {
+        return [
+            'seed' => $this->seed,
+            'runsBeforeFailure' => $this->runsBeforeFailure,
+            'originalArguments' => \Rasuvaeff\PropertyTesting\Internal\ValueRenderer::normalize($this->originalArguments),
+            'shrunkArguments' => \Rasuvaeff\PropertyTesting\Internal\ValueRenderer::normalize($this->shrunkArguments),
+            'shrinkSteps' => $this->shrinkSteps,
+            'failure' => $this->failure instanceof \Throwable
+                ? ['type' => $this->failure::class, 'message' => $this->failure->getMessage()]
+                : null,
+            'skips' => $this->skips,
+        ];
+    }
+
+    public function toJson(bool $pretty = false): string
+    {
+        return json_encode(
+            $this->toArray(),
+            JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE | ($pretty ? JSON_PRETTY_PRINT : 0),
+        );
+    }
+
+    public function toExamplesCode(string $methodName = 'propertyExamples'): string
+    {
+        if (preg_match('/^[A-Za-z_]\w*$/', $methodName) !== 1) {
+            throw new \InvalidArgumentException(sprintf('Invalid examples method name "%s"', $methodName));
+        }
+
+        $arguments = \Rasuvaeff\PropertyTesting\Internal\ValueRenderer::exportPhp(array_values($this->shrunkArguments));
+
+        return sprintf(
+            "public static function %s(): iterable\n{\n    yield 'shrunk seed %d' => %s;\n}",
+            $methodName,
+            $this->seed,
+            $arguments,
+        );
+    }
 }
