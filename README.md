@@ -83,8 +83,15 @@ On failure, the counterexample is rendered into the test output:
 ```
 Property falsified after 246 successful run(s); seed=7382910
   Original: maxAttempts=17, baseSeconds=91, cap=847, attempts=23
-  Shrunk:   maxAttempts=1, baseSeconds=848, cap=847, attempts=1 (12 shrink step(s))
+  Shrunk:   maxAttempts=1, baseSeconds=848, cap=847, attempts=1 (12 shrink step(s), 41 trial(s))
+  Changed:  maxAttempts=17 -> 1, baseSeconds=91 -> 848, attempts=23 -> 1
 ```
+
+The `Changed:` line diffs the original against the shrunk counterexample —
+arguments the shrinker left untouched (here `cap`) are omitted, so the inputs
+that actually drive the failure stand out. `trial(s)` counts every candidate
+the shrinker ran (accepted and rejected); `shrink step(s)` counts only the
+accepted ones.
 
 Reproduce the exact run by passing the reported seed back to the attribute:
 
@@ -323,7 +330,7 @@ CI:
 |---|---|
 | `PROPERTY_RUNS` | Positive integer that overrides every property's run count (dial runs up in CI). |
 | `PROPERTY_SEED` | Integer seed used for any property whose attribute omits `seed` (replay a whole suite). An explicit attribute `seed` still wins. |
-| `PROPERTY_VERBOSE` | Any value except `''`/`0` logs every run's generated arguments — see exactly what a replayed seed feeds the property. |
+| `PROPERTY_VERBOSE` | Any value except `''`/`0` logs every run's generated arguments and, on failure, every accepted shrink step (`shrink step 3: x=63 -> 51`) — see exactly what a replayed seed feeds the property and how the shrinker descends. |
 | `PROPERTY_DB` | Directory path enabling regression replay (below). Unset means the feature is off and nothing is written. |
 
 ### Replaying the last failure

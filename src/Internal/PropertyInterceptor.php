@@ -249,7 +249,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             }
 
             if ($result->status->isFailure()) {
-                [$shrunk, $shrunkDraws, $shrinkSteps, $shrunkFailure] = $this->shrink($info, $next, $trees, $draws, $random, $maxShrinks);
+                [$shrunk, $shrunkDraws, $shrinkSteps, $shrunkFailure, $shrinkTrials] = $this->shrink($info, $next, $trees, $draws, $random, $maxShrinks, $verbose);
 
                 return new TestResult(
                     info: $info,
@@ -266,6 +266,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                         // the minimal one. Falls back to the original when nothing shrank.
                         failure: $shrunkFailure ?? $result->failure,
                         skips: $skips,
+                        shrinkTrials: $shrinkTrials,
                     )),
                     attributes: $runAttributes,
                 );
@@ -651,10 +652,10 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
      * @param list<Shrinkable> $tape The failing run's recorded in-body draws.
      * @param callable(TestInfo): TestResult $next
      * @param ?int $maxShrinks Cap on accepted shrink steps; null means no cap, 0 disables shrinking.
-     * @return array{0: array<string, mixed>, 1: array<string, mixed>, 2: int, 3: ?\Throwable} The
+     * @return array{0: array<string, mixed>, 1: array<string, mixed>, 2: int, 3: ?\Throwable, 4: int} The
      *         minimised arguments, the minimised draws (as `draw#N` pseudo-arguments), the number
-     *         of accepted shrink steps, and the failure of the last accepted candidate (null when
-     *         nothing shrank).
+     *         of accepted shrink steps, the failure of the last accepted candidate (null when
+     *         nothing shrank), and the total number of candidates tried (accepted and rejected).
      */
     private function shrink(
         TestInfo $info,
@@ -663,10 +664,12 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         array $tape,
         Random $random,
         ?int $maxShrinks,
+        bool $verbose,
     ): array {
         $current = $trees;
         $currentTape = $tape;
         $steps = 0;
+        $trials = 0;
         $acceptedFailure = null;
 
         do {
@@ -677,7 +680,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                 // Checking here (before the per-parameter search) makes maxShrinks=0
                 // return the original counterexample with zero accepted steps.
                 if ($this->capReached($maxShrinks, $currentTape, $steps)) {
-                    return [$this->values($current), $this->drawArguments($currentTape), $steps, $acceptedFailure];
+                    return [$this->values($current), $this->drawArguments($currentTape), $steps, $acceptedFailure, $trials];
                 }
 
                 foreach ($current[$name]->shrinks() as $candidate) {
@@ -693,8 +696,13 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                     // $name to the front and scramble non-leading parameters.
                     $trial = array_replace($current, [$name => $candidate]);
                     [$trialResult, $recorded] = $this->trial($info, $next, $trial, $currentTape, $random);
+                    ++$trials;
 
                     if ($this->isFailingResult($trialResult)) {
+                        if ($verbose) {
+                            $this->logShrinkStep($info->name, $steps + 1, $name, $current[$name]->value, $candidate->value);
+                        }
+
                         $current = $trial;
                         $currentTape = $recorded;
                         $acceptedFailure = $trialResult->failure;
@@ -714,7 +722,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
 
             while ($position < count($currentTape)) {
                 if ($this->capReached($maxShrinks, $currentTape, $steps)) {
-                    return [$this->values($current), $this->drawArguments($currentTape), $steps, $acceptedFailure];
+                    return [$this->values($current), $this->drawArguments($currentTape), $steps, $acceptedFailure, $trials];
                 }
 
                 foreach ($currentTape[$position]->shrinks() as $candidate) {
@@ -724,8 +732,13 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
 
                     $trialTape = array_replace($currentTape, [$position => $candidate]);
                     [$trialResult, $recorded] = $this->trial($info, $next, $current, $trialTape, $random);
+                    ++$trials;
 
                     if ($this->isFailingResult($trialResult)) {
+                        if ($verbose) {
+                            $this->logShrinkStep($info->name, $steps + 1, 'draw#' . ($position + 1), $currentTape[$position]->value, $candidate->value);
+                        }
+
                         $currentTape = $recorded;
                         $acceptedFailure = $trialResult->failure;
                         ++$steps;
@@ -739,7 +752,29 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             }
         } while ($improved);
 
-        return [$this->values($current), $this->drawArguments($currentTape), $steps, $acceptedFailure];
+        return [$this->values($current), $this->drawArguments($currentTape), $steps, $acceptedFailure, $trials];
+    }
+
+    /**
+     * `PROPERTY_VERBOSE` trace of the shrink descent: one line per ACCEPTED
+     * candidate (rejected trials are not logged — with wide trees they would
+     * drown the trace), mirroring the `Changed:` diff of the final
+     * counterexample step by step.
+     */
+    private function logShrinkStep(string $property, int $step, string $name, mixed $before, mixed $after): void
+    {
+        $this->messenger->log(
+            Messenger::CHANNEL_STDOUT,
+            sprintf(
+                'Property "%s" shrink step %d: %s=%s -> %s',
+                $property,
+                $step,
+                $name,
+                ValueRenderer::render($before),
+                ValueRenderer::render($after),
+            ),
+            Level::Info,
+        );
     }
 
     /**

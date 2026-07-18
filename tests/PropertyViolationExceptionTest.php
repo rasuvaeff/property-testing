@@ -30,6 +30,63 @@ final class PropertyViolationExceptionTest
         Assert::string($exception->getMessage())->contains('Shrunk:   x=1 (12 shrink step(s))');
     }
 
+    public function rendersTheTrialCountNextToTheAcceptedSteps(): void
+    {
+        $exception = new PropertyViolationException(new CounterExample(
+            seed: 1,
+            runsBeforeFailure: 0,
+            originalArguments: ['x' => 23],
+            shrunkArguments: ['x' => 1],
+            shrinkSteps: 12,
+            shrinkTrials: 47,
+        ));
+
+        Assert::string($exception->getMessage())->contains('(12 shrink step(s), 47 trial(s))');
+    }
+
+    public function omitsTheTrialCountWhenNoCandidateWasTried(): void
+    {
+        $exception = new PropertyViolationException(new CounterExample(
+            seed: 1,
+            runsBeforeFailure: 0,
+            originalArguments: ['x' => 23],
+            shrunkArguments: ['x' => 23],
+        ));
+
+        Assert::false(str_contains($exception->getMessage(), 'trial(s)'));
+    }
+
+    public function rendersAChangedDiffForTheArgumentsThatShrank(): void
+    {
+        $exception = new PropertyViolationException(new CounterExample(
+            seed: 1,
+            runsBeforeFailure: 0,
+            originalArguments: ['x' => 23, 'y' => 5, 'draw#1' => 7],
+            shrunkArguments: ['x' => 1, 'y' => 5],
+            shrinkSteps: 3,
+        ));
+
+        $message = $exception->getMessage();
+
+        Assert::string($message)->contains('Changed:  x=23 -> 1');
+        // A draw dropped by tape truncation appears as absent on the shrunk side.
+        Assert::string($message)->contains('draw#1=7 -> (absent)');
+        // Unchanged arguments stay out of the diff.
+        Assert::false(str_contains($message, 'y=5 ->'));
+    }
+
+    public function omitsTheChangedLineWhenNothingShrank(): void
+    {
+        $exception = new PropertyViolationException(new CounterExample(
+            seed: 1,
+            runsBeforeFailure: 0,
+            originalArguments: ['x' => 23],
+            shrunkArguments: ['x' => 23],
+        ));
+
+        Assert::false(str_contains($exception->getMessage(), 'Changed:'));
+    }
+
     public function rendersTheUnderlyingFailureMessage(): void
     {
         $exception = new PropertyViolationException(new CounterExample(
