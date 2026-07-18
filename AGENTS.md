@@ -181,7 +181,8 @@ make release-check
 
 ## When you finish
 
-- Update `README.md` (and `examples/` if usage changed); update `CHANGELOG.md`
-  when releasing.
+- Update `README.md` AND `README.ru.md` — the README is bilingual, every
+  change lands in both files in the same commit (and `examples/` if usage
+  changed); update `CHANGELOG.md` when releasing.
 - Re-run `composer build`; if the change affects public API or release safety,
   also run `make release-check`. Paste the output.
