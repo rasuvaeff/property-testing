@@ -9,6 +9,7 @@ use Rasuvaeff\PropertyTesting\AssumptionSkipped;
 use Rasuvaeff\PropertyTesting\Classify;
 use Rasuvaeff\PropertyTesting\CounterExample;
 use Rasuvaeff\PropertyTesting\CoverageViolationException;
+use Rasuvaeff\PropertyTesting\DeadlineExceededException;
 use Rasuvaeff\PropertyTesting\ExampleViolationException;
 use Rasuvaeff\PropertyTesting\GaveUpException;
 use Rasuvaeff\PropertyTesting\GenerationExhausted;
@@ -16,6 +17,7 @@ use Rasuvaeff\PropertyTesting\Property;
 use Rasuvaeff\PropertyTesting\PropertyViolationException;
 use Rasuvaeff\PropertyTesting\Random;
 use Rasuvaeff\PropertyTesting\Shrinkable;
+use Rasuvaeff\PropertyTesting\TimeBudgetExceededException;
 use Testo\Common\Messenger;
 use Testo\Core\Context\TestInfo;
 use Testo\Core\Context\TestResult;
@@ -102,7 +104,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         Classify::flushRequirements();
         DrawContext::disarm();
 
-        $exampleFailure = $this->runExamples($reflection, $info, $next, $property, $seed);
+        $exampleFailure = $this->runExamples($reflection, $info, $next, $property, $seed, $parameterNames);
         if ($exampleFailure instanceof TestResult) {
             return $exampleFailure;
         }
@@ -117,7 +119,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             $recalled = $storage->recall($propertyId);
 
             if ($recalled !== null) {
-                $replay = $this->runProperty(new Random($recalled), $recalled, $generators, $parameterNames, $runs, $maxDiscards, $verbose, $next, $info, $property->maxShrinks);
+                $replay = $this->runProperty(new Random($recalled), $recalled, $generators, $parameterNames, $runs, $maxDiscards, $verbose, $next, $info, $property->maxShrinks, $property->timeoutMs, $property->budgetMs);
 
                 if ($replay->failure instanceof PropertyViolationException) {
                     return $replay;
@@ -127,7 +129,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             }
         }
 
-        $result = $this->runProperty($random, $seed, $generators, $parameterNames, $runs, $maxDiscards, $verbose, $next, $info, $property->maxShrinks);
+        $result = $this->runProperty($random, $seed, $generators, $parameterNames, $runs, $maxDiscards, $verbose, $next, $info, $property->maxShrinks, $property->timeoutMs, $property->budgetMs);
 
         if ($storage instanceof SeedStorage && $result->failure instanceof PropertyViolationException) {
             $storage->remember($propertyId, $seed);
@@ -158,10 +160,13 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         callable $next,
         TestInfo $info,
         ?int $maxShrinks,
+        ?int $timeoutMs,
+        ?int $budgetMs,
     ): TestResult {
         $skips = 0;
         $checks = 0;
         $attempts = 0;
+        $phaseStart = hrtime(true);
         /** @var array<string, int> $classifications */
         $classifications = [];
         /**
@@ -177,6 +182,32 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         $runAttributes = [];
 
         while ($checks < $runs) {
+            // The budget is a wall-clock cap on the whole phase: once it runs
+            // out, completing the remaining checks would only overrun further,
+            // so the property fails instead of silently checking less.
+            if ($budgetMs !== null) {
+                $phaseElapsedNs = hrtime(true) - $phaseStart;
+
+                if ($phaseElapsedNs > $budgetMs * 1_000_000) {
+                    $this->warnOnExcessiveSkips($info->name, $skips, $attempts);
+                    $this->reportClassifications($info->name, $classifications, $checks);
+                    Classify::flushRequirements();
+
+                    return new TestResult(
+                        info: $info,
+                        status: Status::Failed,
+                        failure: new TimeBudgetExceededException(
+                            propertyName: $info->name,
+                            budgetMs: $budgetMs,
+                            elapsedMs: (float) $phaseElapsedNs / 1e6,
+                            successfulRuns: $checks,
+                            requiredRuns: $runs,
+                        ),
+                        attributes: $runAttributes,
+                    );
+                }
+            }
+
             ++$attempts;
             Classify::beginRun();
 
@@ -208,7 +239,9 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             }
 
             DrawContext::arm($random);
+            $runStart = hrtime(true);
             $result = $next($info->with(arguments: array_values($arguments)));
+            $runElapsedNs = hrtime(true) - $runStart;
             $draws = DrawContext::disarm();
             $runAttributes = array_merge($runAttributes, $result->attributes);
             $labels = Classify::flushRun();
@@ -268,6 +301,28 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                         skips: $skips,
                         shrinkTrials: $shrinkTrials,
                     )),
+                    attributes: $runAttributes,
+                );
+            }
+
+            // A passing but overlong run is a failure in its own right: the
+            // input is pathological for the code under test. Checked after the
+            // falsification branch so an assertion failure (more actionable)
+            // wins when both happen. Reported unshrunk — shrink acceptance
+            // would have to re-measure wall time, and timing noise makes that
+            // descent non-deterministic.
+            if ($timeoutMs !== null && $runElapsedNs > $timeoutMs * 1_000_000) {
+                Classify::flushRequirements();
+
+                return new TestResult(
+                    info: $info,
+                    status: Status::Failed,
+                    failure: new DeadlineExceededException(
+                        propertyName: $info->name,
+                        arguments: array_merge($arguments, $this->drawArguments($draws)),
+                        elapsedMs: (float) $runElapsedNs / 1e6,
+                        timeoutMs: $timeoutMs,
+                    ),
                     attributes: $runAttributes,
                 );
             }
@@ -530,8 +585,9 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
      * shrunk. Returns the failing {@see TestResult}, or null when all pass.
      *
      * @param callable(TestInfo): TestResult $next
+     * @param list<string> $parameterNames
      */
-    private function runExamples(\ReflectionMethod $testMethod, TestInfo $info, callable $next, Property $property, int $seed): ?TestResult
+    private function runExamples(\ReflectionMethod $testMethod, TestInfo $info, callable $next, Property $property, int $seed, array $parameterNames): ?TestResult
     {
         $index = 0;
         // Examples may call Gen::draw(); their draws come from a dedicated
@@ -541,7 +597,9 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         foreach ($this->resolveExamples($testMethod, $info, $property) as $arguments) {
             Classify::beginRun();
             DrawContext::arm($random);
+            $runStart = hrtime(true);
             $result = $next($info->with(arguments: $arguments));
+            $runElapsedNs = hrtime(true) - $runStart;
             DrawContext::disarm();
             Classify::flushRun();
 
@@ -552,6 +610,23 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                     failure: new ExampleViolationException($index, $arguments, $result->failure),
                     // Keep the failing run's attributes (e.g. codecov's
                     // CoverageResult) on the aggregate result — see runProperty().
+                    attributes: $result->attributes,
+                );
+            }
+
+            // The per-run deadline applies to examples too: a pinned input can
+            // be the pathological one. Example arity matches the parameter
+            // list, so positional arguments are reported under their names.
+            if ($property->timeoutMs !== null && $runElapsedNs > $property->timeoutMs * 1_000_000) {
+                return new TestResult(
+                    info: $info,
+                    status: Status::Failed,
+                    failure: new DeadlineExceededException(
+                        propertyName: $info->name,
+                        arguments: array_combine($parameterNames, $arguments),
+                        elapsedMs: (float) $runElapsedNs / 1e6,
+                        timeoutMs: $property->timeoutMs,
+                    ),
                     attributes: $result->attributes,
                 );
             }

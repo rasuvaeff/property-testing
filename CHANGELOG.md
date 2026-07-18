@@ -20,6 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   candidates tried (accepted and rejected); included in `toArray()`/`toJson()`.
 - `PROPERTY_VERBOSE` now also traces the shrink descent: one line per accepted
   candidate (`shrink step 3: x=63 -> 51`), including `draw#N` tape positions.
+- `#[Property(timeoutMs:)]` — opt-in wall-clock deadline for a single run
+  (random or example). A body that takes longer fails the property with a new
+  `DeadlineExceededException` naming the offending input — protection against
+  pathological inputs (catastrophic regex, deep recursion, unbounded backoff).
+  Measured post-run; the input is reported unshrunk.
+- `#[Property(budgetMs:)]` — opt-in wall-clock budget for the whole random
+  phase. Running out before the requested checks complete fails the property
+  with a new `TimeBudgetExceededException` exposing completed/required run
+  counts.
 
 ## 2.5.0 — 2026-07-18
 

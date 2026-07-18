@@ -8,11 +8,13 @@ use Psr\EventDispatcher\EventDispatcherInterface;
 use Rasuvaeff\PropertyTesting\AssumptionSkipped;
 use Rasuvaeff\PropertyTesting\Classify;
 use Rasuvaeff\PropertyTesting\CoverageViolationException;
+use Rasuvaeff\PropertyTesting\DeadlineExceededException;
 use Rasuvaeff\PropertyTesting\ExampleViolationException;
 use Rasuvaeff\PropertyTesting\GaveUpException;
 use Rasuvaeff\PropertyTesting\Gen;
 use Rasuvaeff\PropertyTesting\Internal\PropertyInterceptor;
 use Rasuvaeff\PropertyTesting\PropertyViolationException;
+use Rasuvaeff\PropertyTesting\TimeBudgetExceededException;
 use Testo\Application\Internal\MessengerHub;
 use Testo\Assert;
 use Testo\Assert\ExpectException;
@@ -856,6 +858,117 @@ final class PropertyInterceptorTest
         } finally {
             putenv('PROPERTY_VERBOSE');
         }
+    }
+
+    public function deadlineFailsAnOverlongRun(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        // The body passes but takes ~20 ms against a 5 ms deadline.
+        $next = static function (TestInfo $info): TestResult {
+            usleep(20_000);
+
+            return new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $interceptor->runTest($this->info(DeadlineStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Failed);
+        Assert::instanceOf($result->failure, DeadlineExceededException::class);
+        Assert::same($result->failure->timeoutMs, 5);
+        // usleep(20_000) guarantees at least ~20 ms; the upper bound kills
+        // unit-conversion mutants (ns-scale values would be astronomically big).
+        Assert::true($result->failure->elapsedMs >= 19.0);
+        Assert::true($result->failure->elapsedMs < 60_000.0);
+        Assert::true(array_key_exists('x', $result->failure->arguments));
+        Assert::string($result->failure->getMessage())->contains('deadline');
+    }
+
+    public function deadlineIgnoresRunsThatFinishInTime(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $calls = 0;
+        $next = static function (TestInfo $info) use (&$calls): TestResult {
+            ++$calls;
+
+            return new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $interceptor->runTest($this->info(GenerousDeadlineStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Passed);
+        Assert::same($calls, 3);
+    }
+
+    public function assertionFailureWinsOverAnOverlongRun(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        // A run that is BOTH slow and failing reports the falsification — the
+        // assertion failure is the actionable signal, the deadline is secondary.
+        $next = static function (TestInfo $info): TestResult {
+            usleep(20_000);
+
+            return new TestResult(info: $info, status: Status::Failed, failure: new \RuntimeException('boom'));
+        };
+
+        $result = $interceptor->runTest($this->info(DeadlineStub::class, 'check'), $next);
+
+        Assert::instanceOf($result->failure, PropertyViolationException::class);
+    }
+
+    public function budgetFailsThePhaseThatOvershoots(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        // Each run takes ~5 ms against a 20 ms whole-phase budget, so the 1000
+        // requested runs cannot complete.
+        $next = static function (TestInfo $info): TestResult {
+            usleep(5_000);
+
+            return new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $interceptor->runTest($this->info(TightBudgetStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Failed);
+        Assert::instanceOf($result->failure, TimeBudgetExceededException::class);
+        Assert::same($result->failure->budgetMs, 20);
+        Assert::same($result->failure->requiredRuns, 1000);
+        Assert::true($result->failure->successfulRuns >= 1);
+        Assert::true($result->failure->successfulRuns < 1000);
+        Assert::true($result->failure->elapsedMs > 20.0);
+        Assert::true($result->failure->elapsedMs < 60_000.0);
+    }
+
+    public function budgetLargeEnoughDoesNotInterfere(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $calls = 0;
+        $next = static function (TestInfo $info) use (&$calls): TestResult {
+            ++$calls;
+
+            return new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $interceptor->runTest($this->info(GenerousBudgetStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Passed);
+        Assert::same($calls, 3);
+    }
+
+    public function deadlineAppliesToExplicitExamples(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static function (TestInfo $info): TestResult {
+            usleep(20_000);
+
+            return new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $interceptor->runTest($this->info(DeadlineExampleStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Failed);
+        Assert::instanceOf($result->failure, DeadlineExceededException::class);
+        // The positional example is reported under the parameter's name.
+        Assert::same($result->failure->arguments, ['x' => 7]);
     }
 
     public function reportsNoDistributionWhenNoLabelsRecorded(): void

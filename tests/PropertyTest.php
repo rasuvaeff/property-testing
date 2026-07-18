@@ -23,17 +23,33 @@ final class PropertyTest
         Assert::null($property->generators);
         Assert::null($property->maxShrinks);
         Assert::null($property->maxDiscards);
+        Assert::null($property->timeoutMs);
+        Assert::null($property->budgetMs);
     }
 
     public function retainsConstructorArguments(): void
     {
-        $property = new Property(runs: 250, seed: 42, generators: 'provide', maxShrinks: 5, maxDiscards: 20);
+        $property = new Property(runs: 250, seed: 42, generators: 'provide', maxShrinks: 5, maxDiscards: 20, timeoutMs: 100, budgetMs: 5_000);
 
         Assert::same($property->runs, 250);
         Assert::same($property->seed, 42);
         Assert::same($property->generators, 'provide');
         Assert::same($property->maxShrinks, 5);
         Assert::same($property->maxDiscards, 20);
+        Assert::same($property->timeoutMs, 100);
+        Assert::same($property->budgetMs, 5_000);
+    }
+
+    #[ExpectException(\InvalidArgumentException::class)]
+    public function rejectsTimeoutBelowOneMillisecond(): void
+    {
+        new Property(timeoutMs: 0);
+    }
+
+    #[ExpectException(\InvalidArgumentException::class)]
+    public function rejectsBudgetBelowOneMillisecond(): void
+    {
+        new Property(budgetMs: 0);
     }
 
     public function acceptsZeroMaxShrinks(): void

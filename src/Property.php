@@ -38,6 +38,15 @@ final readonly class Property implements Interceptable
      *        Defaults to `<testMethod>Examples` when that method exists.
      * @param ?int $maxDiscards Maximum number of discarded inputs before the property gives up.
      *        Null (default) uses ten times the resolved run count.
+     * @param ?int $timeoutMs Wall-clock deadline for a single run (random or example) in
+     *        milliseconds. A body that takes longer fails the property with a
+     *        {@see DeadlineExceededException} naming the offending input — protection against
+     *        pathological inputs (catastrophic regex, deep recursion, unbounded backoff).
+     *        Measured after the run returns, so a body that never returns cannot be
+     *        interrupted; shrink trials are not measured. Null (default) disables the deadline.
+     * @param ?int $budgetMs Wall-clock budget for the whole random phase in milliseconds.
+     *        When it runs out before {@see $runs} successful checks complete, the property
+     *        fails with a {@see TimeBudgetExceededException}. Null (default) disables the budget.
      */
     public function __construct(
         public int $runs = 100,
@@ -46,6 +55,8 @@ final readonly class Property implements Interceptable
         public ?int $maxShrinks = null,
         public ?string $examples = null,
         public ?int $maxDiscards = null,
+        public ?int $timeoutMs = null,
+        public ?int $budgetMs = null,
     ) {
         if ($runs < 1) {
             throw new \InvalidArgumentException('Runs must be greater than or equal to 1');
@@ -55,6 +66,12 @@ final readonly class Property implements Interceptable
         }
         if ($maxDiscards !== null && $maxDiscards < 0) {
             throw new \InvalidArgumentException('Max discards must be greater than or equal to 0');
+        }
+        if ($timeoutMs !== null && $timeoutMs < 1) {
+            throw new \InvalidArgumentException('Timeout must be greater than or equal to 1 millisecond');
+        }
+        if ($budgetMs !== null && $budgetMs < 1) {
+            throw new \InvalidArgumentException('Budget must be greater than or equal to 1 millisecond');
         }
     }
 }
