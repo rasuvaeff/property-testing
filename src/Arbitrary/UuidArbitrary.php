@@ -17,6 +17,7 @@ use Rasuvaeff\PropertyTesting\Shrinkable;
  * shrink. Randomness comes from the seeded {@see Random}, so generated UUIDs are
  * reproducible but NOT suitable for security purposes.
  *
+ * @implements ArbitraryInterface<non-empty-string>
  * @api
  */
 final readonly class UuidArbitrary implements ArbitraryInterface

@@ -29,6 +29,7 @@ use Rasuvaeff\PropertyTesting\StateMachine\CommandSequence;
  * skips any command whose precondition a change invalidated, keeping every
  * candidate sound.
  *
+ * @implements ArbitraryInterface<CommandSequence>
  * @api
  */
 final readonly class CommandSequenceArbitrary implements ArbitraryInterface
@@ -40,12 +41,12 @@ final readonly class CommandSequenceArbitrary implements ArbitraryInterface
     private const int MAX_PICK_ATTEMPTS = 20;
 
     /**
-     * @var list<ArbitraryInterface>
+     * @var list<ArbitraryInterface<Command>>
      */
     private array $commandGenerators;
 
     /**
-     * @param array<array-key, mixed> $commandGenerators Each must be an {@see ArbitraryInterface} producing a {@see Command}.
+     * @param array<array-key, ArbitraryInterface> $commandGenerators Each must produce a {@see Command}.
      */
     public function __construct(
         private mixed $initialModel,
@@ -57,6 +58,7 @@ final readonly class CommandSequenceArbitrary implements ArbitraryInterface
             throw new \InvalidArgumentException('At least one command generator is required');
         }
         foreach ($commandGenerators as $generator) {
+            /** @var mixed $generator */
             if (!$generator instanceof ArbitraryInterface) {
                 throw new \InvalidArgumentException(sprintf(
                     'Command generators must be ArbitraryInterface, got %s',
@@ -74,17 +76,20 @@ final readonly class CommandSequenceArbitrary implements ArbitraryInterface
             throw new \InvalidArgumentException('Minimum length must be less than or equal to maximum length');
         }
 
-        /** @var list<ArbitraryInterface> $validated */
+        /** @var list<ArbitraryInterface<Command>> $validated */
         $validated = array_values($commandGenerators);
         $this->commandGenerators = $validated;
     }
 
+    /**
+     * @return Shrinkable<CommandSequence>
+     */
     #[\Override]
     public function generate(Random $random): Shrinkable
     {
         $length = $random->int($this->minLength, $this->maxLength);
 
-        /** @var list<Shrinkable> $commands */
+        /** @var list<Shrinkable<Command>> $commands */
         $commands = [];
         /** @var mixed $model */
         $model = $this->initialModel;
@@ -122,6 +127,8 @@ final readonly class CommandSequenceArbitrary implements ArbitraryInterface
     /**
      * Draw command generators until one yields a command applicable in the
      * current model, or the attempt budget runs out.
+     *
+     * @return ?Shrinkable<Command>
      */
     private function pickApplicableCommand(Random $random, mixed $model): ?Shrinkable
     {
@@ -148,7 +155,9 @@ final readonly class CommandSequenceArbitrary implements ArbitraryInterface
     }
 
     /**
-     * @param list<Shrinkable> $commands
+     * @param list<Shrinkable<Command>> $commands
+     *
+     * @return Shrinkable<CommandSequence>
      */
     private function tree(array $commands): Shrinkable
     {

@@ -16,11 +16,12 @@ use Rasuvaeff\PropertyTesting\Shrinkable;
  * Shrinking keeps the arity fixed and shrinks one position at a time through
  * that position's own shrink tree, so each component shrinks within its domain.
  *
+ * @implements ArbitraryInterface<list<mixed>>
  * @api
  */
 final readonly class TupleArbitrary implements ArbitraryInterface
 {
-    /** @var non-empty-list<ArbitraryInterface> */
+    /** @var non-empty-list<ArbitraryInterface<mixed>> */
     private array $elements;
 
     public function __construct(ArbitraryInterface ...$elements)
@@ -34,6 +35,9 @@ final readonly class TupleArbitrary implements ArbitraryInterface
         $this->elements = array_values($elements);
     }
 
+    /**
+     * @return Shrinkable<list<mixed>>
+     */
     #[\Override]
     public function generate(Random $random): Shrinkable
     {
@@ -44,7 +48,9 @@ final readonly class TupleArbitrary implements ArbitraryInterface
     }
 
     /**
-     * @param list<Shrinkable> $components
+     * @param list<Shrinkable<mixed>> $components
+     *
+     * @return Shrinkable<list<mixed>>
      */
     private function tree(array $components): Shrinkable
     {

@@ -13,6 +13,7 @@ use Rasuvaeff\PropertyTesting\Shrinkable;
  *
  * Shrinking prefers `null` over descending into the inner value's tree.
  *
+ * @implements ArbitraryInterface<mixed>
  * @api
  */
 final readonly class NullableArbitrary implements ArbitraryInterface
@@ -24,19 +25,33 @@ final readonly class NullableArbitrary implements ArbitraryInterface
     #[\Override]
     public function generate(Random $random): Shrinkable
     {
-        return $random->int(0, 1) === 1
+        /** @var Shrinkable<mixed> $result */
+        $result = $random->int(0, 1) === 1
             ? Shrinkable::leaf(null)
             : $this->wrap($this->inner->generate($random));
+
+        return $result;
     }
 
     private function wrap(Shrinkable $inner): Shrinkable
     {
-        return Shrinkable::of($inner->value, function () use ($inner): \Generator {
-            yield Shrinkable::leaf(null);
+        /** @var Shrinkable<mixed> $result */
+        $result = Shrinkable::of($inner->value, fn() => $this->shrinksFor($inner));
 
-            foreach ($inner->shrinks() as $smaller) {
-                yield $this->wrap($smaller);
-            }
-        });
+        return $result;
+    }
+
+    /**
+     * @return iterable<Shrinkable<mixed>>
+     */
+    private function shrinksFor(Shrinkable $inner): iterable
+    {
+        /** @var Shrinkable<mixed> $null */
+        $null = Shrinkable::leaf(null);
+        yield $null;
+
+        foreach ($inner->shrinks() as $smaller) {
+            yield $this->wrap($smaller);
+        }
     }
 }

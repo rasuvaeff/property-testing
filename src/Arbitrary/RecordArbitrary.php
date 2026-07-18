@@ -17,6 +17,7 @@ use Rasuvaeff\PropertyTesting\Shrinkable;
  * Shrinking keeps the key set fixed and shrinks one field at a time through
  * that field's own shrink tree, so each value shrinks within its domain.
  *
+ * @implements ArbitraryInterface<array<string, mixed>>
  * @api
  */
 final readonly class RecordArbitrary implements ArbitraryInterface
@@ -36,6 +37,9 @@ final readonly class RecordArbitrary implements ArbitraryInterface
         $this->shape = $shape;
     }
 
+    /**
+     * @return Shrinkable<array<string, mixed>>
+     */
     #[\Override]
     public function generate(Random $random): Shrinkable
     {
@@ -48,7 +52,9 @@ final readonly class RecordArbitrary implements ArbitraryInterface
     }
 
     /**
-     * @param array<string, Shrinkable> $fields
+     * @param array<string, Shrinkable<mixed>> $fields
+     *
+     * @return Shrinkable<array<string, mixed>>
      */
     private function tree(array $fields): Shrinkable
     {

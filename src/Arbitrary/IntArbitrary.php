@@ -23,6 +23,7 @@ use Rasuvaeff\PropertyTesting\Shrinkable;
  * subtree toward the same target — a binary search for the minimal failing
  * integer.
  *
+ * @implements ArbitraryInterface<int>
  * @api
  */
 final readonly class IntArbitrary implements ArbitraryInterface
@@ -51,6 +52,7 @@ final readonly class IntArbitrary implements ArbitraryInterface
         return $this->tree($random->int($this->min, $this->max));
     }
 
+    /** @return Shrinkable<int> */
     private function tree(int $value): Shrinkable
     {
         return Shrinkable::of($value, function () use ($value): \Generator {

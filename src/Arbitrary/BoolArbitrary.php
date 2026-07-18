@@ -12,6 +12,7 @@ use Rasuvaeff\PropertyTesting\Shrinkable;
  * Generates booleans. false is the "smaller" boolean: true shrinks to false,
  * false is terminal.
  *
+ * @implements ArbitraryInterface<bool>
  * @api
  */
 final readonly class BoolArbitrary implements ArbitraryInterface
@@ -19,10 +20,11 @@ final readonly class BoolArbitrary implements ArbitraryInterface
     #[\Override]
     public function generate(Random $random): Shrinkable
     {
-        if ($random->int(0, 1) === 1) {
-            return Shrinkable::of(true, static fn(): array => [Shrinkable::leaf(false)]);
-        }
+        $value = $random->int(0, 1) === 1;
 
-        return Shrinkable::leaf(false);
+        /** @var list<Shrinkable<bool>> $shrinks */
+        $shrinks = $value ? [Shrinkable::leaf(false)] : [];
+
+        return Shrinkable::of($value, static fn(): array => $shrinks);
     }
 }

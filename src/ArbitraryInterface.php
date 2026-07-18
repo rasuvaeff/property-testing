@@ -18,6 +18,7 @@ namespace Rasuvaeff\PropertyTesting;
  * and re-apply their transformation; implementations never need to invert a
  * transformed value.
  *
+ * @template TValue The type of the generated value
  * @api
  */
 interface ArbitraryInterface
@@ -27,6 +28,8 @@ interface ArbitraryInterface
      * shrink tree. Candidates must be ordered most aggressive first (typically
      * toward a zero/empty/identity element) and every branch of the tree must
      * be finite, so shrinking terminates.
+     *
+     * @return Shrinkable<TValue>
      */
     public function generate(Random $random): Shrinkable;
 }

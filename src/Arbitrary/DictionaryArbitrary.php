@@ -23,6 +23,9 @@ use Rasuvaeff\PropertyTesting\Shrinkable;
  * {@see $minSize}: an unreachable minimum throws {@see GenerationExhausted}
  * rather than hand the property a too-small map.
  *
+ * @template TKey of array-key
+ * @template TValue
+ * @implements ArbitraryInterface<array<TKey, TValue>>
  * @api
  */
 final readonly class DictionaryArbitrary implements ArbitraryInterface
@@ -33,6 +36,10 @@ final readonly class DictionaryArbitrary implements ArbitraryInterface
      */
     private const int MAX_ATTEMPTS_PER_KEY = 10;
 
+    /**
+     * @param ArbitraryInterface<TKey>   $key
+     * @param ArbitraryInterface<TValue> $value
+     */
     public function __construct(
         private ArbitraryInterface $key,
         private ArbitraryInterface $value,
@@ -50,6 +57,9 @@ final readonly class DictionaryArbitrary implements ArbitraryInterface
         }
     }
 
+    /**
+     * @return Shrinkable<array<TKey, TValue>>
+     */
     #[\Override]
     public function generate(Random $random): Shrinkable
     {
@@ -61,7 +71,7 @@ final readonly class DictionaryArbitrary implements ArbitraryInterface
 
         // Draw distinct keys (skipping collisions), each paired with a value, up
         // to a bounded budget so a too-small key space cannot loop forever.
-        /** @var array<array-key, Shrinkable> $entries */
+        /** @var array<TKey, Shrinkable<TValue>> $entries */
         $entries = [];
         $budget = $size * self::MAX_ATTEMPTS_PER_KEY;
 
@@ -101,7 +111,9 @@ final readonly class DictionaryArbitrary implements ArbitraryInterface
     }
 
     /**
-     * @param array<array-key, Shrinkable> $entries
+     * @param array<array-key, Shrinkable<TValue>> $entries
+     *
+     * @return Shrinkable<array<TKey, TValue>>
      */
     private function tree(array $entries): Shrinkable
     {

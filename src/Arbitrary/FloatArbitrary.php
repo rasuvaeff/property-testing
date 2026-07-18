@@ -22,6 +22,7 @@ use Rasuvaeff\PropertyTesting\Shrinkable;
  * {@see \Rasuvaeff\PropertyTesting\Gen::map()} it to a float — with integrated
  * shrinking the mapped value shrinks through the integer's tree.
  *
+ * @implements ArbitraryInterface<float>
  * @api
  */
 final readonly class FloatArbitrary implements ArbitraryInterface
@@ -49,6 +50,7 @@ final readonly class FloatArbitrary implements ArbitraryInterface
         return $this->tree($this->min + $random->float() * ($this->max - $this->min));
     }
 
+    /** @return Shrinkable<float> */
     private function tree(float $value): Shrinkable
     {
         return Shrinkable::of($value, function () use ($value): \Generator {

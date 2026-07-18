@@ -16,6 +16,7 @@ use Rasuvaeff\PropertyTesting\Shrinkable;
  * full Unicode space via {@see mb_chr()}. Length is chosen uniformly within an
  * inclusive range.
  *
+ * @implements ArbitraryInterface<string>
  * @api
  */
 final readonly class StringArbitrary implements ArbitraryInterface
@@ -57,6 +58,7 @@ final readonly class StringArbitrary implements ArbitraryInterface
         return $this->tree($string);
     }
 
+    /** @return Shrinkable<string> */
     private function tree(string $value): Shrinkable
     {
         return Shrinkable::of($value, function () use ($value): \Generator {

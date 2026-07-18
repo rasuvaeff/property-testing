@@ -13,6 +13,7 @@ use Rasuvaeff\PropertyTesting\Shrinkable;
  * shrinks them by length toward the empty string, then byte-by-byte toward
  * NUL ("\x00"). Useful for parsers, codecs and binary protocols.
  *
+ * @implements ArbitraryInterface<string>
  * @api
  */
 final readonly class BytesArbitrary implements ArbitraryInterface
@@ -38,6 +39,7 @@ final readonly class BytesArbitrary implements ArbitraryInterface
         return $this->tree($random->bytes($random->int($this->minLength, $this->maxLength)));
     }
 
+    /** @return Shrinkable<string> */
     private function tree(string $value): Shrinkable
     {
         return Shrinkable::of($value, function () use ($value): \Generator {

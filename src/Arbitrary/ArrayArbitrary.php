@@ -17,10 +17,15 @@ use Rasuvaeff\PropertyTesting\Shrinkable;
  * by transformed arbitraries ({@see \Rasuvaeff\PropertyTesting\Gen::map()},
  * {@see \Rasuvaeff\PropertyTesting\Gen::flatMap()}) shrink correctly.
  *
+ * @template TElement
+ * @implements ArbitraryInterface<list<TElement>>
  * @api
  */
 final readonly class ArrayArbitrary implements ArbitraryInterface
 {
+    /**
+     * @param ArbitraryInterface<TElement> $element
+     */
     public function __construct(
         private ArbitraryInterface $element,
         private int $minSize = 0,
@@ -37,6 +42,9 @@ final readonly class ArrayArbitrary implements ArbitraryInterface
         }
     }
 
+    /**
+     * @return Shrinkable<list<TElement>>
+     */
     #[\Override]
     public function generate(Random $random): Shrinkable
     {
@@ -51,7 +59,9 @@ final readonly class ArrayArbitrary implements ArbitraryInterface
     }
 
     /**
-     * @param list<Shrinkable> $elements
+     * @param list<Shrinkable<TElement>> $elements
+     *
+     * @return Shrinkable<list<TElement>>
      */
     private function tree(array $elements): Shrinkable
     {
