@@ -17,6 +17,7 @@ use Rasuvaeff\PropertyTesting\Shrinkable;
  * duplicate characters are collapsed. Length is chosen uniformly within an
  * inclusive range.
  *
+ * @implements ArbitraryInterface<string>
  * @api
  */
 final readonly class CharsetStringArbitrary implements ArbitraryInterface
@@ -63,6 +64,7 @@ final readonly class CharsetStringArbitrary implements ArbitraryInterface
         return $this->tree($string);
     }
 
+    /** @return Shrinkable<string> */
     private function tree(string $value): Shrinkable
     {
         return Shrinkable::of($value, function () use ($value): \Generator {

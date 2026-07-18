@@ -22,12 +22,17 @@ use Rasuvaeff\PropertyTesting\Shrinkable;
  * behaviour. An element space too small to reach the minimum size throws
  * {@see GenerationExhausted} rather than hand the property a too-small list.
  *
+ * @template TElement
+ * @implements ArbitraryInterface<list<TElement>>
  * @api
  */
 final readonly class UniqueArrayArbitrary implements ArbitraryInterface
 {
     private const int MAX_ATTEMPTS_PER_ELEMENT = 10;
 
+    /**
+     * @param ArbitraryInterface<TElement> $element
+     */
     public function __construct(
         private ArbitraryInterface $element,
         private int $minSize = 0,
@@ -44,12 +49,15 @@ final readonly class UniqueArrayArbitrary implements ArbitraryInterface
         }
     }
 
+    /**
+     * @return Shrinkable<list<TElement>>
+     */
     #[\Override]
     public function generate(Random $random): Shrinkable
     {
         $size = $random->int($this->minSize, $this->maxSize);
 
-        /** @var list<Shrinkable> $elements */
+        /** @var list<Shrinkable<TElement>> $elements */
         $elements = [];
         /** @var list<mixed> $values */
         $values = [];
@@ -85,7 +93,9 @@ final readonly class UniqueArrayArbitrary implements ArbitraryInterface
     }
 
     /**
-     * @param list<Shrinkable> $elements
+     * @param list<Shrinkable<TElement>> $elements
+     *
+     * @return Shrinkable<list<TElement>>
      */
     private function tree(array $elements): Shrinkable
     {

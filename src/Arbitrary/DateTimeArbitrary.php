@@ -14,6 +14,7 @@ use Rasuvaeff\PropertyTesting\Shrinkable;
  * uniformly from an inclusive range, and shrinks toward the Unix epoch
  * (1970-01-01T00:00:00Z), clamped to the configured range.
  *
+ * @implements ArbitraryInterface<DateTimeImmutable>
  * @api
  */
 final readonly class DateTimeArbitrary implements ArbitraryInterface

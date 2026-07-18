@@ -16,11 +16,13 @@ use Rasuvaeff\PropertyTesting\Shrinkable;
  * The chosen branch's shrink tree is returned as-is, so shrinking stays within
  * the branch that actually generated the value.
  *
+ * @template TValue
+ * @implements ArbitraryInterface<TValue>
  * @api
  */
 final readonly class FrequencyArbitrary implements ArbitraryInterface
 {
-    /** @var non-empty-list<array{0: int, 1: ArbitraryInterface}> */
+    /** @var non-empty-list<array{0: int, 1: ArbitraryInterface<TValue>}> */
     private array $pairs;
 
     private int $totalWeight;

@@ -15,14 +15,22 @@ use Rasuvaeff\PropertyTesting\Shrinkable;
  *
  * There is nothing smaller than a constant, so it does not shrink.
  *
+ * @template TValue
+ * @implements ArbitraryInterface<TValue>
  * @api
  */
 final readonly class ConstantArbitrary implements ArbitraryInterface
 {
+    /**
+     * @param TValue $value
+     */
     public function __construct(
         private mixed $value,
     ) {}
 
+    /**
+     * @return Shrinkable<TValue>
+     */
     #[\Override]
     public function generate(Random $random): Shrinkable
     {

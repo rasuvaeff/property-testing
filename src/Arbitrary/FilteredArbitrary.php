@@ -24,6 +24,8 @@ use Rasuvaeff\PropertyTesting\Shrinkable;
  * Shrinking walks the inner value's tree, keeping only branches whose value
  * satisfies the predicate (a rejected candidate's subtree is pruned with it).
  *
+ * @template TInner
+ * @implements ArbitraryInterface<TInner>
  * @api
  */
 final readonly class FilteredArbitrary implements ArbitraryInterface
@@ -31,13 +33,17 @@ final readonly class FilteredArbitrary implements ArbitraryInterface
     private const int MAX_ATTEMPTS = 100;
 
     /**
-     * @param Closure(mixed): bool $predicate
+     * @param ArbitraryInterface<TInner> $inner
+     * @param Closure(TInner): bool $predicate
      */
     public function __construct(
         private ArbitraryInterface $inner,
         private Closure $predicate,
     ) {}
 
+    /**
+     * @return Shrinkable<TInner>
+     */
     #[\Override]
     public function generate(Random $random): Shrinkable
     {
@@ -56,6 +62,11 @@ final readonly class FilteredArbitrary implements ArbitraryInterface
         );
     }
 
+    /**
+     * @param Shrinkable<TInner> $shrinkable
+     *
+     * @return Shrinkable<TInner>
+     */
     private function filtered(Shrinkable $shrinkable): Shrinkable
     {
         return Shrinkable::of($shrinkable->value, function () use ($shrinkable): \Generator {

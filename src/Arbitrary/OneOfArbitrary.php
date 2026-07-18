@@ -17,13 +17,18 @@ use Rasuvaeff\PropertyTesting\Shrinkable;
  * decreases on every step, shrinking terminates even when several values keep
  * failing. Use this for enumerations and small tagged unions.
  *
+ * @template TValue
+ * @implements ArbitraryInterface<TValue>
  * @api
  */
 final readonly class OneOfArbitrary implements ArbitraryInterface
 {
-    /** @var list<mixed> */
+    /** @var list<TValue> */
     private array $values;
 
+    /**
+     * @param TValue ...$values
+     */
     public function __construct(
         mixed ...$values,
     ) {
@@ -31,16 +36,20 @@ final readonly class OneOfArbitrary implements ArbitraryInterface
             throw new \InvalidArgumentException('OneOf requires at least one value');
         }
 
-        /** @var list<mixed> $values */
+        /** @var list<TValue> $values */
         $this->values = $values;
     }
 
+    /**
+     * @return Shrinkable<TValue>
+     */
     #[\Override]
     public function generate(Random $random): Shrinkable
     {
         return $this->tree($random->int(0, count($this->values) - 1));
     }
 
+    /** @return Shrinkable<TValue> */
     private function tree(int $index): Shrinkable
     {
         return Shrinkable::of($this->values[$index], function () use ($index): \Generator {

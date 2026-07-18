@@ -22,18 +22,25 @@ use Rasuvaeff\PropertyTesting\Shrinkable;
  * its own tree with the source value held fixed. The closure must be pure — it
  * runs once per generated value and once per visited source candidate.
  *
+ * @template TInner
+ * @template TOutput
+ * @implements ArbitraryInterface<TOutput>
  * @api
  */
 final readonly class FlatMappedArbitrary implements ArbitraryInterface
 {
     /**
-     * @param Closure(mixed): ArbitraryInterface $flatMap
+     * @param ArbitraryInterface<TInner> $inner
+     * @param Closure(TInner): ArbitraryInterface<TOutput> $flatMap
      */
     public function __construct(
         private ArbitraryInterface $inner,
         private Closure $flatMap,
     ) {}
 
+    /**
+     * @return Shrinkable<TOutput>
+     */
     #[\Override]
     public function generate(Random $random): Shrinkable
     {
@@ -46,6 +53,11 @@ final readonly class FlatMappedArbitrary implements ArbitraryInterface
         return $this->bind($outer, $seed);
     }
 
+    /**
+     * @param Shrinkable<TInner> $outer
+     *
+     * @return Shrinkable<TOutput>
+     */
     private function bind(Shrinkable $outer, int $seed): Shrinkable
     {
         /** @var mixed $arbitrary */
@@ -58,23 +70,44 @@ final readonly class FlatMappedArbitrary implements ArbitraryInterface
             ));
         }
 
-        return $this->node($outer, $arbitrary->generate(new Random($seed)), $seed);
+        /** @var Shrinkable<TOutput> $inner */
+        $inner = $arbitrary->generate(new Random($seed));
+
+        return $this->node($outer, $inner, $seed);
     }
 
+    /**
+     * @param Shrinkable<TInner>  $outer
+     * @param Shrinkable<TOutput> $inner
+     *
+     * @return Shrinkable<TOutput>
+     */
     private function node(Shrinkable $outer, Shrinkable $inner, int $seed): Shrinkable
     {
-        return Shrinkable::of($inner->value, function () use ($outer, $inner, $seed): \Generator {
-            // 1. Shrink the source value: rebuild the dependent arbitrary from the
-            //    smaller source value and regenerate with the captured seed.
-            foreach ($outer->shrinks() as $smallerOuter) {
-                yield $this->bind($smallerOuter, $seed);
-            }
+        /** @var Shrinkable<TOutput> $result */
+        $result = Shrinkable::of($inner->value, fn() => $this->shrinksFor($outer, $inner, $seed));
 
-            // 2. Shrink the dependent value through its own tree, keeping the
-            //    source value fixed.
-            foreach ($inner->shrinks() as $smallerInner) {
-                yield $this->node($outer, $smallerInner, $seed);
-            }
-        });
+        return $result;
+    }
+
+    /**
+     * @param Shrinkable<TInner>  $outer
+     * @param Shrinkable<TOutput> $inner
+     *
+     * @return iterable<Shrinkable<TOutput>>
+     */
+    private function shrinksFor(Shrinkable $outer, Shrinkable $inner, int $seed): iterable
+    {
+        // 1. Shrink the source value: rebuild the dependent arbitrary from the
+        //    smaller source value and regenerate with the captured seed.
+        foreach ($outer->shrinks() as $smallerOuter) {
+            yield $this->bind($smallerOuter, $seed);
+        }
+
+        // 2. Shrink the dependent value through its own tree, keeping the
+        //    source value fixed.
+        foreach ($inner->shrinks() as $smallerInner) {
+            yield $this->node($outer, $smallerInner, $seed);
+        }
     }
 }

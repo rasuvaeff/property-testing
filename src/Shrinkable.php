@@ -22,12 +22,14 @@ use Closure;
  * Children are produced lazily (the closure runs only when the runner asks),
  * so building a node costs nothing until shrinking actually happens.
  *
+ * @template TValue The type of the carried value
  * @api
  */
 final readonly class Shrinkable
 {
     /**
-     * @param Closure(): iterable<self> $shrinks
+     * @param TValue $value
+     * @param Closure(): iterable<self<TValue>> $shrinks
      */
     private function __construct(
         public mixed $value,
@@ -36,6 +38,12 @@ final readonly class Shrinkable
 
     /**
      * A value with no smaller variants (terminal node).
+     *
+     * @template T
+     *
+     * @param T $value
+     *
+     * @return self<T>
      */
     public static function leaf(mixed $value): self
     {
@@ -46,7 +54,12 @@ final readonly class Shrinkable
      * A value with lazily-computed smaller variants, ordered most aggressive
      * first (typically toward a zero/empty/identity element).
      *
-     * @param Closure(): iterable<self> $shrinks
+     * @template T
+     *
+     * @param T $value
+     * @param Closure(): iterable<self<T>> $shrinks
+     *
+     * @return self<T>
      */
     public static function of(mixed $value, Closure $shrinks): self
     {
@@ -56,7 +69,7 @@ final readonly class Shrinkable
     /**
      * The smaller variants of this value, each with its own subtree.
      *
-     * @return iterable<self>
+     * @return iterable<self<TValue>>
      */
     public function shrinks(): iterable
     {
@@ -67,7 +80,11 @@ final readonly class Shrinkable
      * Transform the whole tree through a pure function: the value and, lazily,
      * every shrink candidate. This is what makes {@see Gen::map()} shrink.
      *
-     * @param Closure(mixed): mixed $map
+     * @template TOutput
+     *
+     * @param Closure(TValue): TOutput $map
+     *
+     * @return self<TOutput>
      */
     public function map(Closure $map): self
     {

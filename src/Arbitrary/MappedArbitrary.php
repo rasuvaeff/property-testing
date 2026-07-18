@@ -17,18 +17,25 @@ use Rasuvaeff\PropertyTesting\Shrinkable;
  * counterexample is reported in the transformed domain. The function must be
  * pure — it runs once per generated value and once per visited candidate.
  *
+ * @template TInner
+ * @template TOutput
+ * @implements ArbitraryInterface<TOutput>
  * @api
  */
 final readonly class MappedArbitrary implements ArbitraryInterface
 {
     /**
-     * @param Closure(mixed): mixed $map
+     * @param ArbitraryInterface<TInner> $inner
+     * @param Closure(TInner): TOutput $map
      */
     public function __construct(
         private ArbitraryInterface $inner,
         private Closure $map,
     ) {}
 
+    /**
+     * @return Shrinkable<TOutput>
+     */
     #[\Override]
     public function generate(Random $random): Shrinkable
     {

@@ -29,6 +29,7 @@ use Rasuvaeff\PropertyTesting\Arbitrary\UniqueArrayArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\UuidArbitrary;
 use Rasuvaeff\PropertyTesting\Internal\DrawContext;
 use Rasuvaeff\PropertyTesting\Internal\RegexCompiler;
+use Rasuvaeff\PropertyTesting\StateMachine\Command;
 
 /**
  * Facade with static factories for the built-in {@see ArbitraryInterface}s.
@@ -179,6 +180,14 @@ final class Gen
      * Keys must be int or string; only distinct keys are kept, so the result
      * may be smaller than the drawn size when the key space runs out, but never
      * below $minSize — an unreachable minimum throws {@see GenerationExhausted}.
+     *
+     * @template TKey of array-key
+     * @template TValue
+     *
+     * @param ArbitraryInterface<TKey>   $key
+     * @param ArbitraryInterface<TValue> $value
+     *
+     * @return DictionaryArbitrary<TKey, TValue>
      */
     public static function dictOf(ArbitraryInterface $key, ArbitraryInterface $value, int $minSize = 0, int $maxSize = 100): DictionaryArbitrary
     {
@@ -505,20 +514,27 @@ final class Gen
      */
     public static function json(int $maxDepth = 3): ArbitraryInterface
     {
-        $leaf = new FrequencyArbitrary([
+        /** @var list<array{int, ArbitraryInterface<mixed>}> $leafPairs */
+        $leafPairs = [
             [1, new ConstantArbitrary(null)],
             [1, new BoolArbitrary()],
             [1, new IntArbitrary(-1000, 1000)],
             [1, new FloatArbitrary(-1000.0, 1000.0)],
             [1, new CharsetStringArbitrary(self::ALNUM . ' ', 0, 12)],
-        ]);
+        ];
+        $leaf = new FrequencyArbitrary($leafPairs);
 
         return self::recursive(
             $leaf,
-            static fn(ArbitraryInterface $inner): ArbitraryInterface => new FrequencyArbitrary([
-                [1, new ArrayArbitrary($inner, 0, 4)],
-                [1, new DictionaryArbitrary(new CharsetStringArbitrary(self::ALPHA, 1, 8), $inner, 0, 4)],
-            ]),
+            static function (ArbitraryInterface $inner): ArbitraryInterface {
+                /** @var list<array{int, ArbitraryInterface<mixed>}> $branchPairs */
+                $branchPairs = [
+                    [1, new ArrayArbitrary($inner, 0, 4)],
+                    [1, new DictionaryArbitrary(new CharsetStringArbitrary(self::ALPHA, 1, 8), $inner, 0, 4)],
+                ];
+
+                return new FrequencyArbitrary($branchPairs);
+            },
             $maxDepth,
         );
     }
@@ -575,7 +591,7 @@ final class Gen
      * to {@see \Rasuvaeff\PropertyTesting\StateMachine\StateMachine::check()} in the
      * property body, passing a factory that builds a fresh system under test.
      *
-     * @param list<ArbitraryInterface> $commandGenerators Each must produce a Command.
+     * @param list<ArbitraryInterface<Command>> $commandGenerators Each must produce a Command.
      */
     public static function commands(
         mixed $initialModel,
