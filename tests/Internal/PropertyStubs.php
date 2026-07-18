@@ -360,3 +360,69 @@ final class NonArrayExampleStub
         return [1, 2];
     }
 }
+
+final class DeadlineStub
+{
+    #[Property(runs: 3, seed: 1, generators: 'provide', timeoutMs: 5)]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
+    }
+}
+
+final class GenerousDeadlineStub
+{
+    #[Property(runs: 3, seed: 1, generators: 'provide', timeoutMs: 60_000)]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
+    }
+}
+
+final class TightBudgetStub
+{
+    #[Property(runs: 1000, seed: 1, generators: 'provide', budgetMs: 20)]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
+    }
+}
+
+final class GenerousBudgetStub
+{
+    #[Property(runs: 3, seed: 1, generators: 'provide', budgetMs: 600_000)]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
+    }
+}
+
+final class DeadlineExampleStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'provide', timeoutMs: 5)]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
+    }
+
+    /** @return list<list<int>> */
+    public static function checkExamples(): array
+    {
+        return [[7]];
+    }
+}
