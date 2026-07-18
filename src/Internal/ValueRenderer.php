@@ -25,6 +25,28 @@ final class ValueRenderer
         return self::format($value, self::MAX_DEPTH, []);
     }
 
+    public static function normalize(mixed $value): mixed
+    {
+        return self::normalizeValue($value, 32, []);
+    }
+
+    public static function exportPhp(mixed $value): string
+    {
+        return match (true) {
+            $value === null => 'null',
+            is_bool($value) => $value ? 'true' : 'false',
+            is_int($value) => (string) $value,
+            is_float($value) => self::exportFloat($value),
+            is_string($value) => var_export($value, true),
+            is_array($value) => self::exportArray($value),
+            $value instanceof \UnitEnum => '\\' . $value::class . '::' . $value->name,
+            default => throw new \LogicException(sprintf(
+                'Cannot export %s as runnable PHP example code',
+                get_debug_type($value),
+            )),
+        };
+    }
+
     /**
      * @param list<int> $seen spl_object_id trail guarding against object cycles.
      */
@@ -120,7 +142,7 @@ final class ValueRenderer
 
     private static function keyLabel(int|string $key): string
     {
-        return is_int($key) ? (string) $key : '"' . $key . '"';
+        return is_int($key) ? (string) $key : self::string($key);
     }
 
     /**
@@ -137,10 +159,10 @@ final class ValueRenderer
         }
 
         // Stringable includes the package's own CommandSequence/Command traces —
-        // render their string form verbatim (unquoted, in full) so the trace
-        // reads naturally.
+        // keep their string form unquoted so the trace reads naturally, but apply
+        // the same escaping and length bound as ordinary strings.
         if ($value instanceof \Stringable) {
-            return (string) $value;
+            return self::stringable((string) $value);
         }
 
         $id = spl_object_id($value);
@@ -189,16 +211,34 @@ final class ValueRenderer
      */
     private static function objectProperties(object $value): array
     {
-        $instanceProperties = array_filter(
-            (new \ReflectionObject($value))->getProperties(),
-            static fn(\ReflectionProperty $property): bool => !$property->isStatic(),
+        /** @var list<\ReflectionProperty> $instanceProperties */
+        $instanceProperties = [];
+        $class = new \ReflectionObject($value);
+
+        do {
+            foreach ($class->getProperties() as $property) {
+                if (!$property->isStatic() && $property->getDeclaringClass()->getName() === $class->getName()) {
+                    $instanceProperties[] = $property;
+                }
+            }
+
+            $parent = $class->getParentClass();
+            $class = $parent === false ? null : $parent;
+        } while ($class instanceof \ReflectionClass);
+
+        $plainNames = array_map(
+            static fn(\ReflectionProperty $property): string => $property->getName(),
+            $instanceProperties,
         );
+        $nameCounts = array_count_values($plainNames);
 
         // Built via array_combine (not per-key assignment) so the mixed property
         // values do not trip Psalm's MixedAssignment at errorLevel 1.
         return array_combine(
             array_map(
-                static fn(\ReflectionProperty $property): string => $property->getName(),
+                static fn(\ReflectionProperty $property): string => $nameCounts[$property->getName()] > 1
+                    ? $property->getDeclaringClass()->getShortName() . '::$' . $property->getName()
+                    : $property->getName(),
                 $instanceProperties,
             ),
             array_map(
@@ -208,5 +248,117 @@ final class ValueRenderer
                 $instanceProperties,
             ),
         );
+    }
+
+    private static function stringable(string $value): string
+    {
+        if (!mb_check_encoding($value, 'UTF-8')) {
+            return self::string($value);
+        }
+
+        $length = mb_strlen($value, 'UTF-8');
+        if ($length > self::MAX_STRING) {
+            return self::escape(mb_substr($value, 0, self::MAX_STRING, 'UTF-8')) . sprintf('… (%d chars)', $length);
+        }
+
+        return self::escape($value);
+    }
+
+    /**
+     * @param list<int> $seen
+     */
+    private static function normalizeValue(mixed $value, int $depth, array $seen): mixed
+    {
+        if ($depth <= 0) {
+            return ['__truncated' => true];
+        }
+
+        if (is_float($value) && !is_finite($value)) {
+            return (string) $value;
+        }
+
+        if (!is_array($value) && !is_object($value)) {
+            return is_resource($value) ? get_debug_type($value) : $value;
+        }
+
+        if (is_array($value)) {
+            return array_map(
+                static fn(mixed $item): mixed => self::normalizeValue($item, $depth - 1, $seen),
+                $value,
+            );
+        }
+
+        if ($value instanceof \BackedEnum) {
+            return ['__type' => $value::class, 'case' => $value->name, 'value' => $value->value];
+        }
+
+        if ($value instanceof \UnitEnum) {
+            return ['__type' => $value::class, 'case' => $value->name];
+        }
+
+        if ($value instanceof \DateTimeInterface) {
+            return ['__type' => $value::class, 'value' => $value->format('Y-m-d H:i:s.uP')];
+        }
+
+        $id = spl_object_id($value);
+        if (in_array($id, $seen, true)) {
+            return ['__type' => $value::class, '__recursion' => true];
+        }
+
+        $seen[] = $id;
+        $properties = array_map(
+            static fn(mixed $item): mixed => self::normalizeValue($item, $depth - 1, $seen),
+            self::objectProperties($value),
+        );
+
+        if ($value instanceof \Stringable) {
+            $properties['__string'] = (string) $value;
+        }
+
+        return [
+            '__type' => $value::class,
+            'properties' => $properties,
+        ];
+    }
+
+    private static function exportFloat(float $value): string
+    {
+        if (is_nan($value)) {
+            return 'NAN';
+        }
+
+        if ($value === INF) {
+            return 'INF';
+        }
+
+        if ($value === -INF) {
+            return '-INF';
+        }
+
+        if ($value === 0.0 && fdiv(1.0, $value) === -INF) {
+            return '-0.0';
+        }
+
+        $exported = var_export($value, true);
+
+        return str_contains($exported, '.') ? $exported : $exported . '.0';
+    }
+
+    /**
+     * @param array<array-key, mixed> $value
+     */
+    private static function exportArray(array $value): string
+    {
+        $isList = array_is_list($value);
+        $items = [];
+
+        /** @var mixed $item */
+        foreach ($value as $key => $item) {
+            $items[] = $isList
+                ? self::exportPhp($item)
+                : self::exportPhp($key) . ' => ' . self::exportPhp($item);
+        }
+
+        return '[' . implode(', ', $items) . ']';
     }
 }

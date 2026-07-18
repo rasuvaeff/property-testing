@@ -126,9 +126,9 @@ make release-check
 - Sized collections guarantee their minimum: `dictOf`/`uniqueArrayOf` (distinct
   keys/elements) and `commands` (applicable steps) throw `GenerationExhausted`
   when the drawn minimum is unreachable, never returning a too-small value.
-- A property with zero successful checks (every run discarded) FAILS with
-  `GaveUpException` — a vacuous green is not allowed. `runs` still means
-  iterations, not required successful checks (that model is a future change).
+- `Property::$runs` means successful checks. Discarded attempts do not consume
+  it; they are retried until `maxDiscards` (default `runs * 10`) is exceeded,
+  then the property fails with a structured `GaveUpException`.
 - `yield from` inside a generator that already `yield`ed causes integer-key
   collisions (later values overwrite earlier ones). Spread inner shrink
   candidates with an explicit `foreach` + `yield`, not `yield from`.

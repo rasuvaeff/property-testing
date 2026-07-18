@@ -225,19 +225,27 @@ keeps the whole domain visible in the generators method.
 
 ### `Assume::that()`
 
-Discards the current run when a precondition does not hold. Discarded runs are
-neither failures nor successful checks. Prefer it over `Gen::filter()` when the
-rejection rate is low; when more than 90% of runs are discarded the runner warns
-that the generators are likely misconfigured.
+Discards the current attempt when a precondition does not hold. `runs` is the
+number of successful checks, so discarded attempts are replaced. Prefer
+`Assume::that()` over `Gen::filter()` when the rejection rate is low; when more
+than 90% of attempts are discarded the runner warns that the generators are
+likely misconfigured.
 
 ```php
 Assume::that($cap >= $baseSeconds);
 ```
 
-A property that discards **every** run made no successful check, so a pass would
-be vacuous — the runner fails it with a `GaveUpException` instead of reporting a
-silent green. Construct valid inputs (`Gen::flatMap()` / `Gen::draw()`) rather
-than discarding broadly.
+Retries are bounded by `maxDiscards` (default: `runs * 10`). Exceeding the budget
+fails with `GaveUpException`, whose public fields report required and successful
+runs, discarded attempts, total attempts and the budget. Override it when a
+legitimate domain is sparse:
+
+```php
+#[Property(runs: 200, maxDiscards: 5_000)]
+```
+
+Construct valid inputs (`Gen::flatMap()` / `Gen::draw()`) instead of raising the
+budget when the relationship can be encoded directly.
 
 ### Bounding shrink work
 
@@ -386,9 +394,9 @@ public function holds(int $n): void
 }
 ```
 
-Discarded runs (`Assume::that()`) are excluded from the denominator. A property
-whose runs are all discarded made no successful check and fails outright (see
-`GaveUpException` under `Assume::that()`).
+Discarded attempts (`Assume::that()`) are excluded from the denominator and
+replaced until all requested successful runs complete. Exceeding `maxDiscards`
+fails with `GaveUpException` (see `Assume::that()`).
 
 ### Sampling a generator
 
@@ -408,6 +416,19 @@ that a custom arbitrary shrinks the way you intended.
 Gen::sampleShrinks(Gen::intBetween(0, 100), seed: 1);
 // ['value' => 87, 'shrinks' => [0, 44, 66, 77, 82, 85, 86]]
 ```
+
+### Exporting a counterexample
+
+`CounterExample::toArray()` and `toJson()` expose a normalized representation
+for reporters and CI artifacts, including nested DTO state and recursion
+markers. To pin a shrunk scalar/array/enum case as a regression example:
+
+```php
+$code = $violation->getCounterExample()->toExamplesCode('holdsExamples');
+```
+
+The generated method yields arguments in parameter order. Unsupported runtime
+objects throw `LogicException` instead of producing code that cannot run.
 
 ### Recipes
 

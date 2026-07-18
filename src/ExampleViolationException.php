@@ -27,7 +27,7 @@ final class ExampleViolationException extends RuntimeException
         private readonly array $arguments,
         ?\Throwable $failure = null,
     ) {
-        $message = sprintf('Explicit example #%d failed: [%s]', $index, self::format($arguments));
+        $message = sprintf('Explicit example #%d failed: [%s]', $index, $this->format($arguments));
 
         if ($failure instanceof \Throwable) {
             $message .= sprintf("\n  Failure:  %s", $failure->getMessage());
@@ -52,10 +52,10 @@ final class ExampleViolationException extends RuntimeException
     /**
      * @param list<mixed> $arguments
      */
-    private static function format(array $arguments): string
+    private function format(array $arguments): string
     {
         return implode(', ', array_map(
-            static fn(mixed $value): string => ValueRenderer::render($value),
+            ValueRenderer::render(...),
             $arguments,
         ));
     }

@@ -132,6 +132,15 @@ final class ValueRendererTest
         Assert::same(ValueRenderer::render([5 => 'x']), '[5 => "x"]');
     }
 
+    public function escapesAndBoundsStringMapKeys(): void
+    {
+        Assert::same(ValueRenderer::render(["a\n\"b" => 1]), '["a\n\"b" => 1]');
+        Assert::same(
+            ValueRenderer::render([str_repeat('x', 70) => 1]),
+            '["' . str_repeat('x', 64) . '…" (70 chars) => 1]',
+        );
+    }
+
     public function keepsExactlyMaxElementsWithoutSummary(): void
     {
         Assert::same(ValueRenderer::render(range(1, 8)), '[1, 2, 3, 4, 5, 6, 7, 8]');
@@ -187,6 +196,22 @@ final class ValueRendererTest
         };
 
         Assert::same(ValueRenderer::render($stringable), 'TRACE');
+    }
+
+    public function escapesAndBoundsStringableValues(): void
+    {
+        $stringable = new class implements \Stringable {
+            #[\Override]
+            public function __toString(): string
+            {
+                return "trace\n" . str_repeat('x', 70);
+            }
+        };
+
+        Assert::same(
+            ValueRenderer::render($stringable),
+            'trace\n' . str_repeat('x', 58) . '… (76 chars)',
+        );
     }
 
     public function rendersSimpleObjectProperties(): void
@@ -274,6 +299,22 @@ final class ValueRendererTest
         );
     }
 
+    public function rendersPrivatePropertiesFromTheWholeInheritanceChain(): void
+    {
+        Assert::same(
+            ValueRenderer::render(new ChildRenderDto(2)),
+            ChildRenderDto::class . ' {child: 2, base: 1}',
+        );
+    }
+
+    public function disambiguatesShadowedPrivateProperties(): void
+    {
+        Assert::same(
+            ValueRenderer::render(new ShadowingChildRenderDto()),
+            ShadowingChildRenderDto::class . ' {ShadowingChildRenderDto::$id: 2, ShadowingBaseRenderDto::$id: 1}',
+        );
+    }
+
     public function escapesQuotesNewlinesAndControlCharacters(): void
     {
         // "a", newline, quote, "b", tab — must stay on one unambiguous line.
@@ -291,6 +332,80 @@ final class ValueRendererTest
     {
         Assert::same(ValueRenderer::render([[[[new \stdClass()]]]]), '[[[[stdClass {}]]]]');
     }
+
+    public function normalizesDomainObjectsForMachineReadableOutput(): void
+    {
+        $cycle = new \stdClass();
+        $cycle->self = $cycle;
+        $stringable = new class implements \Stringable {
+            public int $id = 7;
+
+            #[\Override]
+            public function __toString(): string
+            {
+                return 'trace';
+            }
+        };
+
+        Assert::same(ValueRenderer::normalize(RenderColor::Red), [
+            '__type' => RenderColor::class,
+            'case' => 'Red',
+        ]);
+        Assert::same(ValueRenderer::normalize(RenderStatus::Ready), [
+            '__type' => RenderStatus::class,
+            'case' => 'Ready',
+            'value' => 'ready',
+        ]);
+        Assert::same(ValueRenderer::normalize(new \DateTimeImmutable('@0')), [
+            '__type' => \DateTimeImmutable::class,
+            'value' => '1970-01-01 00:00:00.000000+00:00',
+        ]);
+        Assert::same(ValueRenderer::normalize($cycle), [
+            '__type' => \stdClass::class,
+            'properties' => [
+                'self' => ['__type' => \stdClass::class, '__recursion' => true],
+            ],
+        ]);
+        Assert::same(ValueRenderer::normalize($stringable), [
+            '__type' => $stringable::class,
+            'properties' => ['id' => 7, '__string' => 'trace'],
+        ]);
+    }
+
+    public function normalizesSpecialValuesAndBoundsMachineDepth(): void
+    {
+        $resource = fopen('php://memory', 'r');
+        \assert($resource !== false);
+        $deep = 1;
+        $expected = ['__truncated' => true];
+        for ($i = 0; $i < 32; ++$i) {
+            $deep = [$deep];
+            $expected = [$expected];
+        }
+
+        try {
+            Assert::same(ValueRenderer::normalize(INF), 'INF');
+            Assert::same(ValueRenderer::normalize($resource), 'resource (stream)');
+            Assert::same(ValueRenderer::normalize($deep), $expected);
+        } finally {
+            fclose($resource);
+        }
+    }
+
+    public function exportsRunnablePhpValues(): void
+    {
+        Assert::same(ValueRenderer::exportPhp(null), 'null');
+        Assert::same(ValueRenderer::exportPhp(false), 'false');
+        Assert::same(ValueRenderer::exportPhp(7), '7');
+        Assert::same(ValueRenderer::exportPhp(NAN), 'NAN');
+        Assert::same(ValueRenderer::exportPhp(INF), 'INF');
+        Assert::same(ValueRenderer::exportPhp(-INF), '-INF');
+        Assert::same(ValueRenderer::exportPhp(-0.0), '-0.0');
+        Assert::same(ValueRenderer::exportPhp(2.0), '2.0');
+        Assert::same(ValueRenderer::exportPhp(2.5), '2.5');
+        Assert::same(ValueRenderer::exportPhp(['x' => 1]), "['x' => 1]");
+        Assert::same(ValueRenderer::exportPhp(RenderColor::Blue), '\\' . RenderColor::class . '::Blue');
+    }
 }
 
 enum RenderColor
@@ -299,15 +414,76 @@ enum RenderColor
     case Blue;
 }
 
+enum RenderStatus: string
+{
+    case Ready = 'ready';
+}
+
 final class RenderDto
 {
     // A static property must be excluded from the rendered instance state.
     private static int $rendered = 0;
 
     public function __construct(
-        private int $id,
-        private string $name,
+        private readonly int $id,
+        private readonly string $name,
     ) {
         ++self::$rendered;
+    }
+
+    public function getId(): int
+    {
+        return $this->id;
+    }
+
+    public function getName(): string
+    {
+        return $this->name;
+    }
+}
+
+class BaseRenderDto
+{
+    public function __construct(
+        private readonly int $base = 1,
+    ) {}
+
+    public function getBase(): int
+    {
+        return $this->base;
+    }
+}
+
+final class ChildRenderDto extends BaseRenderDto
+{
+    public function __construct(
+        private readonly int $child,
+    ) {
+        parent::__construct();
+    }
+
+    public function getChild(): int
+    {
+        return $this->child;
+    }
+}
+
+class ShadowingBaseRenderDto
+{
+    private int $id = 1;
+
+    public function getBaseId(): int
+    {
+        return $this->id;
+    }
+}
+
+final class ShadowingChildRenderDto extends ShadowingBaseRenderDto
+{
+    private int $id = 2;
+
+    public function getChildId(): int
+    {
+        return $this->id;
     }
 }

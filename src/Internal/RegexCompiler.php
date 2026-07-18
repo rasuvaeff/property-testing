@@ -106,7 +106,7 @@ final class RegexCompiler
             return $parts[0];
         }
 
-        return new MappedArbitrary(new TupleArbitrary(...$parts), self::joiner());
+        return new MappedArbitrary(new TupleArbitrary(...$parts), $this->joiner());
     }
 
     private function quantified(): ArbitraryInterface
@@ -126,7 +126,7 @@ final class RegexCompiler
             return new ConstantArbitrary('');
         }
 
-        return new MappedArbitrary(new ArrayArbitrary($atom, $min, $max), self::joiner());
+        return new MappedArbitrary(new ArrayArbitrary($atom, $min, $max), $this->joiner());
     }
 
     /**
@@ -206,7 +206,7 @@ final class RegexCompiler
             $char === '(' => $this->group(),
             $char === '[' => $this->characterClass(),
             $char === '\\' => $this->escape(),
-            $char === '.' => $this->consumeAndReturn(self::oneOf(self::printable())),
+            $char === '.' => $this->consumeAndReturn($this->oneOf($this->printable())),
             $char === '^', $char === '$' => throw new \InvalidArgumentException(
                 'Regex anchors are only supported as a single leading "^" or trailing "$"',
             ),
@@ -267,7 +267,7 @@ final class RegexCompiler
             // A range a-z: '-' not first/last in the class.
             if (!$this->atEnd() && $this->peek() === '-' && $this->pos + 1 < count($this->chars) && $this->chars[$this->pos + 1] !== ']') {
                 ++$this->pos; // consume '-'
-                $members = [...$members, ...self::range($char, $this->consume())];
+                $members = [...$members, ...$this->range($char, $this->consume())];
 
                 continue;
             }
@@ -280,13 +280,13 @@ final class RegexCompiler
         }
         ++$this->pos; // consume ']'
 
-        $set = $negated ? self::complement($members) : self::unique($members);
+        $set = $negated ? $this->complement($members) : $this->unique($members);
 
         if ($set === []) {
             throw new \InvalidArgumentException('Regex character class matches no characters');
         }
 
-        return self::oneOf($set);
+        return $this->oneOf($set);
     }
 
     private function escape(): ArbitraryInterface
@@ -300,7 +300,7 @@ final class RegexCompiler
         $char = $this->consume();
 
         return match ($char) {
-            'd', 'w', 's', 'D', 'W', 'S' => self::oneOf($this->classEscape($char)),
+            'd', 'w', 's', 'D', 'W', 'S' => $this->oneOf($this->classEscape($char)),
             't' => new ConstantArbitrary("\t"),
             'n' => new ConstantArbitrary("\n"),
             'r' => new ConstantArbitrary("\r"),
@@ -322,12 +322,12 @@ final class RegexCompiler
     private function classEscape(string $char): array
     {
         return match ($char) {
-            'd' => self::digits(),
-            'w' => self::word(),
-            's' => self::whitespace(),
-            'D' => self::without(self::printable(), self::digits()),
-            'W' => self::without(self::printable(), self::word()),
-            'S' => self::without(self::printable(), self::whitespace()),
+            'd' => $this->digits(),
+            'w' => $this->word(),
+            's' => $this->whitespace(),
+            'D' => $this->without($this->printable(), $this->digits()),
+            'W' => $this->without($this->printable(), $this->word()),
+            'S' => $this->without($this->printable(), $this->whitespace()),
             't' => ["\t"],
             'n' => ["\n"],
             'r' => ["\r"],
@@ -382,11 +382,11 @@ final class RegexCompiler
     /**
      * @param list<string> $set
      */
-    private static function oneOf(array $set): OneOfArbitrary
+    private function oneOf(array $set): OneOfArbitrary
     {
         // Simplest-first (ascending codepoint) so shrinking heads toward the
         // lowest character (e.g. '0' or 'a' rather than a random one).
-        $sorted = self::unique($set);
+        $sorted = $this->unique($set);
         usort($sorted, static fn(string $a, string $b): int => self::ord($a) <=> self::ord($b));
 
         return new OneOfArbitrary(...$sorted);
@@ -395,7 +395,7 @@ final class RegexCompiler
     /**
      * @return \Closure(mixed): string
      */
-    private static function joiner(): \Closure
+    private function joiner(): \Closure
     {
         return static function (mixed $parts): string {
             \assert(is_array($parts));
@@ -407,7 +407,7 @@ final class RegexCompiler
     /**
      * @return list<string>
      */
-    private static function range(string $from, string $to): array
+    private function range(string $from, string $to): array
     {
         $lo = self::ord($from);
         $hi = self::ord($to);
@@ -418,7 +418,7 @@ final class RegexCompiler
 
         $chars = [];
         for ($code = $lo; $code <= $hi; ++$code) {
-            $chars[] = self::chr($code);
+            $chars[] = $this->chr($code);
         }
 
         return $chars;
@@ -428,9 +428,9 @@ final class RegexCompiler
      * @param list<string> $members
      * @return list<string>
      */
-    private static function complement(array $members): array
+    private function complement(array $members): array
     {
-        return self::without(self::printable(), $members);
+        return $this->without($this->printable(), $members);
     }
 
     /**
@@ -438,7 +438,7 @@ final class RegexCompiler
      * @param list<string> $remove
      * @return list<string>
      */
-    private static function without(array $base, array $remove): array
+    private function without(array $base, array $remove): array
     {
         $drop = array_fill_keys($remove, true);
 
@@ -449,7 +449,7 @@ final class RegexCompiler
      * @param list<string> $members
      * @return list<string>
      */
-    private static function unique(array $members): array
+    private function unique(array $members): array
     {
         return array_values(array_unique($members));
     }
@@ -457,23 +457,23 @@ final class RegexCompiler
     /**
      * @return list<string>
      */
-    private static function digits(): array
+    private function digits(): array
     {
-        return self::range('0', '9');
+        return $this->range('0', '9');
     }
 
     /**
      * @return list<string>
      */
-    private static function word(): array
+    private function word(): array
     {
-        return [...self::range('a', 'z'), ...self::range('A', 'Z'), ...self::digits(), '_'];
+        return [...$this->range('a', 'z'), ...$this->range('A', 'Z'), ...$this->digits(), '_'];
     }
 
     /**
      * @return list<string>
      */
-    private static function whitespace(): array
+    private function whitespace(): array
     {
         return [' ', "\t", "\n", "\r"];
     }
@@ -483,9 +483,9 @@ final class RegexCompiler
      *
      * @return list<string>
      */
-    private static function printable(): array
+    private function printable(): array
     {
-        return self::range(' ', '~');
+        return $this->range(' ', '~');
     }
 
     private static function ord(string $char): int
@@ -495,7 +495,7 @@ final class RegexCompiler
         return $code === false ? 0 : $code;
     }
 
-    private static function chr(int $code): string
+    private function chr(int $code): string
     {
         $char = mb_chr($code, 'UTF-8');
 

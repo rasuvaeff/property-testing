@@ -16,10 +16,10 @@ below are bug fixes, but observable — review if you relied on the old behaviou
   value. The interceptor catches it at the generation step and reports a clean
   failure. Exhaustion can be transient (a satisfiable-but-rare predicate) — widen
   the source, raise the budget, or use `Gen::flatMap()` for dependent domains.
-- **A property that discards every run now fails** with the new `@api`
-  `GaveUpException` instead of reporting a vacuous pass. `runs` still means
-  iterations (not required successful checks). Discarding a *subset* of runs is
-  unchanged.
+- **`runs` now means successful checks.** Discarded attempts do not consume the
+  requested run count. The new trailing `Property::$maxDiscards` option bounds
+  retries (default: `runs * 10`); exceeding it fails with `GaveUpException`,
+  which exposes required/successful/discarded/attempt counts.
 - **Sized collections guarantee their minimum.** `Gen::dictOf()` now keeps
   distinct keys (was: colliding keys overwrite) and `Gen::commands()` throws when
   no applicable command reaches `$minLength`; both, plus `Gen::uniqueArrayOf()`,
@@ -31,8 +31,11 @@ below are bug fixes, but observable — review if you relied on the old behaviou
   labelled, object cycles guarded) instead of `[N element(s)]` / a bare class
   name — in `PropertyViolationException`, `ExampleViolationException` and the
   verbose run log. Object rendering includes private/protected properties (real
-  DTOs), and strings escape quotes, newlines and control characters so a value
-  stays on one unambiguous line.
+  DTOs across their inheritance chain), and strings, map keys and `Stringable`
+  output are escaped and bounded so a value stays on one unambiguous line.
+  `CounterExample::toArray()` / `toJson()` provide machine-readable output;
+  `toExamplesCode()` produces a runnable examples-method fragment for values
+  that PHP can represent directly.
 - Removed the unsupported `Attribute::TARGET_FUNCTION` from `#[Property]`; it only
   ever ran on methods.
 

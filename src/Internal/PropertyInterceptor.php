@@ -27,8 +27,8 @@ use Testo\Pipeline\Middleware\TestRunInterceptor;
 
 /**
  * Runs a {@see Property}: generates random arguments, executes the test body
- * {@see Property::$runs} times, and on the first failure shrinks the
- * counterexample to a minimal one.
+ * until {@see Property::$runs} successful checks complete, and on the first
+ * failure shrinks the counterexample to a minimal one.
  *
  * The interceptor self-registers via the {@see Property} attribute's
  * {@see \Testo\Pipeline\Attribute\FallbackInterceptor}, so simply requiring the
@@ -92,6 +92,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         );
 
         $runs = $this->resolveRuns($property->runs);
+        $maxDiscards = $this->resolveMaxDiscards($property->maxDiscards, $runs);
         $seed = $this->resolveSeed($property->seed);
         $verbose = $this->resolveVerbose();
         $random = new Random($seed);
@@ -116,7 +117,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             $recalled = $storage->recall($propertyId);
 
             if ($recalled !== null) {
-                $replay = $this->runProperty(new Random($recalled), $recalled, $generators, $parameterNames, $runs, $verbose, $next, $info, $property->maxShrinks);
+                $replay = $this->runProperty(new Random($recalled), $recalled, $generators, $parameterNames, $runs, $maxDiscards, $verbose, $next, $info, $property->maxShrinks);
 
                 if ($replay->failure instanceof PropertyViolationException) {
                     return $replay;
@@ -126,7 +127,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             }
         }
 
-        $result = $this->runProperty($random, $seed, $generators, $parameterNames, $runs, $verbose, $next, $info, $property->maxShrinks);
+        $result = $this->runProperty($random, $seed, $generators, $parameterNames, $runs, $maxDiscards, $verbose, $next, $info, $property->maxShrinks);
 
         if ($storage instanceof SeedStorage && $result->failure instanceof PropertyViolationException) {
             $storage->remember($propertyId, $seed);
@@ -136,9 +137,10 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
     }
 
     /**
-     * The random-input phase: generate arguments {@see $runs} times, shrink the
-     * first falsifying run into a {@see PropertyViolationException}, otherwise
-     * assess the {@see Classify::cover()} requirements. Runs once per seed, so the
+     * The random-input phase: generate until {@see $runs} successful checks have
+     * completed, shrink the first falsifying run into a
+     * {@see PropertyViolationException}, otherwise assess the
+     * {@see Classify::cover()} requirements. Runs once per seed, so the
      * regression-replay phase can re-run it with a recorded seed.
      *
      * @param array<string, ArbitraryInterface> $generators
@@ -151,6 +153,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         array $generators,
         array $parameterNames,
         int $runs,
+        int $maxDiscards,
         bool $verbose,
         callable $next,
         TestInfo $info,
@@ -158,6 +161,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
     ): TestResult {
         $skips = 0;
         $checks = 0;
+        $attempts = 0;
         /** @var array<string, int> $classifications */
         $classifications = [];
         /**
@@ -172,7 +176,8 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
          */
         $runAttributes = [];
 
-        for ($run = 1; $run <= $runs; ++$run) {
+        while ($checks < $runs) {
+            ++$attempts;
             Classify::beginRun();
 
             try {
@@ -181,6 +186,9 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                 // A generator could not produce a valid value (e.g. Gen::filter()
                 // whose predicate rejected every draw). Report it as a clean
                 // failure rather than let it crash the run as an uncaught error.
+                Classify::flushRun();
+                Classify::flushRequirements();
+
                 return new TestResult(
                     info: $info,
                     status: Status::Failed,
@@ -194,7 +202,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             if ($verbose) {
                 $this->messenger->log(
                     Messenger::CHANNEL_STDOUT,
-                    sprintf('Property "%s" run %d: %s', $info->name, $run, $this->formatArguments($arguments)),
+                    sprintf('Property "%s" attempt %d: %s', $info->name, $attempts, $this->formatArguments($arguments)),
                     Level::Info,
                 );
             }
@@ -208,7 +216,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             if ($verbose && $draws !== []) {
                 $this->messenger->log(
                     Messenger::CHANNEL_STDOUT,
-                    sprintf('Property "%s" run %d draws: %s', $info->name, $run, $this->formatArguments($this->drawArguments($draws))),
+                    sprintf('Property "%s" attempt %d draws: %s', $info->name, $attempts, $this->formatArguments($this->drawArguments($draws))),
                     Level::Info,
                 );
             }
@@ -216,6 +224,26 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             // A discarded run is neither a failure nor a check.
             if ($result->failure instanceof AssumptionSkipped) {
                 ++$skips;
+
+                if ($skips > $maxDiscards) {
+                    $this->warnOnExcessiveSkips($info->name, $skips, $attempts);
+                    $this->reportClassifications($info->name, $classifications, $checks);
+                    Classify::flushRequirements();
+
+                    return new TestResult(
+                        info: $info,
+                        status: Status::Failed,
+                        failure: new GaveUpException(
+                            propertyName: $info->name,
+                            requiredRuns: $runs,
+                            successfulRuns: $checks,
+                            discardedRuns: $skips,
+                            attempts: $attempts,
+                            maxDiscards: $maxDiscards,
+                        ),
+                        attributes: $runAttributes,
+                    );
+                }
 
                 continue;
             }
@@ -250,33 +278,10 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             ++$checks;
         }
 
-        $this->warnOnExcessiveSkips($info->name, $skips, $runs);
+        $this->warnOnExcessiveSkips($info->name, $skips, $attempts);
         $this->reportClassifications($info->name, $classifications, $checks);
 
         $requirements = Classify::flushRequirements();
-
-        // No successful check: the body asserted nothing, so a "pass" would be
-        // vacuous — report a failure instead of a silent green. When a coverage
-        // requirement was registered, say specifically that it cannot be assessed;
-        // otherwise it is a plain give-up.
-        if ($checks === 0 && $runs > 0) {
-            return new TestResult(
-                info: $info,
-                status: Status::Failed,
-                failure: $requirements === []
-                    ? new GaveUpException(sprintf(
-                        'Property "%s" made no successful check: all %d run(s) were discarded (Assume::that / filter-discard). '
-                        . 'Narrow or construct the generators so inputs are valid by construction.',
-                        $info->name,
-                        $runs,
-                    ))
-                    : new CoverageViolationException(sprintf(
-                        'Property "%s" has coverage requirements but no successful runs to assess them',
-                        $info->name,
-                    )),
-                attributes: $runAttributes,
-            );
-        }
 
         $violation = $this->coverageViolation($info->name, $requirements, $classifications, $checks);
 
@@ -299,9 +304,8 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
     /**
      * Check the {@see Classify::cover()} requirements against the label counts
      * of the passing runs; every run passed, but an under-covered label means
-     * the pass is (partially) vacuous and must fail. Called only with at least
-     * one successful check (the zero-check case is handled by the caller), so the
-     * denominator is always positive.
+     * the pass is (partially) vacuous and must fail. The successful-run loop
+     * guarantees the denominator is always positive.
      *
      * @param array<string, float> $requirements
      * @param array<string, int> $classifications
@@ -361,6 +365,15 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         }
 
         return (int) $env;
+    }
+
+    private function resolveMaxDiscards(?int $maxDiscards, int $runs): int
+    {
+        if ($maxDiscards !== null) {
+            return $maxDiscards;
+        }
+
+        return $runs > intdiv(PHP_INT_MAX, 10) ? PHP_INT_MAX : $runs * 10;
     }
 
     /**
@@ -822,20 +835,20 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         );
     }
 
-    private function warnOnExcessiveSkips(string $name, int $skips, int $runs): void
+    private function warnOnExcessiveSkips(string $name, int $skips, int $attempts): void
     {
-        if ($runs <= 0 || ($skips / $runs) <= self::SKIP_RATE_WARNING_THRESHOLD) {
+        if ($attempts <= 0 || ($skips / $attempts) <= self::SKIP_RATE_WARNING_THRESHOLD) {
             return;
         }
 
         $this->messenger->log(
             Messenger::CHANNEL_STDERR,
             sprintf(
-                'Property "%s" discarded %d of %d runs (%d%%); consider narrowing the generators',
+                'Property "%s" discarded %d of %d attempt(s) (%d%%); consider narrowing the generators',
                 $name,
                 $skips,
-                $runs,
-                (int) round(((float) $skips / (float) $runs) * 100.0),
+                $attempts,
+                (int) round(((float) $skips / (float) $attempts) * 100.0),
             ),
             Level::Warning,
         );
