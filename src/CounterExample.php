@@ -22,6 +22,7 @@ final readonly class CounterExample
      * @param int $shrinkSteps Number of accepted shrink steps between the original and the minimised arguments.
      * @param ?\Throwable $failure The assertion or exception reported by the failing run.
      * @param int $skips Number of runs discarded via {@see Assume::that()} before the failure.
+     * @param int $shrinkTrials Total number of shrink candidates tried (accepted and rejected).
      */
     public function __construct(
         public int $seed,
@@ -31,6 +32,7 @@ final readonly class CounterExample
         public int $shrinkSteps = 0,
         public ?\Throwable $failure = null,
         public int $skips = 0,
+        public int $shrinkTrials = 0,
     ) {}
 
     /**
@@ -46,6 +48,7 @@ final readonly class CounterExample
             'originalArguments' => \Rasuvaeff\PropertyTesting\Internal\ValueRenderer::normalize($this->originalArguments),
             'shrunkArguments' => \Rasuvaeff\PropertyTesting\Internal\ValueRenderer::normalize($this->shrunkArguments),
             'shrinkSteps' => $this->shrinkSteps,
+            'shrinkTrials' => $this->shrinkTrials,
             'failure' => $this->failure instanceof \Throwable
                 ? ['type' => $this->failure::class, 'message' => $this->failure->getMessage()]
                 : null,

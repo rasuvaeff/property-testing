@@ -34,19 +34,51 @@ final class PropertyViolationException extends RuntimeException
         $shrunk = $this->format($c->shrunkArguments);
 
         $message = sprintf(
-            "Property falsified after %d successful run(s); seed=%d\n  Original: %s\n  Shrunk:   %s (%d shrink step(s))",
+            "Property falsified after %d successful run(s); seed=%d\n  Original: %s\n  Shrunk:   %s (%d shrink step(s)%s)",
             $c->runsBeforeFailure,
             $c->seed,
             $original,
             $shrunk,
             $c->shrinkSteps,
+            $c->shrinkTrials > 0 ? sprintf(', %d trial(s)', $c->shrinkTrials) : '',
         );
+
+        $diff = $this->diff($c->originalArguments, $c->shrunkArguments);
+
+        if ($diff !== '') {
+            $message .= sprintf("\n  Changed:  %s", $diff);
+        }
 
         if ($c->failure instanceof \Throwable) {
             $message .= sprintf("\n  Failure:  %s", $c->failure->getMessage());
         }
 
         return $message;
+    }
+
+    /**
+     * `name: before -> after` for every argument whose rendered value differs
+     * between the original and the shrunk counterexample; unchanged arguments
+     * are omitted. An in-body draw can appear on one side only (the tape grows
+     * or truncates during shrinking) — the missing side renders as `(absent)`.
+     *
+     * @param array<string, mixed> $original
+     * @param array<string, mixed> $shrunk
+     */
+    private function diff(array $original, array $shrunk): string
+    {
+        $parts = [];
+
+        foreach (array_keys($original + $shrunk) as $name) {
+            $before = array_key_exists($name, $original) ? ValueRenderer::render($original[$name]) : '(absent)';
+            $after = array_key_exists($name, $shrunk) ? ValueRenderer::render($shrunk[$name]) : '(absent)';
+
+            if ($before !== $after) {
+                $parts[] = sprintf('%s=%s -> %s', $name, $before, $after);
+            }
+        }
+
+        return implode(', ', $parts);
     }
 
     /**

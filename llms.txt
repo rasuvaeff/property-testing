@@ -206,7 +206,9 @@ property is not passing vacuously; `cover()` turns that into a hard CI gate.
 - `PROPERTY_SEED` (int): seed for any property whose attribute omits `seed`; an
   explicit attribute `seed` still wins.
 - `PROPERTY_VERBOSE` (any value except ''/'0'): logs every run's generated
-  arguments to stdout — inspect what a replayed seed actually feeds the test.
+  arguments to stdout, plus one line per ACCEPTED shrink step on failure
+  (`shrink step 3: x=63 -> 51`) — inspect what a replayed seed feeds the test
+  and how the shrinker descends.
 
 ### Discarding runs: `Assume::that(bool $condition): void`
 
@@ -225,7 +227,11 @@ Warns when >90% of attempts are discarded. Exceeding `maxDiscards` fails with a
 
 The failing `TestResult` carries a `Rasuvaeff\PropertyTesting\PropertyViolationException`
 with `getCounterExample(): CounterExample` exposing:
-`seed`, `runsBeforeFailure`, `originalArguments`, `shrunkArguments`, `shrinkSteps`, `failure`, `skips`.
+`seed`, `runsBeforeFailure`, `originalArguments`, `shrunkArguments`, `shrinkSteps`,
+`failure`, `skips`, `shrinkTrials` (candidates tried, accepted + rejected).
+The exception message includes a `Changed:` line diffing original vs shrunk
+arguments (unchanged ones omitted; a draw dropped by tape truncation renders
+as `(absent)`).
 `CounterExample::toArray()` / `toJson()` return normalized machine-readable data;
 `toExamplesCode(string $method = 'propertyExamples')` emits runnable PHP for
 scalar/array/enum arguments and rejects unsupported objects.

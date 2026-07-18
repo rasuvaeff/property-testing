@@ -23,6 +23,7 @@ use Testo\Core\Context\TestInfo;
 use Testo\Core\Context\TestResult;
 use Testo\Core\Definition\CaseDefinition;
 use Testo\Core\Definition\TestDefinition;
+use Testo\Core\Log\Message;
 use Testo\Core\Value\Status;
 use Testo\Test;
 
@@ -83,6 +84,9 @@ final class PropertyInterceptorTest
         Assert::same($counterExample->shrunkArguments['x'], 51);
         Assert::same($counterExample->originalArguments['x'] > 50, true);
         Assert::same($counterExample->runsBeforeFailure, 0);
+        // Every accepted step is a trial (rejected candidates add more).
+        Assert::true($counterExample->shrinkTrials >= $counterExample->shrinkSteps);
+        Assert::true($counterExample->shrinkTrials >= 1);
     }
 
     public function reportsTheFailureOfTheShrunkCounterexampleNotTheOriginal(): void
@@ -144,6 +148,10 @@ final class PropertyInterceptorTest
 
         Assert::instanceOf($result->failure, PropertyViolationException::class);
         Assert::same($result->failure->getCounterExample()->shrunkArguments['x'], 52);
+        // Reaching 52 requires rejecting candidates (50 and below pass), so the
+        // trial count strictly exceeds the accepted steps.
+        $counterExample = $result->failure->getCounterExample();
+        Assert::true($counterExample->shrinkTrials > $counterExample->shrinkSteps);
     }
 
     public function flatMapGeneratorShrinksTheDependentValue(): void
@@ -272,6 +280,8 @@ final class PropertyInterceptorTest
         $counterExample = $result->failure->getCounterExample();
         Assert::same($counterExample->shrinkSteps, 0);
         Assert::same($counterExample->shrunkArguments, $counterExample->originalArguments);
+        // The cap engages before the first candidate runs, so nothing is tried.
+        Assert::same($counterExample->shrinkTrials, 0);
     }
 
     public function examplesMayDrawValues(): void
@@ -491,6 +501,8 @@ final class PropertyInterceptorTest
         $counterExample = $result->failure->getCounterExample();
         Assert::same($counterExample->shrinkSteps, 0);
         Assert::same($counterExample->shrunkArguments, $counterExample->originalArguments);
+        // The cap engages before the first candidate runs, so nothing is tried.
+        Assert::same($counterExample->shrinkTrials, 0);
     }
 
     public function envPropertyRunsOverridesTheAttributeRunCount(): void
@@ -747,6 +759,38 @@ final class PropertyInterceptorTest
             Assert::same(count($messages), 5);
             Assert::string($messages[0]->content)->contains('attempt 1: x=');
             Assert::string($messages[4]->content)->contains('attempt 5: x=');
+        } finally {
+            putenv('PROPERTY_VERBOSE');
+        }
+    }
+
+    public function verboseLogsEveryAcceptedShrinkStep(): void
+    {
+        putenv('PROPERTY_VERBOSE=1');
+
+        try {
+            $messenger = $this->createMessenger();
+            $interceptor = new PropertyInterceptor($messenger);
+            // Fails iff x > 50; FalsifyingStub draws from [51, 100] with seed 1,
+            // so shrinking descends to 51 through at least one accepted step.
+            $next = static fn(TestInfo $info): TestResult => $info->arguments[0] > 50
+                ? new TestResult(info: $info, status: Status::Failed, failure: new \RuntimeException('x>50'))
+                : new TestResult(info: $info, status: Status::Passed);
+
+            $result = $interceptor->runTest($this->info(FalsifyingStub::class, 'check'), $next);
+
+            Assert::instanceOf($result->failure, PropertyViolationException::class);
+            $steps = $result->failure->getCounterExample()->shrinkSteps;
+
+            $trace = array_values(array_filter(
+                $messenger->getMessages()->channel(Messenger::CHANNEL_STDOUT),
+                static fn(Message $message): bool => str_contains($message->content, 'shrink step'),
+            ));
+
+            // One trace line per accepted step; the last one lands on the minimum.
+            Assert::same(count($trace), $steps);
+            Assert::string($trace[0]->content)->contains('shrink step 1: x=');
+            Assert::string($trace[$steps - 1]->content)->contains('-> 51');
         } finally {
             putenv('PROPERTY_VERBOSE');
         }

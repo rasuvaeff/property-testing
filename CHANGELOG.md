@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.6.0 — Unreleased
+
+- Psalm generics across the public surface: `ArbitraryInterface<TValue>`,
+  `Shrinkable<TValue>`, all built-in arbitraries, and the `Gen` facade typed
+  end-to-end — consumer code gets inference (`Gen::map(Gen::intBetween(0, 5),
+  fn(int $n): string => ...)` is `ArbitraryInterface<string>`) and closure
+  parameters check against the inner arbitrary's type. Docblock-only; runtime
+  behaviour is unchanged.
+- Counterexample messages gain a `Changed:` line diffing the original against
+  the shrunk arguments (unchanged arguments omitted) and a trial count next to
+  the accepted shrink steps: `(12 shrink step(s), 41 trial(s))`.
+- `CounterExample` exposes `shrinkTrials` — the total number of shrink
+  candidates tried (accepted and rejected); included in `toArray()`/`toJson()`.
+- `PROPERTY_VERBOSE` now also traces the shrink descent: one line per accepted
+  candidate (`shrink step 3: x=63 -> 51`), including `draw#N` tape positions.
+
 ## 2.5.0 — 2026-07-18
 
 Correctness release. Generators never hand a property an out-of-domain value,

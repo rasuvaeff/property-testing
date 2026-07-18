@@ -24,6 +24,7 @@ final class CounterExampleTest
             shrunkArguments: ['x' => 3],
             failure: $failure,
             skips: 2,
+            shrinkTrials: 9,
         );
 
         Assert::same($counterExample->seed, 42);
@@ -32,6 +33,7 @@ final class CounterExampleTest
         Assert::same($counterExample->shrunkArguments, ['x' => 3]);
         Assert::same($counterExample->failure, $failure);
         Assert::same($counterExample->skips, 2);
+        Assert::same($counterExample->shrinkTrials, 9);
     }
 
     public function defaultsFailureAndSkipsToNullAndZero(): void
@@ -45,6 +47,7 @@ final class CounterExampleTest
 
         Assert::null($counterExample->failure);
         Assert::same($counterExample->skips, 0);
+        Assert::same($counterExample->shrinkTrials, 0);
     }
 
     public function exposesMachineReadableArrayAndJsonRepresentations(): void
@@ -56,12 +59,14 @@ final class CounterExampleTest
             shrunkArguments: ['value' => NAN],
             failure: new \RuntimeException('boom'),
             skips: 2,
+            shrinkTrials: 9,
         );
 
         $data = $counterExample->toArray();
         Assert::same($data['seed'], 42);
         Assert::same($data['originalArguments']['dto']['properties']['id'], 7);
         Assert::same($data['shrunkArguments']['value'], 'NAN');
+        Assert::same($data['shrinkTrials'], 9);
         Assert::same($data['failure'], ['type' => \RuntimeException::class, 'message' => 'boom']);
 
         $decoded = json_decode($counterExample->toJson(), true, flags: JSON_THROW_ON_ERROR);
