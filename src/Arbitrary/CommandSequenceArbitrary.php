@@ -46,7 +46,7 @@ final readonly class CommandSequenceArbitrary implements ArbitraryInterface
     private array $commandGenerators;
 
     /**
-     * @param array<array-key, ArbitraryInterface<Command>> $commandGenerators Each must produce a {@see Command}.
+     * @param array<array-key, ArbitraryInterface> $commandGenerators Each must produce a {@see Command}.
      */
     public function __construct(
         private mixed $initialModel,

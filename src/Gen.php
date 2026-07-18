@@ -29,7 +29,6 @@ use Rasuvaeff\PropertyTesting\Arbitrary\UniqueArrayArbitrary;
 use Rasuvaeff\PropertyTesting\Arbitrary\UuidArbitrary;
 use Rasuvaeff\PropertyTesting\Internal\DrawContext;
 use Rasuvaeff\PropertyTesting\Internal\RegexCompiler;
-use Rasuvaeff\PropertyTesting\StateMachine\Command;
 
 /**
  * Facade with static factories for the built-in {@see ArbitraryInterface}s.
@@ -149,6 +148,12 @@ final class Gen
 
     /**
      * Lists whose elements are drawn from $element.
+     *
+     * @template TElement
+     *
+     * @param ArbitraryInterface<TElement> $element
+     *
+     * @return ArrayArbitrary<TElement>
      */
     public static function arrayOf(ArbitraryInterface $element, int $minSize = 0, int $maxSize = 100): ArrayArbitrary
     {
@@ -157,6 +162,12 @@ final class Gen
 
     /**
      * Non-empty lists whose elements are drawn from $element.
+     *
+     * @template TElement
+     *
+     * @param ArbitraryInterface<TElement> $element
+     *
+     * @return ArrayArbitrary<TElement>
      */
     public static function nonEmptyArrayOf(ArbitraryInterface $element, int $maxSize = 100): ArrayArbitrary
     {
@@ -169,6 +180,12 @@ final class Gen
      * smaller than the drawn size when the element space runs out of fresh
      * values, but never below $minSize — an unreachable minimum throws
      * {@see GenerationExhausted}.
+     *
+     * @template TElement
+     *
+     * @param ArbitraryInterface<TElement> $element
+     *
+     * @return UniqueArrayArbitrary<TElement>
      */
     public static function uniqueArrayOf(ArbitraryInterface $element, int $minSize = 0, int $maxSize = 100): UniqueArrayArbitrary
     {
@@ -209,6 +226,12 @@ final class Gen
 
     /**
      * Picks one of the given values at random.
+     *
+     * @template TValue
+     *
+     * @param TValue ...$values
+     *
+     * @return OneOfArbitrary<TValue>
      */
     public static function oneOf(mixed ...$values): OneOfArbitrary
     {
@@ -218,7 +241,11 @@ final class Gen
     /**
      * Picks one value at random from an array (the array form of {@see oneOf()}).
      *
-     * @param array<array-key, mixed> $values Must be non-empty.
+     * @template TValue
+     *
+     * @param array<array-key, TValue> $values Must be non-empty.
+     *
+     * @return OneOfArbitrary<TValue>
      */
     public static function elements(array $values): OneOfArbitrary
     {
@@ -227,6 +254,12 @@ final class Gen
 
     /**
      * Always produces $value; does not shrink.
+     *
+     * @template TValue
+     *
+     * @param TValue $value
+     *
+     * @return ConstantArbitrary<TValue>
      */
     public static function constant(mixed $value): ConstantArbitrary
     {
@@ -237,7 +270,11 @@ final class Gen
      * One case of a PHP enum, in declaration order. Shrinks toward
      * earlier-declared cases, so declare simpler cases first.
      *
-     * @param class-string $enum
+     * @template TEnum
+     *
+     * @param class-string<TEnum> $enum
+     *
+     * @return OneOfArbitrary<TEnum>
      */
     public static function enum(string $enum): OneOfArbitrary
     {
@@ -245,6 +282,7 @@ final class Gen
             throw new \InvalidArgumentException(sprintf('"%s" is not an enum', $enum));
         }
 
+        /** @var list<TEnum> $cases */
         $cases = array_map(
             static fn(\ReflectionEnumUnitCase $case): \UnitEnum => $case->getValue(),
             (new \ReflectionEnum($enum))->getCases(),
@@ -257,6 +295,8 @@ final class Gen
      * Special float values (NaN, ±INF, -0.0 and the representation edges) where
      * float bugs cluster — an opt-in complement to {@see float()}, which stays
      * inside its finite range. Shrinks toward earlier-listed specials.
+     *
+     * @return OneOfArbitrary<float>
      */
     public static function floatSpecial(): OneOfArbitrary
     {
@@ -277,6 +317,8 @@ final class Gen
      * Ordered integer pairs `[lo, hi]` with $min <= lo <= hi <= $max — the
      * "range/interval" input without an {@see Assume::that()} discard. Built on
      * {@see flatMap()}, so both bounds shrink while `lo <= hi` always holds.
+     *
+     * @return FlatMappedArbitrary<int, list<mixed>>
      */
     public static function intRange(int $min, int $max): FlatMappedArbitrary
     {
@@ -337,7 +379,13 @@ final class Gen
      * Shrinking happens in the source domain and the function is re-applied,
      * so mapped values shrink through the inner arbitrary's tree.
      *
-     * @param Closure(mixed): mixed $map
+     * @template TInner
+     * @template TOutput
+     *
+     * @param ArbitraryInterface<TInner> $inner
+     * @param Closure(TInner): TOutput $map
+     *
+     * @return MappedArbitrary<TInner, TOutput>
      */
     public static function map(ArbitraryInterface $inner, Closure $map): MappedArbitrary
     {
@@ -351,7 +399,13 @@ final class Gen
      * valid index into it) instead of discarding invalid combinations with
      * {@see Assume::that()}.
      *
-     * @param Closure(mixed): ArbitraryInterface $flatMap
+     * @template TInner
+     * @template TOutput
+     *
+     * @param ArbitraryInterface<TInner> $inner
+     * @param Closure(TInner): ArbitraryInterface<TOutput> $flatMap
+     *
+     * @return FlatMappedArbitrary<TInner, TOutput>
      */
     public static function flatMap(ArbitraryInterface $inner, Closure $flatMap): FlatMappedArbitrary
     {
@@ -361,7 +415,12 @@ final class Gen
     /**
      * Generates values from $inner, retrying until $predicate holds.
      *
-     * @param Closure(mixed): bool $predicate
+     * @template TInner
+     *
+     * @param ArbitraryInterface<TInner> $inner
+     * @param Closure(TInner): bool $predicate
+     *
+     * @return FilteredArbitrary<TInner>
      */
     public static function filter(ArbitraryInterface $inner, Closure $predicate): FilteredArbitrary
     {
@@ -393,10 +452,19 @@ final class Gen
      *
      * Only valid while the property runner executes the body; anywhere else
      * it throws.
+     *
+     * @template TValue
+     *
+     * @param ArbitraryInterface<TValue> $arbitrary
+     *
+     * @return TValue
      */
     public static function draw(ArbitraryInterface $arbitrary): mixed
     {
-        return DrawContext::draw($arbitrary);
+        /** @var TValue $value */
+        $value = DrawContext::draw($arbitrary);
+
+        return $value;
     }
 
     /**
@@ -414,11 +482,18 @@ final class Gen
      * probability proportional to its weight, then produces the value. Shrinking
      * stays within the branch that generated the value.
      *
-     * @param iterable<array{int, ArbitraryInterface}> $pairs Weights must be >= 1.
+     * @template TValue
+     *
+     * @param iterable<array{int, ArbitraryInterface<TValue>}> $pairs Weights must be >= 1.
+     *
+     * @return FrequencyArbitrary<TValue>
      */
     public static function frequency(iterable $pairs): FrequencyArbitrary
     {
-        return new FrequencyArbitrary($pairs);
+        /** @var FrequencyArbitrary<TValue> $arbitrary */
+        $arbitrary = new FrequencyArbitrary($pairs);
+
+        return $arbitrary;
     }
 
     /**
@@ -442,6 +517,8 @@ final class Gen
     /**
      * IPv4 dotted-quad address strings (`"0.0.0.0"`..`"255.255.255.255"`). Each
      * octet shrinks toward 0 through its own integer tree.
+     *
+     * @return MappedArbitrary<list<mixed>, string>
      */
     public static function ipv4(): MappedArbitrary
     {
@@ -461,6 +538,8 @@ final class Gen
      * Syntactically valid `local@label.tld` email addresses over a lowercase
      * alphanumeric alphabet and a small TLD set. Shrinks toward the shortest
      * local part / label and the first TLD.
+     *
+     * @return MappedArbitrary<list<mixed>, non-empty-string>
      */
     public static function email(): MappedArbitrary
     {
@@ -483,6 +562,8 @@ final class Gen
     /**
      * HTTP/HTTPS URLs `scheme://host.tld[/segment...]` over a lowercase
      * alphanumeric alphabet. Shrinks toward `http://a.com` (no path).
+     *
+     * @return MappedArbitrary<list<mixed>, non-empty-string>
      */
     public static function url(): MappedArbitrary
     {
@@ -514,27 +595,20 @@ final class Gen
      */
     public static function json(int $maxDepth = 3): ArbitraryInterface
     {
-        /** @var list<array{int, ArbitraryInterface<mixed>}> $leafPairs */
-        $leafPairs = [
+        $leaf = new FrequencyArbitrary([
             [1, new ConstantArbitrary(null)],
             [1, new BoolArbitrary()],
             [1, new IntArbitrary(-1000, 1000)],
             [1, new FloatArbitrary(-1000.0, 1000.0)],
             [1, new CharsetStringArbitrary(self::ALNUM . ' ', 0, 12)],
-        ];
-        $leaf = new FrequencyArbitrary($leafPairs);
+        ]);
 
         return self::recursive(
             $leaf,
-            static function (ArbitraryInterface $inner): ArbitraryInterface {
-                /** @var list<array{int, ArbitraryInterface<mixed>}> $branchPairs */
-                $branchPairs = [
-                    [1, new ArrayArbitrary($inner, 0, 4)],
-                    [1, new DictionaryArbitrary(new CharsetStringArbitrary(self::ALPHA, 1, 8), $inner, 0, 4)],
-                ];
-
-                return new FrequencyArbitrary($branchPairs);
-            },
+            static fn(ArbitraryInterface $inner): ArbitraryInterface => new FrequencyArbitrary([
+                [1, new ArrayArbitrary($inner, 0, 4)],
+                [1, new DictionaryArbitrary(new CharsetStringArbitrary(self::ALPHA, 1, 8), $inner, 0, 4)],
+            ]),
             $maxDepth,
         );
     }
@@ -542,6 +616,8 @@ final class Gen
     /**
      * The JSON text of {@see json()} (`json_encode` of each generated value),
      * for exercising JSON parsers and decoders.
+     *
+     * @return MappedArbitrary<mixed, string>
      */
     public static function jsonString(int $maxDepth = 3): MappedArbitrary
     {
@@ -564,14 +640,21 @@ final class Gen
      * {@see \InvalidArgumentException} naming the construct.
      *
      * @param int $maxRepeat Upper bound generation uses for unbounded quantifiers (`*`, `+`, `{n,}`).
+     *
+     * @return ArbitraryInterface<string>
      */
     public static function regex(string $pattern, int $maxRepeat = 8): ArbitraryInterface
     {
-        return RegexCompiler::compile($pattern, $maxRepeat);
+        /** @var ArbitraryInterface<string> $arbitrary */
+        $arbitrary = RegexCompiler::compile($pattern, $maxRepeat);
+
+        return $arbitrary;
     }
 
     /**
      * Alias of {@see regex()} for parity with fast-check/Hypothesis naming.
+     *
+     * @return ArbitraryInterface<string>
      */
     public static function stringMatching(string $pattern, int $maxRepeat = 8): ArbitraryInterface
     {
@@ -591,7 +674,7 @@ final class Gen
      * to {@see \Rasuvaeff\PropertyTesting\StateMachine\StateMachine::check()} in the
      * property body, passing a factory that builds a fresh system under test.
      *
-     * @param list<ArbitraryInterface<Command>> $commandGenerators Each must produce a Command.
+     * @param list<ArbitraryInterface> $commandGenerators Each must produce a {@see \Rasuvaeff\PropertyTesting\StateMachine\Command}.
      */
     public static function commands(
         mixed $initialModel,
@@ -607,7 +690,11 @@ final class Gen
      * debugging aid for inspecting a generator's output and distribution; unlike
      * the other factories it returns values, not an arbitrary.
      *
-     * @return list<mixed>
+     * @template TValue
+     *
+     * @param ArbitraryInterface<TValue> $arbitrary
+     *
+     * @return list<TValue>
      */
     public static function sample(ArbitraryInterface $arbitrary, int $count = 10, int $seed = 0): array
     {
@@ -617,10 +704,13 @@ final class Gen
 
         $random = new Random($seed);
 
-        return array_map(
+        /** @var list<TValue> $values */
+        $values = array_map(
             static fn(int $i): mixed => $arbitrary->generate($random)->value,
             range(1, $count),
         );
+
+        return $values;
     }
 
     /**
@@ -629,7 +719,11 @@ final class Gen
      * {@see ArbitraryInterface}s: eyeball what the shrink tree offers before
      * wiring the arbitrary into a property.
      *
-     * @return array{value: mixed, shrinks: list<mixed>}
+     * @template TValue
+     *
+     * @param ArbitraryInterface<TValue> $arbitrary
+     *
+     * @return array{value: TValue, shrinks: list<TValue>}
      */
     public static function sampleShrinks(ArbitraryInterface $arbitrary, int $seed = 0, int $limit = 10): array
     {
@@ -639,7 +733,7 @@ final class Gen
 
         $shrinkable = $arbitrary->generate(new Random($seed));
 
-        /** @var list<Shrinkable> $candidates */
+        /** @var list<Shrinkable<TValue>> $candidates */
         $candidates = [];
         foreach ($shrinkable->shrinks() as $candidate) {
             $candidates[] = $candidate;
@@ -649,9 +743,12 @@ final class Gen
             }
         }
 
-        return [
+        /** @var array{value: TValue, shrinks: list<TValue>} $result */
+        $result = [
             'value' => $shrinkable->value,
             'shrinks' => array_map(static fn(Shrinkable $candidate): mixed => $candidate->value, $candidates),
         ];
+
+        return $result;
     }
 }

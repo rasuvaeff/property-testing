@@ -20,7 +20,6 @@ final readonly class BoolArbitrary implements ArbitraryInterface
     #[\Override]
     public function generate(Random $random): Shrinkable
     {
-        /** @var bool $value */
         $value = $random->int(0, 1) === 1;
 
         /** @var list<Shrinkable<bool>> $shrinks */

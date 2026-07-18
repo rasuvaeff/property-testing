@@ -22,11 +22,11 @@ use Rasuvaeff\PropertyTesting\Shrinkable;
  */
 final readonly class RecordArbitrary implements ArbitraryInterface
 {
-    /** @var non-empty-array<string, ArbitraryInterface<mixed>> */
+    /** @var non-empty-array<string, ArbitraryInterface> */
     private array $shape;
 
     /**
-     * @param array<string, ArbitraryInterface<mixed>> $shape Field name => arbitrary for that field.
+     * @param array<string, ArbitraryInterface> $shape Field name => arbitrary for that field.
      */
     public function __construct(array $shape)
     {

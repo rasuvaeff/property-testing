@@ -17,7 +17,7 @@ use Rasuvaeff\PropertyTesting\Shrinkable;
  * shrink. Randomness comes from the seeded {@see Random}, so generated UUIDs are
  * reproducible but NOT suitable for security purposes.
  *
- * @implements ArbitraryInterface<string>
+ * @implements ArbitraryInterface<non-empty-string>
  * @api
  */
 final readonly class UuidArbitrary implements ArbitraryInterface
@@ -33,8 +33,7 @@ final readonly class UuidArbitrary implements ArbitraryInterface
 
         $hex = bin2hex($bytes);
 
-        /** @var Shrinkable<string> */
-        $leaf = Shrinkable::leaf(sprintf(
+        return Shrinkable::leaf(sprintf(
             '%s-%s-%s-%s-%s',
             substr($hex, 0, 8),
             substr($hex, 8, 4),
@@ -42,7 +41,5 @@ final readonly class UuidArbitrary implements ArbitraryInterface
             substr($hex, 16, 4),
             substr($hex, 20, 12),
         ));
-
-        return $leaf;
     }
 }
