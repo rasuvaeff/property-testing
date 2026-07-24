@@ -16,6 +16,7 @@ of random inputs per test, find the failing one, and shrink it to a minimal
 counterexample you can actually read.
 
 > Using an AI coding assistant? [llms.txt](llms.txt) contains a compact API reference you can share with the model.
+> Projects using the [llm/skills](https://github.com/roxblnfk/skills) Composer plugin also get this package's agent skill synced into `.agents/skills/` automatically on install.
 
 Since 2.0 shrinking is **integrated**: `generate()` returns a
 [`Shrinkable`](src/Shrinkable.php) — the value plus a lazy tree of smaller
