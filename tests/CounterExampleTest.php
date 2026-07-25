@@ -102,6 +102,12 @@ final class CounterExampleTest
         (new CounterExample(1, 0, [], []))->toExamplesCode('not-valid');
     }
 
+    #[ExpectException(\InvalidArgumentException::class)]
+    public function rejectsExamplesMethodNameWithTrailingNewline(): void
+    {
+        (new CounterExample(1, 0, [], []))->toExamplesCode("validName\n");
+    }
+
     #[ExpectException(\LogicException::class)]
     public function refusesToGenerateNonRunnableObjectExampleCode(): void
     {

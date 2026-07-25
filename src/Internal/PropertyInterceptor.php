@@ -416,7 +416,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             return $runs;
         }
 
-        if (preg_match('/^\d+$/', $env) !== 1 || (int) $env < 1) {
+        if (preg_match('/^\d+\z/', $env) !== 1 || (int) $env < 1) {
             throw new \InvalidArgumentException(sprintf('PROPERTY_RUNS must be a positive integer, got "%s"', $env));
         }
 
@@ -478,7 +478,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             return random_int(0, PHP_INT_MAX);
         }
 
-        if (preg_match('/^-?\d+$/', $env) !== 1) {
+        if (preg_match('/^-?\d+\z/', $env) !== 1) {
             throw new \InvalidArgumentException(sprintf('PROPERTY_SEED must be an integer, got "%s"', $env));
         }
 
