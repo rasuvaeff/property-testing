@@ -66,7 +66,7 @@ final readonly class CounterExample
 
     public function toExamplesCode(string $methodName = 'propertyExamples'): string
     {
-        if (preg_match('/^[A-Za-z_]\w*$/', $methodName) !== 1) {
+        if (preg_match('/^[A-Za-z_]\w*\z/', $methodName) !== 1) {
             throw new \InvalidArgumentException(sprintf('Invalid examples method name "%s"', $methodName));
         }
 

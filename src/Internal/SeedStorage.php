@@ -51,7 +51,7 @@ final readonly class SeedStorage
 
         $content = file_get_contents($file);
 
-        if ($content === false || preg_match('/^-?\d+$/', trim($content)) !== 1) {
+        if ($content === false || preg_match('/^-?\d+\z/', trim($content)) !== 1) {
             return null;
         }
 
