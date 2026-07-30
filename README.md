@@ -357,17 +357,35 @@ CI:
 | `PROPERTY_RUNS` | Positive integer that overrides every property's run count (dial runs up in CI). |
 | `PROPERTY_SEED` | Integer seed used for any property whose attribute omits `seed` (replay a whole suite). An explicit attribute `seed` still wins. |
 | `PROPERTY_VERBOSE` | Any value except `''`/`0` logs every run's generated arguments and, on failure, every accepted shrink step (`shrink step 3: x=63 -> 51`) — see exactly what a replayed seed feeds the property and how the shrinker descends. |
-| `PROPERTY_DB` | Directory path enabling regression replay (below). Unset means the feature is off and nothing is written. |
+| `PROPERTY_DB` | Directory path enabling the regression corpus (below). Unset means the feature is off and nothing is written. |
 
-### Replaying the last failure
+### Regression corpus
 
-Set `PROPERTY_DB` to a directory and a falsified property records the seed that
-failed. On the next run that seed is re-run **first** (unless the attribute pins
-its own `seed`): a still-failing seed is reported immediately for fast feedback,
-and a seed that no longer fails is forgotten. Only the seed is stored — never the
-generated values, which may be objects or closures — so re-running the seed
-reproduces the same draw. Storage is one small file per property
-(`<sha1(id)>.seed`); add the directory to `.gitignore`.
+Set `PROPERTY_DB` to a directory and every falsified property records its failure
+there. On the next run the recorded failures are replayed **first** (unless the
+attribute pins its own `seed`): one that still fails is reported immediately for
+fast feedback, one that no longer fails — or that the property now discards via
+`Assume::that()` — is pruned. A property accumulates several past failures, so
+fixing the newest one does not lose the older ones.
+
+A failure is recorded in one of two ways:
+
+| Entry | When | Replay | Reported as |
+|---|---|---|---|
+| Values | Every minimised argument is representable as data: `null`, scalars, arrays, enum cases, byte strings | One run with the exact recorded input | `RegressionViolationException` |
+| Seed | Anything else — objects, closures, or in-body `Gen::draw()` values in the counterexample | The whole random phase, re-run with that seed | `PropertyViolationException` |
+
+Values entries are preferred: they cost a single run, and they keep working when
+the generation sequence shifts, because they carry the input rather than a
+recipe for regenerating it. Seed entries are the fallback and are dropped when
+the package's generation sequence changes (they would otherwise replay a
+different input under the guise of a regression). A values entry is also dropped
+when the property's signature no longer matches the recorded argument names — a
+renamed or added parameter makes the stored input a different input.
+
+Storage is one small JSON file per property (`<sha1(id)>.json`, at most 8 values
+entries and 2 seed entries, oldest evicted first); add the directory to
+`.gitignore`.
 
 ### Explicit examples
 

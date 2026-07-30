@@ -76,9 +76,22 @@ use Rasuvaeff\PropertyTesting\Property;
 
 Env: `PROPERTY_RUNS` (override run count), `PROPERTY_SEED` (seed when the
 attribute omits it), `PROPERTY_VERBOSE` (log each run's args), `PROPERTY_DB`
-(directory enabling regression replay: a falsified property records its seed and
-re-runs it first next time — seed only, not values; unless the attribute pins a
-seed).
+(directory enabling the regression corpus, below).
+
+Regression corpus (`PROPERTY_DB=<dir>`): every falsified property records its
+failure; recorded failures replay BEFORE the random phase (unless the attribute
+pins a `seed`). A still-failing entry is reported at once; one that passes or is
+discarded via `Assume::that()` is pruned. Two entry kinds:
+- values — the minimised input stored as data (null/scalars/arrays/enum cases/
+  byte strings). Replays as ONE run, reported as `RegressionViolationException`
+  (`getArguments()`, `getSeed()`). Survives a shifted generation sequence;
+  dropped when the property's parameter names no longer match.
+- seed — the fallback when a value is not representable as data (objects,
+  closures, in-body `Gen::draw()` values). Re-runs the whole random phase with
+  that seed, reported as `PropertyViolationException`. Dropped when the
+  package's generation-sequence epoch changes.
+One JSON file per property (`<sha1(id)>.json`), max 8 values + 2 seed entries,
+oldest evicted. Gitignore the directory.
 
 The runner generates `runs` random argument sets, invokes the test through
 Testo's pipeline, and on the first failure shrinks the counterexample to a

@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.8.0 — 2026-07-30
+
+Regression corpus. `PROPERTY_DB` graduates from "remember the last failing seed"
+to a small per-property corpus of past failures, stored as data wherever
+possible.
+
+- **A falsified property now records its minimised input, not just a seed.**
+  When every shrunk argument is representable as data — `null`, scalars, arrays,
+  enum cases, byte strings — the input itself is stored and replayed as a single
+  run, reported through the new `@api` `RegressionViolationException`
+  (`getArguments()`, `getSeed()`). Such an entry costs one run instead of a whole
+  random phase and keeps reproducing the bug even when the generation sequence
+  shifts. Counterexamples that cannot be represented (objects, closures, in-body
+  `Gen::draw()` values) still fall back to storing the seed and replay the random
+  phase as before.
+- **Several failures per property.** The corpus keeps up to 8 values entries and
+  2 seed entries (oldest evicted, duplicates collapsed) and replays them all
+  before the random phase, so fixing the newest regression no longer forgets the
+  older ones. An entry that no longer fails — or that the property now discards
+  via `Assume::that()` — is pruned.
+- **Stale entries are dropped instead of misreported.** A values entry whose
+  argument names no longer match the property's signature (renamed, reordered or
+  added parameter) and a seed entry from a superseded generation-sequence epoch
+  are both discarded rather than replayed as a different input. The on-disk
+  format carries a version and is ignored wholesale when it is not the expected
+  one.
+- Storage moved from `<sha1(id)>.seed` to `<sha1(id)>.json`. A corpus directory
+  written by an earlier version is not read; it is an opt-in local cache and
+  regenerates on the next failure.
+
 ## 2.7.1 — 2026-07-25
 
 - Reject trailing newlines in validated values: anchor regexes with `\z`

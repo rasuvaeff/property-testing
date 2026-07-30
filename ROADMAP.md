@@ -157,6 +157,19 @@ the new arbitrary. Because an accepted candidate can regrow the tape with
 fresh trees, accepted shrink steps are capped (1000) when draws are present —
 the per-arbitrary finite-tree termination argument alone no longer applies.
 
+## Wave 7 — `2.8.0` (regression corpus)
+
+| Item | What | Status |
+|---|---|---|
+| T1.4 | several failing entries per property instead of one seed, stored as serialisable minimal examples where possible (seed = fallback for non-representable inputs), replayed before the random phase, with a format version and a generation-sequence epoch | done |
+
+Shipped in `2.8.0`: `CorpusStorage` (JSON, one file per property, 8 values + 2
+seed entries), `CorpusEntry`, `ValueCodec` (lossless JSON codec for scalars,
+arrays, enum cases, byte strings and floats — everything else refused so the
+caller falls back to a seed), and the `@api` `RegressionViolationException` for a
+failing values replay. `draw#N` pseudo-arguments force the seed fallback; a
+values entry is dropped when the property's parameter names change.
+
 ## Backlog — Tier 3 (niche, unscheduled)
 
 | Item | What |
@@ -183,4 +196,10 @@ the per-arbitrary finite-tree termination argument alone no longer applies.
 - `2.3.0` — T2.4 (domain arbitraries + `regex`), T1.2 (explicit examples), T1.3
   (seed persistence + replay). T2.5 split out. (done, released 2026-07-09)
 - `2.4.0` — T2.5 (in-body draw via a replay tape over the tree model). (done)
+- `2.5.0` — correctness release (exhaustion, discard accounting, nested value
+  rendering, guaranteed collection minimums). (done, released 2026-07-18)
+- `2.6.0` — Psalm generics, shrink diagnostics, `timeoutMs`/`budgetMs`. (done,
+  released 2026-07-18)
+- `2.7.0` — AI agent skill via `llm/skills`. (done, released 2026-07-25)
+- `2.8.0` — Wave 7, regression corpus. (done)
 - Backlog — Tier 3 items, unscheduled.
