@@ -7,13 +7,16 @@ namespace Rasuvaeff\PropertyTesting\Tests\Internal;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Rasuvaeff\PropertyTesting\AssumptionSkipped;
 use Rasuvaeff\PropertyTesting\Classify;
+use Rasuvaeff\PropertyTesting\CounterExample;
 use Rasuvaeff\PropertyTesting\CoverageViolationException;
 use Rasuvaeff\PropertyTesting\DeadlineExceededException;
 use Rasuvaeff\PropertyTesting\ExampleViolationException;
 use Rasuvaeff\PropertyTesting\GaveUpException;
 use Rasuvaeff\PropertyTesting\Gen;
+use Rasuvaeff\PropertyTesting\Internal\CorpusStorage;
 use Rasuvaeff\PropertyTesting\Internal\PropertyInterceptor;
 use Rasuvaeff\PropertyTesting\PropertyViolationException;
+use Rasuvaeff\PropertyTesting\RegressionViolationException;
 use Rasuvaeff\PropertyTesting\TimeBudgetExceededException;
 use Testo\Application\Internal\MessengerHub;
 use Testo\Assert;
@@ -1092,7 +1095,7 @@ final class PropertyInterceptorTest
         $interceptor->runTest($this->info(NonArrayExampleStub::class, 'check'), $next);
     }
 
-    public function recordsFailingSeedWhenStorageEnabled(): void
+    public function recordsTheMinimisedFailureWhenStorageEnabled(): void
     {
         $dir = $this->tempStorageDir();
         putenv('PROPERTY_DB=' . $dir);
@@ -1108,9 +1111,106 @@ final class PropertyInterceptorTest
             $result = $interceptor->runTest($this->info(NoSeedFalsifyingStub::class, 'check'), $next);
 
             Assert::instanceOf($result->failure, PropertyViolationException::class);
-            $file = $dir . '/' . sha1(NoSeedFalsifyingStub::class . '::check') . '.seed';
-            Assert::same(is_file($file), true);
-            Assert::same((int) file_get_contents($file), $result->failure->getCounterExample()->seed);
+            \assert($result->failure instanceof PropertyViolationException);
+
+            // The minimised input is stored as data, so the regression replays as
+            // a single run rather than a whole random phase.
+            $entries = (new CorpusStorage($dir))->recall(NoSeedFalsifyingStub::class . '::check', ['x']);
+            Assert::same(count($entries), 1);
+            Assert::true($entries[0]->isValues());
+            Assert::same($entries[0]->arguments, $result->failure->getCounterExample()->shrunkArguments);
+            Assert::same($entries[0]->seed, $result->failure->getCounterExample()->seed);
+        } finally {
+            putenv('PROPERTY_DB');
+            $this->cleanupDir($dir);
+        }
+    }
+
+    public function replaysARecordedInputBeforeTheRandomPhase(): void
+    {
+        $dir = $this->tempStorageDir();
+        putenv('PROPERTY_DB=' . $dir);
+
+        try {
+            (new CorpusStorage($dir))->remember(
+                NoSeedFalsifyingStub::class . '::check',
+                $this->counterExample(['x' => 77], 4242),
+                ['x'],
+            );
+
+            $seen = [];
+            $interceptor = new PropertyInterceptor($this->createMessenger());
+            $next = static function (TestInfo $info) use (&$seen): TestResult {
+                $seen[] = $info->arguments;
+
+                return new TestResult(info: $info, status: Status::Failed, failure: new \RuntimeException('always'));
+            };
+
+            $result = $interceptor->runTest($this->info(NoSeedFalsifyingStub::class, 'check'), $next);
+
+            // The recorded input is already minimal: it runs once, verbatim, and is
+            // reported without shrinking.
+            Assert::instanceOf($result->failure, RegressionViolationException::class);
+            \assert($result->failure instanceof RegressionViolationException);
+            Assert::same($result->failure->getArguments(), ['x' => 77]);
+            Assert::same($result->failure->getSeed(), 4242);
+            Assert::same($seen, [[77]]);
+        } finally {
+            putenv('PROPERTY_DB');
+            $this->cleanupDir($dir);
+        }
+    }
+
+    public function prunesARecordedInputWhenTheReplayNoLongerFails(): void
+    {
+        $dir = $this->tempStorageDir();
+        putenv('PROPERTY_DB=' . $dir);
+
+        try {
+            $storage = new CorpusStorage($dir);
+            $id = NoSeedFalsifyingStub::class . '::check';
+            $storage->remember($id, $this->counterExample(['x' => 77], 4242), ['x']);
+
+            $interceptor = new PropertyInterceptor($this->createMessenger());
+            $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+
+            $result = $interceptor->runTest($this->info(NoSeedFalsifyingStub::class, 'check'), $next);
+
+            Assert::same($result->status, Status::Passed);
+            Assert::same($storage->recall($id, ['x']), []);
+        } finally {
+            putenv('PROPERTY_DB');
+            $this->cleanupDir($dir);
+        }
+    }
+
+    /**
+     * A recorded input that the property now discards is out of the property's
+     * domain — it can never falsify it again, so the entry goes.
+     */
+    public function prunesARecordedInputTheReplayDiscards(): void
+    {
+        $dir = $this->tempStorageDir();
+        putenv('PROPERTY_DB=' . $dir);
+
+        try {
+            $storage = new CorpusStorage($dir);
+            $id = NoSeedFalsifyingStub::class . '::check';
+            $storage->remember($id, $this->counterExample(['x' => 77], 4242), ['x']);
+
+            $interceptor = new PropertyInterceptor($this->createMessenger());
+            $next = static fn(TestInfo $info): TestResult => new TestResult(
+                info: $info,
+                status: Status::Error,
+                failure: new AssumptionSkipped(),
+            );
+
+            $result = $interceptor->runTest($this->info(NoSeedFalsifyingStub::class, 'check'), $next);
+
+            // Every random run discards too, so the property gives up — but the
+            // stale entry is gone.
+            Assert::instanceOf($result->failure, GaveUpException::class);
+            Assert::same($storage->recall($id, ['x']), []);
         } finally {
             putenv('PROPERTY_DB');
             $this->cleanupDir($dir);
@@ -1123,9 +1223,9 @@ final class PropertyInterceptorTest
         putenv('PROPERTY_DB=' . $dir);
 
         try {
-            // Pre-seed storage with a recorded failing seed; the replay phase must
-            // reproduce the failure with THAT seed (not a fresh random one).
-            file_put_contents($dir . '/' . sha1(NoSeedFalsifyingStub::class . '::check') . '.seed', '999');
+            // A counterexample the codec cannot represent is stored as a seed; the
+            // replay phase must re-run the random phase with THAT seed.
+            $this->writeSeedEntry($dir, NoSeedFalsifyingStub::class . '::check', 999);
 
             $interceptor = new PropertyInterceptor($this->createMessenger());
             $next = static fn(TestInfo $info): TestResult => new TestResult(
@@ -1144,14 +1244,14 @@ final class PropertyInterceptorTest
         }
     }
 
-    public function forgetsARecordedSeedWhenTheReplayNoLongerFails(): void
+    public function prunesARecordedSeedWhenTheReplayNoLongerFails(): void
     {
         $dir = $this->tempStorageDir();
         putenv('PROPERTY_DB=' . $dir);
 
         try {
-            $file = $dir . '/' . sha1(NoSeedFalsifyingStub::class . '::check') . '.seed';
-            file_put_contents($file, '999');
+            $id = NoSeedFalsifyingStub::class . '::check';
+            $this->writeSeedEntry($dir, $id, 999);
 
             $interceptor = new PropertyInterceptor($this->createMessenger());
             $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
@@ -1159,7 +1259,7 @@ final class PropertyInterceptorTest
             $result = $interceptor->runTest($this->info(NoSeedFalsifyingStub::class, 'check'), $next);
 
             Assert::same($result->status, Status::Passed);
-            Assert::same(is_file($file), false);
+            Assert::same((new CorpusStorage($dir))->recall($id, ['x']), []);
         } finally {
             putenv('PROPERTY_DB');
             $this->cleanupDir($dir);
@@ -1172,9 +1272,13 @@ final class PropertyInterceptorTest
         putenv('PROPERTY_DB=' . $dir);
 
         try {
-            // FalsifyingStub pins seed:1; a stored seed must be ignored so the
-            // pinned reproducibility wins.
-            file_put_contents($dir . '/' . sha1(FalsifyingStub::class . '::check') . '.seed', '999');
+            // FalsifyingStub pins seed:1; a stored regression must be ignored so
+            // the pinned reproducibility wins.
+            (new CorpusStorage($dir))->remember(
+                FalsifyingStub::class . '::check',
+                $this->counterExample(['x' => 77], 999),
+                ['x'],
+            );
 
             $interceptor = new PropertyInterceptor($this->createMessenger());
             $next = static fn(TestInfo $info): TestResult => new TestResult(
@@ -1191,6 +1295,32 @@ final class PropertyInterceptorTest
             putenv('PROPERTY_DB');
             $this->cleanupDir($dir);
         }
+    }
+
+    /**
+     * @param array<string, mixed> $arguments
+     */
+    private function counterExample(array $arguments, int $seed): CounterExample
+    {
+        return new CounterExample(
+            seed: $seed,
+            runsBeforeFailure: 0,
+            originalArguments: $arguments,
+            shrunkArguments: $arguments,
+        );
+    }
+
+    /**
+     * Storage writes a seed entry only for counterexamples the codec cannot
+     * represent; this shortcut builds one directly.
+     */
+    private function writeSeedEntry(string $dir, string $id, int $seed): void
+    {
+        file_put_contents($dir . '/' . sha1($id) . '.json', json_encode([
+            'format' => CorpusStorage::FORMAT_VERSION,
+            'property' => $id,
+            'entries' => [['kind' => 'seed', 'seed' => $seed, 'epoch' => CorpusStorage::SEQUENCE_EPOCH]],
+        ], JSON_THROW_ON_ERROR));
     }
 
     public function storageDisabledWritesNothingAndDoesNotCrash(): void

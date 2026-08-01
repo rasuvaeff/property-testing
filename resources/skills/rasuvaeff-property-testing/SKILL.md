@@ -77,6 +77,12 @@ public static function sortedThenSortedIsIdempotentGenerators(): array
 | Rare precondition, construction impossible | `Assume::that()` (last resort) |
 | Sequences of ops vs a model | `Gen::commands()` + `StateMachine::check()` |
 | Prove the property is not vacuous | `Classify::label()` / `Classify::cover()` |
+| Keep found bugs from coming back | `PROPERTY_DB=<gitignored dir>` (regression corpus) |
+
+Set `PROPERTY_DB` to a directory and every falsified property records its
+minimised input there; recorded failures replay before the random phase on the
+next run (`RegressionViolationException`, or `PropertyViolationException` when
+the input could only be stored as a seed) and are pruned once they pass.
 
 ## Full API
 

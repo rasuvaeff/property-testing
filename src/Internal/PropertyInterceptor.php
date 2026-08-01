@@ -16,6 +16,7 @@ use Rasuvaeff\PropertyTesting\GenerationExhausted;
 use Rasuvaeff\PropertyTesting\Property;
 use Rasuvaeff\PropertyTesting\PropertyViolationException;
 use Rasuvaeff\PropertyTesting\Random;
+use Rasuvaeff\PropertyTesting\RegressionViolationException;
 use Rasuvaeff\PropertyTesting\Shrinkable;
 use Rasuvaeff\PropertyTesting\TimeBudgetExceededException;
 use Testo\Common\Messenger;
@@ -109,30 +110,36 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             return $exampleFailure;
         }
 
-        $storage = SeedStorage::fromEnv();
+        $storage = CorpusStorage::fromEnv();
         $propertyId = $reflection->getDeclaringClass()->getName() . '::' . $reflection->getName();
 
-        // Opt-in regression replay: re-run a previously recorded failing seed
-        // first (unless the attribute pins its own seed). A reproduced failure is
-        // reported immediately; a seed that no longer fails is forgotten.
-        if ($storage instanceof SeedStorage && $property->seed === null) {
-            $recalled = $storage->recall($propertyId);
+        // Opt-in regression replay: re-run every recorded past failure first
+        // (unless the attribute pins its own seed). A reproduced failure is
+        // reported immediately; an entry that no longer fails is pruned.
+        if ($storage instanceof CorpusStorage && $property->seed === null) {
+            foreach ($storage->recall($propertyId, $parameterNames) as $entry) {
+                if ($entry->isValues()) {
+                    $replay = $this->replayRegression($info, $next, $entry->arguments, $entry->seed, $parameterNames, $property->timeoutMs);
 
-            if ($recalled !== null) {
-                $replay = $this->runProperty(new Random($recalled), $recalled, $generators, $parameterNames, $runs, $maxDiscards, $verbose, $next, $info, $property->maxShrinks, $property->timeoutMs, $property->budgetMs);
+                    if ($replay instanceof TestResult) {
+                        return $replay;
+                    }
+                } else {
+                    $replay = $this->runProperty(new Random($entry->seed), $entry->seed, $generators, $parameterNames, $runs, $maxDiscards, $verbose, $next, $info, $property->maxShrinks, $property->timeoutMs, $property->budgetMs);
 
-                if ($replay->failure instanceof PropertyViolationException) {
-                    return $replay;
+                    if ($replay->failure instanceof PropertyViolationException) {
+                        return $replay;
+                    }
                 }
 
-                $storage->forget($propertyId);
+                $storage->prune($propertyId, $entry);
             }
         }
 
         $result = $this->runProperty($random, $seed, $generators, $parameterNames, $runs, $maxDiscards, $verbose, $next, $info, $property->maxShrinks, $property->timeoutMs, $property->budgetMs);
 
-        if ($storage instanceof SeedStorage && $result->failure instanceof PropertyViolationException) {
-            $storage->remember($propertyId, $seed);
+        if ($storage instanceof CorpusStorage && $result->failure instanceof PropertyViolationException) {
+            $storage->remember($propertyId, $result->failure->getCounterExample(), $parameterNames);
         }
 
         return $result;
@@ -632,6 +639,65 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             }
 
             ++$index;
+        }
+
+        return null;
+    }
+
+    /**
+     * Replays one recorded regression: the minimised input of an earlier failure,
+     * run once with the very values that failed. Returns the failing result, or
+     * null when the input no longer falsifies the property (the caller then prunes
+     * the entry) — including when the run is discarded, which means the recorded
+     * input has fallen out of the property's domain.
+     *
+     * Mirrors {@see runExamples()}'s lifecycle discipline: the input is not
+     * shrunk (it is already minimal) and the per-run deadline applies.
+     *
+     * @param callable(TestInfo): TestResult $next
+     * @param array<string, mixed> $arguments The recorded input, keyed by parameter name.
+     * @param int $seed Seed of the run that recorded it.
+     * @param list<string> $parameterNames
+     */
+    private function replayRegression(TestInfo $info, callable $next, array $arguments, int $seed, array $parameterNames, ?int $timeoutMs): ?TestResult
+    {
+        // Recall validated the key set against the live signature; order the
+        // values the way the method declares its parameters.
+        $positional = array_map(static fn(string $name): mixed => $arguments[$name], $parameterNames);
+
+        Classify::beginRun();
+        // A recorded regression may call Gen::draw(); its draws come from a
+        // dedicated deterministic stream keyed on the recording run's seed.
+        DrawContext::arm(new Random($seed));
+        $runStart = hrtime(true);
+        $result = $next($info->with(arguments: $positional));
+        $runElapsedNs = hrtime(true) - $runStart;
+        DrawContext::disarm();
+        Classify::flushRun();
+
+        if ($this->isFailingResult($result)) {
+            return new TestResult(
+                info: $info,
+                status: Status::Failed,
+                failure: new RegressionViolationException($arguments, $seed, $result->failure),
+                // Keep the failing run's attributes (e.g. codecov's
+                // CoverageResult) on the aggregate result — see runProperty().
+                attributes: $result->attributes,
+            );
+        }
+
+        if ($timeoutMs !== null && $runElapsedNs > $timeoutMs * 1_000_000) {
+            return new TestResult(
+                info: $info,
+                status: Status::Failed,
+                failure: new DeadlineExceededException(
+                    propertyName: $info->name,
+                    arguments: $arguments,
+                    elapsedMs: (float) $runElapsedNs / 1e6,
+                    timeoutMs: $timeoutMs,
+                ),
+                attributes: $result->attributes,
+            );
         }
 
         return null;

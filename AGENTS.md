@@ -24,8 +24,14 @@ The `2.3.0` additions: domain arbitraries on `Gen` (`ipv4`/`email`/`url`/`json`/
 `jsonString`, and `regex`/`stringMatching` compiled by the internal
 `RegexCompiler` — a PCRE-subset recursive-descent compiler to combinators);
 explicit examples (`#[Property(examples: …)]` / `<testMethod>Examples`, failing
-via `ExampleViolationException`); and opt-in seed persistence/replay via the
-internal `SeedStorage` (`PROPERTY_DB`).
+via `ExampleViolationException`); and opt-in failure persistence/replay via the
+internal `CorpusStorage` (`PROPERTY_DB`).
+
+The `2.8.0` addition: the regression corpus — `CorpusStorage` keeps several past
+failures per property (`CorpusEntry`, encoded by the internal `ValueCodec`),
+preferring the minimised input as data over the bare seed, and the interceptor
+replays them all before the random phase (`RegressionViolationException` for a
+values entry).
 
 The `2.4.0` addition: in-body dependent draw — `Gen::draw($arb)` inside the
 property body, backed by the internal `DrawContext` replay tape (fast-check's
@@ -113,6 +119,30 @@ make release-check
   termination argument alone does not bound the descent — the interceptor caps
   accepted steps via `MAX_DRAW_SHRINK_STEPS` whenever the tape is non-empty.
   Do not remove the cap or add re-validation to the replay.
+- **The regression corpus must never replay a different input than it recorded.**
+  Three guards enforce that, and removing any of them turns the corpus into a
+  source of false green runs:
+  - a counterexample carrying `draw#N` pseudo-arguments (in-body `Gen::draw()`)
+    is stored as a SEED, never as values — replaying the named parameters alone
+    would let the body draw fresh values. Feeding stored values into
+    `DrawContext` would need a tape-replay corpus format, which does not exist;
+  - `CorpusStorage::recall()` drops a values entry whose argument names are not
+    exactly the property's current parameters, and orders the recalled values by
+    the reflection parameter list (never by insertion order);
+  - `CorpusStorage::SEQUENCE_EPOCH` fences seed entries off. Bump it in any
+    release that shifts the generated sequence for a given seed (new boundary
+    bias, changed draw order, a rewritten arbitrary) — otherwise an old seed
+    replays a different input while claiming to be a regression. Values entries
+    carry the input and are deliberately exempt.
+- `ValueCodec` sends EVERY float through a tagged envelope, as text.
+  `json_encode()` renders an integral float as an integer literal (`0.0` -> `0`),
+  so an unenveloped float decodes back as an int — the package's own property
+  test `encodedValuesSurviveJsonTransport` catches this. Do not "optimise" finite
+  floats back to raw JSON numbers.
+- Psalm 6.16 crashes (`TLiteralFloat`: "unexpected NAN value was coerced to
+  string") when it must infer a literal type for the `NAN` constant in `src/`.
+  `ValueCodec::decodeFloat()` computes it with `fdiv(0.0, 0.0)` for that reason;
+  re-check before replacing it with `NAN`.
 - `Classify` carries a second static: coverage requirements from `cover()`,
   scoped per PROPERTY (not per run). The interceptor drains them once after
   the run loop via `flushRequirements()` and defensively before it — a
