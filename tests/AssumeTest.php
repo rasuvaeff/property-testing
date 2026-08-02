@@ -13,6 +13,7 @@ use Testo\Test;
 
 #[Test]
 #[Covers(Assume::class)]
+#[Covers(AssumptionSkipped::class)]
 final class AssumeTest
 {
     public function trueConditionDoesNotThrow(): void
@@ -26,5 +27,12 @@ final class AssumeTest
     public function falseConditionThrowsAssumptionSkipped(): void
     {
         Assume::that(false);
+    }
+
+    public function assumptionSkippedCarriesTheDiscardMessage(): void
+    {
+        $exception = new AssumptionSkipped();
+
+        Assert::same($exception->getMessage(), 'Assumption not satisfied; property run discarded');
     }
 }

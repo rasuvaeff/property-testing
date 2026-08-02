@@ -34,6 +34,7 @@ use Testo\Test;
 
 #[Test]
 #[Covers(PropertyInterceptor::class)]
+#[Covers(CoverageViolationException::class)]
 final class PropertyInterceptorTest
 {
     public function passesEveryRunAndReportsPassed(): void
