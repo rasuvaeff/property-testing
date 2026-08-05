@@ -1,8 +1,8 @@
 ---
 layout: home
-title: property-testing
+title: Testo Property Testing
 hero:
-  name: property-testing
+  name: Testo Property Testing
   text: Сгенерируй сотни входов. Shrink'айте тот, что ломает.
   tagline: Property-based testing для PHP 8.3+, плагин для Testo.
   actions:

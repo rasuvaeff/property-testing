@@ -1,8 +1,8 @@
 ---
 layout: home
-title: property-testing
+title: Testo Property Testing
 hero:
-  name: property-testing
+  name: Testo Property Testing
   text: Generate hundreds of inputs. Shrink the one that breaks it.
   tagline: Property-based testing for PHP 8.3+, built as a plugin for Testo.
   actions:
