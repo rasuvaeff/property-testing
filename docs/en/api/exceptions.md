@@ -31,5 +31,4 @@ ever reaches your test. Don't catch it, and don't build on it — a future
 release is free to change how discards are signalled internally.
 
 <small>Generated from a reflection pass over every `@api` type in `src/`
-(<code>docs/scripts/reflect-api.php</code>) — see <a href="/en/api/">API
-overview</a> for how this stays in sync with the source.</small>
+(<code>docs/scripts/reflect-api.php</code>) — see [API overview](/en/api/) for how this stays in sync with the source.</small>

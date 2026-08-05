@@ -108,15 +108,32 @@ for (const match of configSource.matchAll(linkPattern)) {
 }
 
 const markdownLinkPattern = /\]\((\/(?:en|ru)\/[^)#\s]+)(#[^)\s]*)?\)/g
+// Raw HTML anchors like <a href="/en/..."> bypass VitePress's `base` rewriting
+// (only markdown links and Vue Router links get the base prefix), so they point
+// at the domain root on a project-Pages site. Internal links must be markdown.
+const rawHtmlAnchorPattern = /<a\s[^>]*href="\/(?!\/)[^"]*"/i
 for (const lang of ['en', 'ru']) {
     for (const file of collectMarkdownFiles(join(docsDir, lang))) {
         const content = readFileSync(file, 'utf8')
+        if (rawHtmlAnchorPattern.test(content)) {
+            const lineNum = content.split('\n').findIndex((l) => rawHtmlAnchorPattern.test(l)) + 1
+            fail(`${file.replace(docsDir + '/', '')}:${lineNum} uses a raw HTML <a href="/..."> internal link — VitePress does not apply \`base\` to it. Use a markdown link instead.`)
+        }
         for (const match of content.matchAll(markdownLinkPattern)) {
             const link = match[1]
             if (!resolveLink(link)) {
                 fail(`${file.replace(docsDir + '/', '')} links to "${link}", which does not resolve to a file.`)
             }
         }
+    }
+}
+// The root language picker uses relative <a href="./en/"> (browser-resolved),
+// so it is exempt — but an absolute <a href="/en/"> there is still wrong.
+const rootIndex = join(docsDir, 'index.md')
+if (existsSync(rootIndex)) {
+    const rootContent = readFileSync(rootIndex, 'utf8')
+    if (/<a\s[^>]*href="\/(?:en|ru)\//i.test(rootContent)) {
+        fail('docs/index.md uses an absolute <a href="/en|/ru/..."> link — use a relative "./en/" form so the browser resolves it under the site base.')
     }
 }
 

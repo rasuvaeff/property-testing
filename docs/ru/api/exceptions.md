@@ -32,4 +32,4 @@ title: Исключения
 
 <small>Сгенерировано проходом рефлексии по всем `@api`-типам в `src/`
 (<code>docs/scripts/reflect-api.php</code>) — как это остаётся синхронным с
-исходниками, см. <a href="/ru/api/">обзор API</a>.</small>
+исходниками, см. [обзор API](/ru/api/).</small>
