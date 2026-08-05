@@ -1,5 +1,6 @@
 ---
 title: "Shrinkable"
+description: "Shrinkable — class в справочнике API property-testing."
 ---
 
 <!-- АВТОГЕНЕРАЦИЯ: docs/scripts/generate-api.mjs, проход рефлексии по src/ (docs/scripts/reflect-api.php) — не редактировать вручную. -->
@@ -18,10 +19,34 @@ title: "Shrinkable"
 
 ## Методы
 
-| Метод |
-|---|
-| `static leaf(mixed $value): Shrinkable` |
-| `static of(mixed $value, Closure $shrinks): Shrinkable` |
-| `shrinks(): iterable` |
-| `map(Closure $map): Shrinkable` |
+### leaf()
+
+```php
+static leaf(mixed $value): Shrinkable
+```
+
+- `$value` — undefined
+
+### of()
+
+```php
+static of(mixed $value, Closure $shrinks): Shrinkable
+```
+
+- `$value` — undefined
+- `$shrinks` — undefined
+
+### shrinks()
+
+```php
+shrinks(): iterable
+```
+
+### map()
+
+```php
+map(Closure $map): Shrinkable
+```
+
+- `$map` — undefined
 

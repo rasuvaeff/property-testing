@@ -1,10 +1,14 @@
 ---
 layout: home
 title: Testo Property Testing
+description: "Property-based тестирование для PHP 8.3+, плагин для Testo: генерируйте сотни случайных входов, находите тот, что фальсифицирует property, и shrink'айте его до минимального контрпримера."
 hero:
   name: Testo Property Testing
   text: Сгенерируй сотни входов. Shrink'айте тот, что ломает.
   tagline: Property-based testing для PHP 8.3+, плагин для Testo.
+  image:
+    src: /logo-mark.svg
+    alt: Логотип Property Testing
   actions:
     - theme: brand
       text: Что такое property-testing?

@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://rasuvaeff.github.io/property-testing/sitemap.xml

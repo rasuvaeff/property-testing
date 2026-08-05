@@ -1,5 +1,6 @@
 ---
 title: "Assume"
+description: "Assume — class в справочнике API property-testing."
 ---
 
 <!-- АВТОГЕНЕРАЦИЯ: docs/scripts/generate-api.mjs, проход рефлексии по src/ (docs/scripts/reflect-api.php) — не редактировать вручную. -->
@@ -12,7 +13,11 @@ title: "Assume"
 
 ## Методы
 
-| Метод |
-|---|
-| `static that(bool $condition): void` |
+### that()
+
+```php
+static that(bool $condition): void
+```
+
+- `$condition` — undefined
 

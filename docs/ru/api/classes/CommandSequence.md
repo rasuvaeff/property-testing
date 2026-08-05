@@ -1,5 +1,6 @@
 ---
 title: "CommandSequence"
+description: "CommandSequence — class в справочнике API property-testing."
 ---
 
 <!-- АВТОГЕНЕРАЦИЯ: docs/scripts/generate-api.mjs, проход рефлексии по src/ (docs/scripts/reflect-api.php) — не редактировать вручную. -->
@@ -19,7 +20,9 @@ title: "CommandSequence"
 
 ## Методы
 
-| Метод |
-|---|
-| `__toString(): string` |
+### __toString()
+
+```php
+__toString(): string
+```
 

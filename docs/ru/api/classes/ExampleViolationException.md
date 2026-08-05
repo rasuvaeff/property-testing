@@ -1,5 +1,6 @@
 ---
 title: "ExampleViolationException"
+description: "ExampleViolationException — class в справочнике API property-testing."
 ---
 
 <!-- АВТОГЕНЕРАЦИЯ: docs/scripts/generate-api.mjs, проход рефлексии по src/ (docs/scripts/reflect-api.php) — не редактировать вручную. -->
@@ -12,8 +13,15 @@ title: "ExampleViolationException"
 
 ## Методы
 
-| Метод |
-|---|
-| `getIndex(): int` |
-| `getArguments(): array` |
+### getIndex()
+
+```php
+getIndex(): int
+```
+
+### getArguments()
+
+```php
+getArguments(): array
+```
 

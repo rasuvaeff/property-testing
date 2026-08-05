@@ -1,5 +1,6 @@
 ---
 title: Обзор API
+description: "Каждый @api-тип в src/ property-testing, взятый живым проходом рефлексии — Property, Gen, Assume, ArbitraryInterface, Shrinkable, CounterExample, Classify."
 ---
 
 # Обзор API

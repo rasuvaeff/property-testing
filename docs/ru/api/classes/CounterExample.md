@@ -1,5 +1,6 @@
 ---
 title: "CounterExample"
+description: "CounterExample — class в справочнике API property-testing."
 ---
 
 <!-- АВТОГЕНЕРАЦИЯ: docs/scripts/generate-api.mjs, проход рефлексии по src/ (docs/scripts/reflect-api.php) — не редактировать вручную. -->
@@ -25,9 +26,25 @@ title: "CounterExample"
 
 ## Методы
 
-| Метод |
-|---|
-| `toArray(): array` |
-| `toJson(bool $pretty): string` |
-| `toExamplesCode(string $methodName): string` |
+### toArray()
+
+```php
+toArray(): array
+```
+
+### toJson()
+
+```php
+toJson(bool $pretty): string
+```
+
+- `$pretty` — undefined
+
+### toExamplesCode()
+
+```php
+toExamplesCode(string $methodName): string
+```
+
+- `$methodName` — undefined
 

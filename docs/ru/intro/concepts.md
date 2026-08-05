@@ -1,5 +1,6 @@
 ---
 title: Концепции
+description: "Краткий глоссарий терминологии property-testing: property, генератор/arbitrary, run, discard, seed, falsify, shrink, counterexample."
 ---
 
 # Концепции
@@ -50,7 +51,7 @@ shrinker'у.
 **Counterexample**
 &nbsp;&nbsp;Шринкнутый (минимальный) вход, фальсифицировавший property, плюс
 исходный вход, падение и статистика прогонов/shrink-шагов — несёт
-[`CounterExample`](/ru/api/index#counterexample), сообщается внутри
+[`CounterExample`](/ru/api/classes/CounterExample), сообщается внутри
 [`PropertyViolationException`](/ru/api/exceptions).
 
 **Classify / coverage**

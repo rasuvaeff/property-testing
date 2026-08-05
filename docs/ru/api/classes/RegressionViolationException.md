@@ -1,5 +1,6 @@
 ---
 title: "RegressionViolationException"
+description: "RegressionViolationException — class в справочнике API property-testing."
 ---
 
 <!-- АВТОГЕНЕРАЦИЯ: docs/scripts/generate-api.mjs, проход рефлексии по src/ (docs/scripts/reflect-api.php) — не редактировать вручную. -->
@@ -12,8 +13,15 @@ title: "RegressionViolationException"
 
 ## Методы
 
-| Метод |
-|---|
-| `getArguments(): array` |
-| `getSeed(): int` |
+### getArguments()
+
+```php
+getArguments(): array
+```
+
+### getSeed()
+
+```php
+getSeed(): int
+```
 
