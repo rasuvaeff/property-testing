@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 112 28" width="112" height="28" role="img" aria-label="Testo plugin">
+  <title>Testo plugin</title>
+  <rect x="0.75" y="0.75" width="110.5" height="26.5" rx="13.25" fill="none" stroke="#12796A" stroke-width="1.5"/>
+  <circle cx="18" cy="14" r="4" fill="#F79A6B"/>
+  <text x="30" y="19" font-family="Inter, system-ui, -apple-system, Segoe UI, sans-serif" font-size="13" fill="#12796A">Testo plugin</text>
+</svg>

@@ -1,5 +1,6 @@
 ---
 title: "Рецепт: первое property"
+description: "Разбор property_test.php: от пустого тестового класса Testo до фальсифицированного property и обратно до зелёного."
 ---
 
 # Рецепт: первое property

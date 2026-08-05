@@ -4,63 +4,63 @@ const enSidebar = [
     {
         text: 'Intro',
         items: [
-            { text: 'What is property-testing', link: '/en/intro/what-is-property-testing' },
-            { text: 'Getting started', link: '/en/intro/getting-started' },
-            { text: 'Concepts', link: '/en/intro/concepts' },
+            { text: 'What is property-testing', link: '/intro/what-is-property-testing' },
+            { text: 'Getting started', link: '/intro/getting-started' },
+            { text: 'Concepts', link: '/intro/concepts' },
         ],
     },
-    { text: 'Shrinking', link: '/en/shrinking' },
+    { text: 'Shrinking', link: '/shrinking' },
     {
         text: 'Generators',
         items: [
-            { text: 'Overview', link: '/en/generators/index' },
-            { text: 'Boundary bias', link: '/en/generators/boundary-bias' },
-            { text: 'Dependent generators (flatMap vs draw)', link: '/en/generators/dependent' },
-            { text: 'Custom arbitrary', link: '/en/generators/custom-arbitrary' },
+            { text: 'Overview', link: '/generators/index' },
+            { text: 'Boundary bias', link: '/generators/boundary-bias' },
+            { text: 'Dependent generators (flatMap vs draw)', link: '/generators/dependent' },
+            { text: 'Custom arbitrary', link: '/generators/custom-arbitrary' },
         ],
     },
     {
         text: 'Controlling runs',
         items: [
-            { text: 'Assume vs filter', link: '/en/controlling-runs/assume-vs-filter' },
-            { text: 'Bounding shrink work', link: '/en/controlling-runs/bounding-shrink' },
-            { text: 'Deadlines', link: '/en/controlling-runs/deadlines' },
-            { text: 'Environment overrides', link: '/en/controlling-runs/env-overrides' },
+            { text: 'Assume vs filter', link: '/controlling-runs/assume-vs-filter' },
+            { text: 'Bounding shrink work', link: '/controlling-runs/bounding-shrink' },
+            { text: 'Deadlines', link: '/controlling-runs/deadlines' },
+            { text: 'Environment overrides', link: '/controlling-runs/env-overrides' },
         ],
     },
-    { text: 'Regression corpus', link: '/en/regression-corpus' },
-    { text: 'Explicit examples', link: '/en/explicit-examples' },
-    { text: 'Distribution', link: '/en/distribution' },
-    { text: 'Sampling & export', link: '/en/sampling-and-export' },
+    { text: 'Regression corpus', link: '/regression-corpus' },
+    { text: 'Explicit examples', link: '/explicit-examples' },
+    { text: 'Distribution', link: '/distribution' },
+    { text: 'Sampling & export', link: '/sampling-and-export' },
     {
         text: 'State machine',
         items: [
-            { text: 'Concepts', link: '/en/state-machine/concepts' },
-            { text: 'Shrinking', link: '/en/state-machine/shrinking' },
+            { text: 'Concepts', link: '/state-machine/concepts' },
+            { text: 'Shrinking', link: '/state-machine/shrinking' },
         ],
     },
-    { text: 'Recipes', link: '/en/recipes' },
-    { text: 'Security', link: '/en/security' },
-    { text: 'Examples', link: '/en/examples' },
+    { text: 'Recipes', link: '/recipes' },
+    { text: 'Security', link: '/security' },
+    { text: 'Examples', link: '/examples' },
     {
         text: 'Cookbook',
         items: [
-            { text: 'Your first property', link: '/en/cookbook/first-property' },
-            { text: 'Reproducing with a seed', link: '/en/cookbook/reproducing-with-seed' },
-            { text: 'CI recipes', link: '/en/cookbook/ci-recipes' },
-            { text: 'Writing a state machine test', link: '/en/cookbook/writing-a-state-machine' },
+            { text: 'Your first property', link: '/cookbook/first-property' },
+            { text: 'Reproducing with a seed', link: '/cookbook/reproducing-with-seed' },
+            { text: 'CI recipes', link: '/cookbook/ci-recipes' },
+            { text: 'Writing a state machine test', link: '/cookbook/writing-a-state-machine' },
         ],
     },
     {
         text: 'API',
         items: [
-            { text: 'Overview', link: '/en/api/index' },
-            { text: 'Exceptions', link: '/en/api/exceptions' },
+            { text: 'Overview', link: '/api/index' },
+            { text: 'Exceptions', link: '/api/exceptions' },
         ],
     },
-    { text: 'Roadmap', link: '/en/roadmap' },
-    { text: 'Migrating from 1.x', link: '/en/migrating-from-1x' },
-    { text: 'llms.txt reference', link: '/en/llms' },
+    { text: 'Roadmap', link: '/roadmap' },
+    { text: 'Migrating from 1.x', link: '/migrating-from-1x' },
+    { text: 'llms.txt reference', link: '/llms' },
 ]
 
 const ruSidebar = [
@@ -126,13 +126,45 @@ const ruSidebar = [
     { text: 'llms.txt', link: '/ru/llms' },
 ]
 
+const SITE_URL = 'https://rasuvaeff.github.io/property-testing/'
+
 export default defineConfig({
     title: 'Testo Property Testing',
-    description: 'Property-based testing for PHP 8.3+, built as a plugin for Testo',
+    description:
+        'Property-based testing for PHP 8.3+, a Testo plugin: generate hundreds of random inputs, find the one that falsifies your property, and shrink it to a minimal counterexample.',
     base: '/property-testing/',
     cleanUrls: true,
     lastUpdated: true,
+    sitemap: { hostname: SITE_URL },
+    head: [
+        ['link', { rel: 'icon', type: 'image/svg+xml', href: '/property-testing/logo-mark.svg' }],
+        ['meta', { name: 'theme-color', content: '#12796A' }],
+        ['meta', { property: 'og:type', content: 'website' }],
+        ['meta', { property: 'og:site_name', content: 'Testo Property Testing' }],
+        ['meta', { name: 'twitter:card', content: 'summary' }],
+    ],
+    // Per-page canonical + Open Graph/Twitter title & description — VitePress's
+    // static `head` array above can't vary per page, and every page otherwise
+    // shares one generic <meta description>, which is worse for search than a
+    // page-specific one (set via each page's own `description` frontmatter).
+    // `pageData.relativePath` already carries the 'ru/' prefix for Russian
+    // pages and no prefix for English ones (English is the unprefixed root
+    // locale), so no locale-specific branching is needed here.
+    transformHead: ({ pageData, title, description }) => {
+        const clean = pageData.relativePath.replace(/\.md$/, '').replace(/(^|\/)index$/, '$1')
+        const url = SITE_URL + clean
+
+        return [
+            ['link', { rel: 'canonical', href: url }],
+            ['meta', { property: 'og:title', content: title }],
+            ['meta', { property: 'og:description', content: description }],
+            ['meta', { property: 'og:url', content: url }],
+            ['meta', { name: 'twitter:title', content: title }],
+            ['meta', { name: 'twitter:description', content: description }],
+        ]
+    },
     themeConfig: {
+        logo: '/logo-mark.svg',
         search: { provider: 'local' },
         socialLinks: [
             { icon: 'github', link: 'https://github.com/rasuvaeff/property-testing' },
@@ -145,14 +177,13 @@ export default defineConfig({
         root: {
             label: 'English',
             lang: 'en',
-            link: '/en/',
             themeConfig: {
                 nav: [
-                    { text: 'Guide', link: '/en/intro/what-is-property-testing' },
-                    { text: 'API', link: '/en/api/index' },
+                    { text: 'Guide', link: '/intro/what-is-property-testing' },
+                    { text: 'API', link: '/api/index' },
                     { text: 'Testo', link: 'https://php-testo.github.io/' },
                 ],
-                sidebar: { '/en/': enSidebar },
+                sidebar: { '/': enSidebar },
                 outlineTitle: 'On this page',
             },
         },

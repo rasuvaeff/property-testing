@@ -1,5 +1,6 @@
 ---
 title: Исключения
+description: "Каждый режим отказа property-testing как типизированное исключение — PropertyViolationException, GaveUpException, DeadlineExceededException и другие, поле за полем."
 ---
 
 # Исключения

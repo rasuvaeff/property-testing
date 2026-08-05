@@ -1,5 +1,6 @@
 ---
 title: "Random"
+description: "Random — class в справочнике API property-testing."
 ---
 
 <!-- АВТОГЕНЕРАЦИЯ: docs/scripts/generate-api.mjs, проход рефлексии по src/ (docs/scripts/reflect-api.php) — не редактировать вручную. -->
@@ -12,9 +13,26 @@ title: "Random"
 
 ## Методы
 
-| Метод |
-|---|
-| `int(int $min, int $max): int` |
-| `float(): float` |
-| `bytes(int $length): string` |
+### int()
+
+```php
+int(int $min, int $max): int
+```
+
+- `$min` — undefined
+- `$max` — undefined
+
+### float()
+
+```php
+float(): float
+```
+
+### bytes()
+
+```php
+bytes(int $length): string
+```
+
+- `$length` — undefined
 

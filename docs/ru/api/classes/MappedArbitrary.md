@@ -1,5 +1,6 @@
 ---
 title: "MappedArbitrary"
+description: "MappedArbitrary — class в справочнике API property-testing."
 ---
 
 <!-- АВТОГЕНЕРАЦИЯ: docs/scripts/generate-api.mjs, проход рефлексии по src/ (docs/scripts/reflect-api.php) — не редактировать вручную. -->
@@ -12,7 +13,11 @@ title: "MappedArbitrary"
 
 ## Методы
 
-| Метод |
-|---|
-| `generate(Random $random): Shrinkable` |
+### generate()
+
+```php
+generate(Random $random): Shrinkable
+```
+
+- `$random` — undefined
 

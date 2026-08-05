@@ -1,5 +1,6 @@
 ---
 title: "State machine: shrinking"
+description: "Как падающая последовательность Command shrink'ается до кратчайшего воспроизведения: сначала удаление смежных блоков, затем упрощение отдельных команд."
 ---
 
 # State machine: shrinking

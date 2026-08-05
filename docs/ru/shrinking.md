@@ -1,5 +1,6 @@
 ---
 title: Shrinking
+description: "Интегрированный shrinking: каждый вызов generate() возвращает значение вместе с ленивым shrink-деревом, поэтому трансформированные генераторы (map, flatMap) shrink'аются корректно бесплатно."
 ---
 
 # Shrinking
