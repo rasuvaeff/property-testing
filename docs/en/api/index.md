@@ -57,7 +57,7 @@ Two `@api` members exist for narrower, more advanced use than "write a
 but not `@api`; see the note at the bottom of the
 [exceptions reference](/en/api/exceptions#not-part-of-the-contract).
 
-<small>This page and <a href="/en/api/exceptions">Exceptions</a> are checked
+<small>This page and [Exceptions](/en/api/exceptions) are checked
 against a live reflection snapshot of <code>src/</code>, not hand-maintained
 from memory — see <a href="https://github.com/rasuvaeff/property-testing/issues/29"
 target="_blank" rel="noopener">issue #29</a> for the gaps this closed.</small>

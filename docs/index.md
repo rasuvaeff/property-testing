@@ -7,8 +7,8 @@ title: Testo Property Testing
   <h1 style="margin-bottom: 1rem;">Testo Property Testing</h1>
   <p style="margin-bottom: 2rem; opacity: 0.75;">Property-based testing for PHP 8.3+</p>
   <p>
-    <a href="/en/">English</a>
+    <a href="./en/">English</a>
     &nbsp;/&nbsp;
-    <a href="/ru/">Русский</a>
+    <a href="./ru/">Русский</a>
   </p>
 </div>

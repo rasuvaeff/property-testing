@@ -56,7 +56,7 @@ title: Обзор API
 но не `@api`; см. заметку внизу
 [справочника исключений](/ru/api/exceptions#не-часть-контракта).
 
-<small>Эта страница и <a href="/ru/api/exceptions">Исключения</a> сверяются
+<small>Эта страница и [Исключения](/ru/api/exceptions) сверяются
 со снимком рефлексии <code>src/</code>, а не поддерживаются по памяти — см.
 <a href="https://github.com/rasuvaeff/property-testing/issues/29"
 target="_blank" rel="noopener">issue #29</a>, какие пробелы это закрыло.</small>
