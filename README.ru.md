@@ -7,8 +7,11 @@
 [![Psalm level](https://img.shields.io/badge/psalm-level_1-blue.svg)](https://github.com/rasuvaeff/property-testing/actions/workflows/static-analysis.yml)
 [![PHP](https://img.shields.io/packagist/dependency-v/rasuvaeff/property-testing/php)](https://packagist.org/packages/rasuvaeff/property-testing)
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE.md)
+[![Docs](https://github.com/rasuvaeff/property-testing/actions/workflows/docs.yml/badge.svg)](https://rasuvaeff.github.io/property-testing/)
+
 [English version](README.md)
 
+**[Документация](https://rasuvaeff.github.io/property-testing/)** — полное руководство, сгенерированный API-справочник и cookbook.
 Property-based тестирование для PHP 8.3+, реализованное как плагин для
 тест-фреймворка [Testo](https://github.com/php-testo/testo). Генерируйте сотни
 случайных входов на каждый тест, находите падающий и shrink'айте его до

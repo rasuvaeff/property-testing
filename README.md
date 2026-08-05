@@ -7,8 +7,11 @@
 [![Psalm level](https://img.shields.io/badge/psalm-level_1-blue.svg)](https://github.com/rasuvaeff/property-testing/actions/workflows/static-analysis.yml)
 [![PHP](https://img.shields.io/packagist/dependency-v/rasuvaeff/property-testing/php)](https://packagist.org/packages/rasuvaeff/property-testing)
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE.md)
+[![Docs](https://github.com/rasuvaeff/property-testing/actions/workflows/docs.yml/badge.svg)](https://rasuvaeff.github.io/property-testing/)
 
 [Русская версия](README.ru.md)
+
+**[Documentation](https://rasuvaeff.github.io/property-testing/)** — full guide, generated API reference, and cookbook.
 
 Property-based testing for PHP 8.3+, built as a plugin for the
 [Testo](https://github.com/php-testo/testo) testing framework. Generate hundreds
