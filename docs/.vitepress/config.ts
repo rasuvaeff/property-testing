@@ -127,7 +127,7 @@ const ruSidebar = [
 ]
 
 export default defineConfig({
-    title: 'property-testing',
+    title: 'Testo Property Testing',
     description: 'Property-based testing for PHP 8.3+, built as a plugin for Testo',
     base: '/property-testing/',
     cleanUrls: true,
