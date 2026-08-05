@@ -1,0 +1,23 @@
+---
+title: "GaveUpException"
+---
+
+<!-- АВТОГЕНЕРАЦИЯ: docs/scripts/generate-api.mjs, проход рефлексии по src/ (docs/scripts/reflect-api.php) — не редактировать вручную. -->
+
+# `GaveUpException`
+
+`Rasuvaeff\PropertyTesting\GaveUpException`
+
+**Класс** — [Исходник](https://github.com/rasuvaeff/property-testing/blob/master/src/GaveUpException.php) — **Наследует:** `RuntimeException`
+
+## Свойства
+
+| Свойство | Тип | Readonly |
+|---|---|---|
+| `propertyName` | `string` | yes |
+| `requiredRuns` | `int` | yes |
+| `successfulRuns` | `int` | yes |
+| `discardedRuns` | `int` | yes |
+| `attempts` | `int` | yes |
+| `maxDiscards` | `int` | yes |
+
