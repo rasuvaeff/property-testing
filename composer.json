@@ -26,7 +26,7 @@
         "php": "8.3 - 8.5",
         "ext-mbstring": "*",
         "ext-random": "*",
-        "testo/testo": "^0.10.25 || ^1.0"
+        "testo/testo": "^0.10.39 || ^1.0"
     },
     "require-dev": {
         "ergebnis/composer-normalize": "^2.51",
