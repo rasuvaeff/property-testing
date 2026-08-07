@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\PropertyTesting\Tests\Internal;
 
+use Internal\Path;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Rasuvaeff\PropertyTesting\AssumptionSkipped;
 use Rasuvaeff\PropertyTesting\Classify;
@@ -24,6 +25,7 @@ use Testo\Assert\ExpectException;
 use Testo\Codecov\Covers;
 use Testo\Common\Messenger;
 use Testo\Core\Context\CaseInfo;
+use Testo\Core\Context\Identity\SuiteIdentity;
 use Testo\Core\Context\TestInfo;
 use Testo\Core\Context\TestResult;
 use Testo\Core\Definition\CaseDefinition;
@@ -1418,7 +1420,10 @@ final class PropertyInterceptorTest
 
         return new TestInfo(
             name: $method,
-            caseInfo: new CaseInfo(definition: new CaseDefinition(name: 'Stub', type: 'test')),
+            caseInfo: new CaseInfo(
+                suiteIdentity: new SuiteIdentity('Unit'),
+                definition: new CaseDefinition(name: 'Stub', type: 'test', file: Path::create(__FILE__)),
+            ),
             testDefinition: new TestDefinition(reflection: $reflection),
         );
     }
