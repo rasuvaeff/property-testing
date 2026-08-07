@@ -1,0 +1,1958 @@
+[
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface",
+        "kind": "interface",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "generate",
+                "static": false,
+                "params": [
+                    {
+                        "name": "random",
+                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\ArrayArbitrary",
+        "kind": "class",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "generate",
+                "static": false,
+                "params": [
+                    {
+                        "name": "random",
+                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\BoolArbitrary",
+        "kind": "class",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "generate",
+                "static": false,
+                "params": [
+                    {
+                        "name": "random",
+                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\BytesArbitrary",
+        "kind": "class",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "generate",
+                "static": false,
+                "params": [
+                    {
+                        "name": "random",
+                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\CharsetStringArbitrary",
+        "kind": "class",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "generate",
+                "static": false,
+                "params": [
+                    {
+                        "name": "random",
+                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\CommandSequenceArbitrary",
+        "kind": "class",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "generate",
+                "static": false,
+                "params": [
+                    {
+                        "name": "random",
+                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\ConstantArbitrary",
+        "kind": "class",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "generate",
+                "static": false,
+                "params": [
+                    {
+                        "name": "random",
+                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\DateTimeArbitrary",
+        "kind": "class",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "generate",
+                "static": false,
+                "params": [
+                    {
+                        "name": "random",
+                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\DictionaryArbitrary",
+        "kind": "class",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "generate",
+                "static": false,
+                "params": [
+                    {
+                        "name": "random",
+                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\FilteredArbitrary",
+        "kind": "class",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "generate",
+                "static": false,
+                "params": [
+                    {
+                        "name": "random",
+                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\FlatMappedArbitrary",
+        "kind": "class",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "generate",
+                "static": false,
+                "params": [
+                    {
+                        "name": "random",
+                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\FloatArbitrary",
+        "kind": "class",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "generate",
+                "static": false,
+                "params": [
+                    {
+                        "name": "random",
+                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\FrequencyArbitrary",
+        "kind": "class",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "generate",
+                "static": false,
+                "params": [
+                    {
+                        "name": "random",
+                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\IntArbitrary",
+        "kind": "class",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "generate",
+                "static": false,
+                "params": [
+                    {
+                        "name": "random",
+                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\MappedArbitrary",
+        "kind": "class",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "generate",
+                "static": false,
+                "params": [
+                    {
+                        "name": "random",
+                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\NullableArbitrary",
+        "kind": "class",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "generate",
+                "static": false,
+                "params": [
+                    {
+                        "name": "random",
+                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\OneOfArbitrary",
+        "kind": "class",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "generate",
+                "static": false,
+                "params": [
+                    {
+                        "name": "random",
+                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\RecordArbitrary",
+        "kind": "class",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "generate",
+                "static": false,
+                "params": [
+                    {
+                        "name": "random",
+                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\StringArbitrary",
+        "kind": "class",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "generate",
+                "static": false,
+                "params": [
+                    {
+                        "name": "random",
+                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\TupleArbitrary",
+        "kind": "class",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "generate",
+                "static": false,
+                "params": [
+                    {
+                        "name": "random",
+                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\UniqueArrayArbitrary",
+        "kind": "class",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "generate",
+                "static": false,
+                "params": [
+                    {
+                        "name": "random",
+                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\UuidArbitrary",
+        "kind": "class",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "generate",
+                "static": false,
+                "params": [
+                    {
+                        "name": "random",
+                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Assume",
+        "kind": "class",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "that",
+                "static": true,
+                "params": [
+                    {
+                        "name": "condition",
+                        "type": "bool"
+                    }
+                ],
+                "returnType": "void"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\AssumptionSkipped",
+        "kind": "class",
+        "isApi": false,
+        "extends": "RuntimeException",
+        "publicProperties": [],
+        "publicMethods": []
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Classify",
+        "kind": "class",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "label",
+                "static": true,
+                "params": [
+                    {
+                        "name": "label",
+                        "type": "string"
+                    }
+                ],
+                "returnType": "void"
+            },
+            {
+                "name": "when",
+                "static": true,
+                "params": [
+                    {
+                        "name": "condition",
+                        "type": "bool"
+                    },
+                    {
+                        "name": "label",
+                        "type": "string"
+                    }
+                ],
+                "returnType": "void"
+            },
+            {
+                "name": "cover",
+                "static": true,
+                "params": [
+                    {
+                        "name": "condition",
+                        "type": "bool"
+                    },
+                    {
+                        "name": "label",
+                        "type": "string"
+                    },
+                    {
+                        "name": "minPercent",
+                        "type": "float"
+                    }
+                ],
+                "returnType": "void"
+            },
+            {
+                "name": "beginRun",
+                "static": true,
+                "params": [],
+                "returnType": "void"
+            },
+            {
+                "name": "flushRun",
+                "static": true,
+                "params": [],
+                "returnType": "array"
+            },
+            {
+                "name": "flushRequirements",
+                "static": true,
+                "params": [],
+                "returnType": "array"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\CounterExample",
+        "kind": "class",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [
+            {
+                "name": "seed",
+                "type": "int",
+                "readonly": true
+            },
+            {
+                "name": "runsBeforeFailure",
+                "type": "int",
+                "readonly": true
+            },
+            {
+                "name": "originalArguments",
+                "type": "array",
+                "readonly": true
+            },
+            {
+                "name": "shrunkArguments",
+                "type": "array",
+                "readonly": true
+            },
+            {
+                "name": "shrinkSteps",
+                "type": "int",
+                "readonly": true
+            },
+            {
+                "name": "failure",
+                "type": "?Throwable",
+                "readonly": true
+            },
+            {
+                "name": "skips",
+                "type": "int",
+                "readonly": true
+            },
+            {
+                "name": "shrinkTrials",
+                "type": "int",
+                "readonly": true
+            }
+        ],
+        "publicMethods": [
+            {
+                "name": "toArray",
+                "static": false,
+                "params": [],
+                "returnType": "array"
+            },
+            {
+                "name": "toJson",
+                "static": false,
+                "params": [
+                    {
+                        "name": "pretty",
+                        "type": "bool"
+                    }
+                ],
+                "returnType": "string"
+            },
+            {
+                "name": "toExamplesCode",
+                "static": false,
+                "params": [
+                    {
+                        "name": "methodName",
+                        "type": "string"
+                    }
+                ],
+                "returnType": "string"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\CoverageViolationException",
+        "kind": "class",
+        "isApi": true,
+        "extends": "RuntimeException",
+        "publicProperties": [],
+        "publicMethods": []
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\DeadlineExceededException",
+        "kind": "class",
+        "isApi": true,
+        "extends": "RuntimeException",
+        "publicProperties": [
+            {
+                "name": "propertyName",
+                "type": "string",
+                "readonly": true
+            },
+            {
+                "name": "arguments",
+                "type": "array",
+                "readonly": true
+            },
+            {
+                "name": "elapsedMs",
+                "type": "float",
+                "readonly": true
+            },
+            {
+                "name": "timeoutMs",
+                "type": "int",
+                "readonly": true
+            }
+        ],
+        "publicMethods": []
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\ExampleViolationException",
+        "kind": "class",
+        "isApi": true,
+        "extends": "RuntimeException",
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "getIndex",
+                "static": false,
+                "params": [],
+                "returnType": "int"
+            },
+            {
+                "name": "getArguments",
+                "static": false,
+                "params": [],
+                "returnType": "array"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\GaveUpException",
+        "kind": "class",
+        "isApi": true,
+        "extends": "RuntimeException",
+        "publicProperties": [
+            {
+                "name": "propertyName",
+                "type": "string",
+                "readonly": true
+            },
+            {
+                "name": "requiredRuns",
+                "type": "int",
+                "readonly": true
+            },
+            {
+                "name": "successfulRuns",
+                "type": "int",
+                "readonly": true
+            },
+            {
+                "name": "discardedRuns",
+                "type": "int",
+                "readonly": true
+            },
+            {
+                "name": "attempts",
+                "type": "int",
+                "readonly": true
+            },
+            {
+                "name": "maxDiscards",
+                "type": "int",
+                "readonly": true
+            }
+        ],
+        "publicMethods": []
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Gen",
+        "kind": "class",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "int",
+                "static": true,
+                "params": [],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\IntArbitrary"
+            },
+            {
+                "name": "intBetween",
+                "static": true,
+                "params": [
+                    {
+                        "name": "min",
+                        "type": "int"
+                    },
+                    {
+                        "name": "max",
+                        "type": "int"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\IntArbitrary"
+            },
+            {
+                "name": "intPositive",
+                "static": true,
+                "params": [],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\IntArbitrary"
+            },
+            {
+                "name": "float",
+                "static": true,
+                "params": [],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\FloatArbitrary"
+            },
+            {
+                "name": "floatBetween",
+                "static": true,
+                "params": [
+                    {
+                        "name": "min",
+                        "type": "float"
+                    },
+                    {
+                        "name": "max",
+                        "type": "float"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\FloatArbitrary"
+            },
+            {
+                "name": "bool",
+                "static": true,
+                "params": [],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\BoolArbitrary"
+            },
+            {
+                "name": "string",
+                "static": true,
+                "params": [],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\StringArbitrary"
+            },
+            {
+                "name": "stringAscii",
+                "static": true,
+                "params": [],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\StringArbitrary"
+            },
+            {
+                "name": "stringOf",
+                "static": true,
+                "params": [
+                    {
+                        "name": "minLength",
+                        "type": "int"
+                    },
+                    {
+                        "name": "maxLength",
+                        "type": "int"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\StringArbitrary"
+            },
+            {
+                "name": "char",
+                "static": true,
+                "params": [],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\StringArbitrary"
+            },
+            {
+                "name": "stringFrom",
+                "static": true,
+                "params": [
+                    {
+                        "name": "alphabet",
+                        "type": "string"
+                    },
+                    {
+                        "name": "minLength",
+                        "type": "int"
+                    },
+                    {
+                        "name": "maxLength",
+                        "type": "int"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\CharsetStringArbitrary"
+            },
+            {
+                "name": "bytes",
+                "static": true,
+                "params": [
+                    {
+                        "name": "minLength",
+                        "type": "int"
+                    },
+                    {
+                        "name": "maxLength",
+                        "type": "int"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\BytesArbitrary"
+            },
+            {
+                "name": "arrayOf",
+                "static": true,
+                "params": [
+                    {
+                        "name": "element",
+                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                    },
+                    {
+                        "name": "minSize",
+                        "type": "int"
+                    },
+                    {
+                        "name": "maxSize",
+                        "type": "int"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\ArrayArbitrary"
+            },
+            {
+                "name": "nonEmptyArrayOf",
+                "static": true,
+                "params": [
+                    {
+                        "name": "element",
+                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                    },
+                    {
+                        "name": "maxSize",
+                        "type": "int"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\ArrayArbitrary"
+            },
+            {
+                "name": "uniqueArrayOf",
+                "static": true,
+                "params": [
+                    {
+                        "name": "element",
+                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                    },
+                    {
+                        "name": "minSize",
+                        "type": "int"
+                    },
+                    {
+                        "name": "maxSize",
+                        "type": "int"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\UniqueArrayArbitrary"
+            },
+            {
+                "name": "dictOf",
+                "static": true,
+                "params": [
+                    {
+                        "name": "key",
+                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                    },
+                    {
+                        "name": "value",
+                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                    },
+                    {
+                        "name": "minSize",
+                        "type": "int"
+                    },
+                    {
+                        "name": "maxSize",
+                        "type": "int"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\DictionaryArbitrary"
+            },
+            {
+                "name": "record",
+                "static": true,
+                "params": [
+                    {
+                        "name": "shape",
+                        "type": "array"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\RecordArbitrary"
+            },
+            {
+                "name": "oneOf",
+                "static": true,
+                "params": [
+                    {
+                        "name": "values",
+                        "type": "mixed"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\OneOfArbitrary"
+            },
+            {
+                "name": "elements",
+                "static": true,
+                "params": [
+                    {
+                        "name": "values",
+                        "type": "array"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\OneOfArbitrary"
+            },
+            {
+                "name": "constant",
+                "static": true,
+                "params": [
+                    {
+                        "name": "value",
+                        "type": "mixed"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\ConstantArbitrary"
+            },
+            {
+                "name": "enum",
+                "static": true,
+                "params": [
+                    {
+                        "name": "enum",
+                        "type": "string"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\OneOfArbitrary"
+            },
+            {
+                "name": "floatSpecial",
+                "static": true,
+                "params": [],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\OneOfArbitrary"
+            },
+            {
+                "name": "intRange",
+                "static": true,
+                "params": [
+                    {
+                        "name": "min",
+                        "type": "int"
+                    },
+                    {
+                        "name": "max",
+                        "type": "int"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\FlatMappedArbitrary"
+            },
+            {
+                "name": "recursive",
+                "static": true,
+                "params": [
+                    {
+                        "name": "leaf",
+                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                    },
+                    {
+                        "name": "wrap",
+                        "type": "Closure"
+                    },
+                    {
+                        "name": "maxDepth",
+                        "type": "int"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+            },
+            {
+                "name": "nullable",
+                "static": true,
+                "params": [
+                    {
+                        "name": "inner",
+                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\NullableArbitrary"
+            },
+            {
+                "name": "map",
+                "static": true,
+                "params": [
+                    {
+                        "name": "inner",
+                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                    },
+                    {
+                        "name": "map",
+                        "type": "Closure"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\MappedArbitrary"
+            },
+            {
+                "name": "flatMap",
+                "static": true,
+                "params": [
+                    {
+                        "name": "inner",
+                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                    },
+                    {
+                        "name": "flatMap",
+                        "type": "Closure"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\FlatMappedArbitrary"
+            },
+            {
+                "name": "filter",
+                "static": true,
+                "params": [
+                    {
+                        "name": "inner",
+                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                    },
+                    {
+                        "name": "predicate",
+                        "type": "Closure"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\FilteredArbitrary"
+            },
+            {
+                "name": "draw",
+                "static": true,
+                "params": [
+                    {
+                        "name": "arbitrary",
+                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                    }
+                ],
+                "returnType": "mixed"
+            },
+            {
+                "name": "tuple",
+                "static": true,
+                "params": [
+                    {
+                        "name": "elements",
+                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\TupleArbitrary"
+            },
+            {
+                "name": "frequency",
+                "static": true,
+                "params": [
+                    {
+                        "name": "pairs",
+                        "type": "iterable"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\FrequencyArbitrary"
+            },
+            {
+                "name": "uuid",
+                "static": true,
+                "params": [],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\UuidArbitrary"
+            },
+            {
+                "name": "datetime",
+                "static": true,
+                "params": [
+                    {
+                        "name": "min",
+                        "type": "?DateTimeImmutable"
+                    },
+                    {
+                        "name": "max",
+                        "type": "?DateTimeImmutable"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\DateTimeArbitrary"
+            },
+            {
+                "name": "ipv4",
+                "static": true,
+                "params": [],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\MappedArbitrary"
+            },
+            {
+                "name": "email",
+                "static": true,
+                "params": [],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\MappedArbitrary"
+            },
+            {
+                "name": "url",
+                "static": true,
+                "params": [],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\MappedArbitrary"
+            },
+            {
+                "name": "json",
+                "static": true,
+                "params": [
+                    {
+                        "name": "maxDepth",
+                        "type": "int"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+            },
+            {
+                "name": "jsonString",
+                "static": true,
+                "params": [
+                    {
+                        "name": "maxDepth",
+                        "type": "int"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\MappedArbitrary"
+            },
+            {
+                "name": "regex",
+                "static": true,
+                "params": [
+                    {
+                        "name": "pattern",
+                        "type": "string"
+                    },
+                    {
+                        "name": "maxRepeat",
+                        "type": "int"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+            },
+            {
+                "name": "stringMatching",
+                "static": true,
+                "params": [
+                    {
+                        "name": "pattern",
+                        "type": "string"
+                    },
+                    {
+                        "name": "maxRepeat",
+                        "type": "int"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+            },
+            {
+                "name": "commands",
+                "static": true,
+                "params": [
+                    {
+                        "name": "initialModel",
+                        "type": "mixed"
+                    },
+                    {
+                        "name": "commandGenerators",
+                        "type": "array"
+                    },
+                    {
+                        "name": "minLength",
+                        "type": "int"
+                    },
+                    {
+                        "name": "maxLength",
+                        "type": "int"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\CommandSequenceArbitrary"
+            },
+            {
+                "name": "sample",
+                "static": true,
+                "params": [
+                    {
+                        "name": "arbitrary",
+                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                    },
+                    {
+                        "name": "count",
+                        "type": "int"
+                    },
+                    {
+                        "name": "seed",
+                        "type": "int"
+                    }
+                ],
+                "returnType": "array"
+            },
+            {
+                "name": "sampleShrinks",
+                "static": true,
+                "params": [
+                    {
+                        "name": "arbitrary",
+                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                    },
+                    {
+                        "name": "seed",
+                        "type": "int"
+                    },
+                    {
+                        "name": "limit",
+                        "type": "int"
+                    }
+                ],
+                "returnType": "array"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\GenerationExhausted",
+        "kind": "class",
+        "isApi": true,
+        "extends": "RuntimeException",
+        "publicProperties": [
+            {
+                "name": "arbitrary",
+                "type": "string",
+                "readonly": true
+            },
+            {
+                "name": "attempts",
+                "type": "int",
+                "readonly": true
+            }
+        ],
+        "publicMethods": []
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Internal\\Boundary",
+        "kind": "class",
+        "isApi": false,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "ints",
+                "static": true,
+                "params": [
+                    {
+                        "name": "min",
+                        "type": "int"
+                    },
+                    {
+                        "name": "max",
+                        "type": "int"
+                    }
+                ],
+                "returnType": "array"
+            },
+            {
+                "name": "floats",
+                "static": true,
+                "params": [
+                    {
+                        "name": "min",
+                        "type": "float"
+                    },
+                    {
+                        "name": "max",
+                        "type": "float"
+                    }
+                ],
+                "returnType": "array"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Internal\\CorpusEntry",
+        "kind": "class",
+        "isApi": false,
+        "extends": null,
+        "publicProperties": [
+            {
+                "name": "arguments",
+                "type": "?array",
+                "readonly": true
+            },
+            {
+                "name": "seed",
+                "type": "int",
+                "readonly": true
+            }
+        ],
+        "publicMethods": [
+            {
+                "name": "values",
+                "static": true,
+                "params": [
+                    {
+                        "name": "arguments",
+                        "type": "array"
+                    },
+                    {
+                        "name": "seed",
+                        "type": "int"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Internal\\CorpusEntry"
+            },
+            {
+                "name": "seed",
+                "static": true,
+                "params": [
+                    {
+                        "name": "seed",
+                        "type": "int"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Internal\\CorpusEntry"
+            },
+            {
+                "name": "isValues",
+                "static": false,
+                "params": [],
+                "returnType": "bool"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Internal\\CorpusStorage",
+        "kind": "class",
+        "isApi": false,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "fromEnv",
+                "static": true,
+                "params": [],
+                "returnType": "?Rasuvaeff\\PropertyTesting\\Internal\\CorpusStorage"
+            },
+            {
+                "name": "recall",
+                "static": false,
+                "params": [
+                    {
+                        "name": "id",
+                        "type": "string"
+                    },
+                    {
+                        "name": "parameterNames",
+                        "type": "array"
+                    }
+                ],
+                "returnType": "array"
+            },
+            {
+                "name": "remember",
+                "static": false,
+                "params": [
+                    {
+                        "name": "id",
+                        "type": "string"
+                    },
+                    {
+                        "name": "counterExample",
+                        "type": "Rasuvaeff\\PropertyTesting\\CounterExample"
+                    },
+                    {
+                        "name": "parameterNames",
+                        "type": "array"
+                    }
+                ],
+                "returnType": "void"
+            },
+            {
+                "name": "prune",
+                "static": false,
+                "params": [
+                    {
+                        "name": "id",
+                        "type": "string"
+                    },
+                    {
+                        "name": "entry",
+                        "type": "Rasuvaeff\\PropertyTesting\\Internal\\CorpusEntry"
+                    }
+                ],
+                "returnType": "void"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Internal\\DrawContext",
+        "kind": "class",
+        "isApi": false,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "arm",
+                "static": true,
+                "params": [
+                    {
+                        "name": "random",
+                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                    },
+                    {
+                        "name": "tape",
+                        "type": "array"
+                    }
+                ],
+                "returnType": "void"
+            },
+            {
+                "name": "draw",
+                "static": true,
+                "params": [
+                    {
+                        "name": "arbitrary",
+                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                    }
+                ],
+                "returnType": "mixed"
+            },
+            {
+                "name": "disarm",
+                "static": true,
+                "params": [],
+                "returnType": "array"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Internal\\PropertyInterceptor",
+        "kind": "class",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "runTest",
+                "static": false,
+                "params": [
+                    {
+                        "name": "info",
+                        "type": "Testo\\Core\\Context\\TestInfo"
+                    },
+                    {
+                        "name": "next",
+                        "type": "callable"
+                    }
+                ],
+                "returnType": "Testo\\Core\\Context\\TestResult"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Internal\\RegexCompiler",
+        "kind": "class",
+        "isApi": false,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "compile",
+                "static": true,
+                "params": [
+                    {
+                        "name": "pattern",
+                        "type": "string"
+                    },
+                    {
+                        "name": "maxRepeat",
+                        "type": "int"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Internal\\ValueCodec",
+        "kind": "class",
+        "isApi": false,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "encode",
+                "static": true,
+                "params": [
+                    {
+                        "name": "value",
+                        "type": "mixed"
+                    }
+                ],
+                "returnType": "?array"
+            },
+            {
+                "name": "decode",
+                "static": true,
+                "params": [
+                    {
+                        "name": "encoded",
+                        "type": "mixed"
+                    }
+                ],
+                "returnType": "?array"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Internal\\ValueRenderer",
+        "kind": "class",
+        "isApi": false,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "render",
+                "static": true,
+                "params": [
+                    {
+                        "name": "value",
+                        "type": "mixed"
+                    }
+                ],
+                "returnType": "string"
+            },
+            {
+                "name": "normalize",
+                "static": true,
+                "params": [
+                    {
+                        "name": "value",
+                        "type": "mixed"
+                    }
+                ],
+                "returnType": "mixed"
+            },
+            {
+                "name": "exportPhp",
+                "static": true,
+                "params": [
+                    {
+                        "name": "value",
+                        "type": "mixed"
+                    }
+                ],
+                "returnType": "string"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Property",
+        "kind": "class",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [
+            {
+                "name": "runs",
+                "type": "int",
+                "readonly": true
+            },
+            {
+                "name": "seed",
+                "type": "?int",
+                "readonly": true
+            },
+            {
+                "name": "generators",
+                "type": "?string",
+                "readonly": true
+            },
+            {
+                "name": "maxShrinks",
+                "type": "?int",
+                "readonly": true
+            },
+            {
+                "name": "examples",
+                "type": "?string",
+                "readonly": true
+            },
+            {
+                "name": "maxDiscards",
+                "type": "?int",
+                "readonly": true
+            },
+            {
+                "name": "timeoutMs",
+                "type": "?int",
+                "readonly": true
+            },
+            {
+                "name": "budgetMs",
+                "type": "?int",
+                "readonly": true
+            }
+        ],
+        "publicMethods": []
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\PropertyViolationException",
+        "kind": "class",
+        "isApi": true,
+        "extends": "RuntimeException",
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "getCounterExample",
+                "static": false,
+                "params": [],
+                "returnType": "Rasuvaeff\\PropertyTesting\\CounterExample"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Random",
+        "kind": "class",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "int",
+                "static": false,
+                "params": [
+                    {
+                        "name": "min",
+                        "type": "int"
+                    },
+                    {
+                        "name": "max",
+                        "type": "int"
+                    }
+                ],
+                "returnType": "int"
+            },
+            {
+                "name": "float",
+                "static": false,
+                "params": [],
+                "returnType": "float"
+            },
+            {
+                "name": "bytes",
+                "static": false,
+                "params": [
+                    {
+                        "name": "length",
+                        "type": "int"
+                    }
+                ],
+                "returnType": "string"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\RegressionViolationException",
+        "kind": "class",
+        "isApi": true,
+        "extends": "RuntimeException",
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "getArguments",
+                "static": false,
+                "params": [],
+                "returnType": "array"
+            },
+            {
+                "name": "getSeed",
+                "static": false,
+                "params": [],
+                "returnType": "int"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Shrinkable",
+        "kind": "class",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [
+            {
+                "name": "value",
+                "type": "mixed",
+                "readonly": true
+            }
+        ],
+        "publicMethods": [
+            {
+                "name": "leaf",
+                "static": true,
+                "params": [
+                    {
+                        "name": "value",
+                        "type": "mixed"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+            },
+            {
+                "name": "of",
+                "static": true,
+                "params": [
+                    {
+                        "name": "value",
+                        "type": "mixed"
+                    },
+                    {
+                        "name": "shrinks",
+                        "type": "Closure"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+            },
+            {
+                "name": "shrinks",
+                "static": false,
+                "params": [],
+                "returnType": "iterable"
+            },
+            {
+                "name": "map",
+                "static": false,
+                "params": [
+                    {
+                        "name": "map",
+                        "type": "Closure"
+                    }
+                ],
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\StateMachine\\Command",
+        "kind": "interface",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "preCondition",
+                "static": false,
+                "params": [
+                    {
+                        "name": "model",
+                        "type": "mixed"
+                    }
+                ],
+                "returnType": "bool"
+            },
+            {
+                "name": "nextState",
+                "static": false,
+                "params": [
+                    {
+                        "name": "model",
+                        "type": "mixed"
+                    }
+                ],
+                "returnType": "mixed"
+            },
+            {
+                "name": "run",
+                "static": false,
+                "params": [
+                    {
+                        "name": "model",
+                        "type": "mixed"
+                    },
+                    {
+                        "name": "system",
+                        "type": "mixed"
+                    }
+                ],
+                "returnType": "mixed"
+            },
+            {
+                "name": "postCondition",
+                "static": false,
+                "params": [
+                    {
+                        "name": "model",
+                        "type": "mixed"
+                    },
+                    {
+                        "name": "result",
+                        "type": "mixed"
+                    }
+                ],
+                "returnType": "bool"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\StateMachine\\CommandSequence",
+        "kind": "class",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [
+            {
+                "name": "initialModel",
+                "type": "mixed",
+                "readonly": true
+            },
+            {
+                "name": "commands",
+                "type": "array",
+                "readonly": true
+            }
+        ],
+        "publicMethods": [
+            {
+                "name": "__toString",
+                "static": false,
+                "params": [],
+                "returnType": "string"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\StateMachine\\PostconditionViolation",
+        "kind": "class",
+        "isApi": true,
+        "extends": "RuntimeException",
+        "publicProperties": [
+            {
+                "name": "trace",
+                "type": "array",
+                "readonly": true
+            },
+            {
+                "name": "step",
+                "type": "int",
+                "readonly": true
+            },
+            {
+                "name": "command",
+                "type": "Rasuvaeff\\PropertyTesting\\StateMachine\\Command",
+                "readonly": true
+            },
+            {
+                "name": "model",
+                "type": "mixed",
+                "readonly": true
+            },
+            {
+                "name": "result",
+                "type": "mixed",
+                "readonly": true
+            }
+        ],
+        "publicMethods": []
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\StateMachine\\StateMachine",
+        "kind": "class",
+        "isApi": true,
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "check",
+                "static": true,
+                "params": [
+                    {
+                        "name": "sequence",
+                        "type": "Rasuvaeff\\PropertyTesting\\StateMachine\\CommandSequence"
+                    },
+                    {
+                        "name": "system",
+                        "type": "Closure"
+                    }
+                ],
+                "returnType": "void"
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\TimeBudgetExceededException",
+        "kind": "class",
+        "isApi": true,
+        "extends": "RuntimeException",
+        "publicProperties": [
+            {
+                "name": "propertyName",
+                "type": "string",
+                "readonly": true
+            },
+            {
+                "name": "budgetMs",
+                "type": "int",
+                "readonly": true
+            },
+            {
+                "name": "elapsedMs",
+                "type": "float",
+                "readonly": true
+            },
+            {
+                "name": "successfulRuns",
+                "type": "int",
+                "readonly": true
+            },
+            {
+                "name": "requiredRuns",
+                "type": "int",
+                "readonly": true
+            }
+        ],
+        "publicMethods": []
+    }
+]

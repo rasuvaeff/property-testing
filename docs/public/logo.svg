@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 120" width="500" height="120" role="img" aria-label="Property Testing, a Testo plugin">
+  <title>Property Testing — a Testo plugin</title>
+  <style>
+    .ink{fill:#141428}
+    @media (prefers-color-scheme: dark){.ink{fill:#F2F1FA}}
+  </style>
+  <rect x="0" y="0" width="120" height="120" rx="30" fill="#12796A"/>
+  <rect x="24" y="25" width="74" height="12" rx="6" fill="#FFFFFF"/>
+  <rect x="24" y="45" width="54" height="12" rx="6" fill="#FFFFFF"/>
+  <rect x="24" y="65" width="38" height="12" rx="6" fill="#FFFFFF"/>
+  <rect x="24" y="85" width="20" height="12" rx="6" fill="#F79A6B"/>
+  <text class="ink" x="150" y="58" font-family="Inter, system-ui, -apple-system, Segoe UI, sans-serif" font-size="38" font-weight="600" letter-spacing="-0.8">Property Testing</text>
+  <rect x="152" y="74" width="112" height="28" rx="14" fill="none" stroke="#12796A" stroke-width="1.5"/>
+  <circle cx="170" cy="88" r="4" fill="#F79A6B"/>
+  <text x="182" y="93" font-family="Inter, system-ui, -apple-system, Segoe UI, sans-serif" font-size="13" fill="#12796A">Testo plugin</text>
+</svg>
