@@ -232,8 +232,24 @@ final readonly class CorpusStorage
         }
 
         $tmp = dirname($file) . '/.' . basename($file) . '.' . $pid . '.tmp';
-        file_put_contents($tmp, $payload);
-        rename($tmp, $file);
+
+        // The length check keeps a full disk from shrinking the corpus: a
+        // partially written temp file renamed over the previous document would
+        // be the very torn write the temp file exists to prevent — only worse,
+        // because the rename makes it durable. On any short or failed write the
+        // previous document stays untouched.
+        if (@file_put_contents($tmp, $payload) !== \strlen($payload)) {
+            @unlink($tmp);
+
+            return;
+        }
+
+        if (!@rename($tmp, $file)) {
+            // A failed rename (e.g. Windows, when a concurrent reader holds the
+            // destination open) must not leave the temp file behind; the corpus
+            // simply keeps its previous state.
+            @unlink($tmp);
+        }
     }
 
     /**
@@ -258,7 +274,9 @@ final readonly class CorpusStorage
         }
 
         try {
-            flock($lock, LOCK_EX);
+            if (!flock($lock, LOCK_EX)) {
+                throw new \RuntimeException(sprintf('Could not lock the corpus for property "%s"', $id));
+            }
 
             $action();
         } finally {

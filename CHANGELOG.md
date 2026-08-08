@@ -14,7 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   would silently lose the first; and a process killed mid-write would leave a
   truncated JSON document that the next `recall()` silently drops. Writes now
   go through a temp file + atomic `rename()`, so a reader sees either the
-  previous or the new document, never a partial one.
+  previous or the new document, never a partial one. A short write (full disk)
+  or a failed `rename()` aborts the commit and keeps the previous document
+  intact instead of renaming a truncated temp file over it; a failed `flock()`
+  raises instead of silently proceeding unserialised.
+- Run the Unit suite on Windows in CI.
 
 ## 2.8.0 — 2026-07-30
 

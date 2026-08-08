@@ -490,6 +490,126 @@ final class CorpusStorageTest
         Assert::true(is_file($this->dir . '/' . sha1('B::b') . '.json.lock'));
     }
 
+    /**
+     * A write that cannot complete must leave the previous document intact.
+     * A partially written temp file renamed over a good corpus would be worse
+     * than the torn write the temp file exists to prevent — the rename makes
+     * the truncation durable.
+     */
+    public function failedTempWriteLeavesThePreviousCorpusIntact(): void
+    {
+        $storage = $this->storage();
+        $storage->remember(self::ID, $this->counterExample(['x' => 1], 1), ['x']);
+
+        // Occupying the deterministic temp path with a directory makes the
+        // payload write fail even when the suite runs as root.
+        $tmp = $this->dir . '/.' . sha1(self::ID) . '.json.' . getmypid() . '.tmp';
+        mkdir($tmp);
+
+        try {
+            $storage->remember(self::ID, $this->counterExample(['x' => 2], 2), ['x']);
+        } finally {
+            rmdir($tmp);
+        }
+
+        $entries = $storage->recall(self::ID, ['x']);
+
+        Assert::same(count($entries), 1);
+        Assert::same($entries[0]->arguments, ['x' => 1]);
+    }
+
+    /**
+     * A failed rename must clean its temp file up: leaking one contradicts the
+     * "no temp files behind" contract, and the corpus simply keeps its previous
+     * state.
+     */
+    public function failedRenameCleansUpItsTempFile(): void
+    {
+        // A non-empty directory at the destination path defeats rename() on
+        // every platform.
+        $file = $this->file();
+        mkdir($file);
+        file_put_contents($file . '/occupied', 'x');
+
+        $this->storage()->remember(self::ID, $this->counterExample(['x' => 1], 1), ['x']);
+
+        Assert::same(glob($this->dir . '/.*.tmp') ?: [], []);
+    }
+
+    /**
+     * remember()'s read-modify-write must block on the cross-process lock and
+     * lose neither commit. The parent holds a shared lock — an exclusive
+     * acquire blocks against it, while a writer mutated down to LOCK_SH (or to
+     * no lock at all) sails through and fails the running-state assertion.
+     */
+    public function rememberBlocksOnTheCrossProcessLockAndLosesNothing(): void
+    {
+        $storage = $this->storage();
+        $storage->remember(self::ID, $this->counterExample(['x' => 1], 1), ['x']);
+
+        $lock = fopen($this->file() . '.lock', 'c');
+        Assert::true(\is_resource($lock));
+        Assert::true(flock($lock, LOCK_SH));
+
+        $ready = $this->dir . '/ready';
+        $worker = $this->dir . '/worker.php';
+        file_put_contents($worker, $this->workerScript());
+
+        $pipes = [];
+        $process = proc_open([PHP_BINARY, $worker, $this->dir, self::ID, $ready], [], $pipes);
+        Assert::true(\is_resource($process));
+
+        try {
+            // The worker signals right before calling remember(); once it has,
+            // the only thing between it and completion is the lock.
+            $deadline = microtime(true) + 10.0;
+
+            while (!is_file($ready) && microtime(true) < $deadline) {
+                usleep(10_000);
+            }
+
+            Assert::true(is_file($ready));
+
+            usleep(300_000);
+            Assert::true(proc_get_status($process)['running']);
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
+
+        Assert::same(proc_close($process), 0);
+
+        Assert::same(count($this->storage()->recall(self::ID, ['x'])), 2);
+    }
+
+    private function workerScript(): string
+    {
+        $autoload = var_export(\dirname(__DIR__, 2) . '/vendor/autoload.php', true);
+
+        return <<<PHP
+            <?php
+
+            declare(strict_types=1);
+
+            require {$autoload};
+
+            [, \$dir, \$id, \$ready] = \$argv;
+
+            touch(\$ready);
+
+            (new \\Rasuvaeff\\PropertyTesting\\Internal\\CorpusStorage(\$dir))->remember(
+                \$id,
+                new \\Rasuvaeff\\PropertyTesting\\CounterExample(
+                    seed: 2,
+                    runsBeforeFailure: 0,
+                    originalArguments: ['x' => 2],
+                    shrunkArguments: ['x' => 2],
+                ),
+                ['x'],
+            );
+            PHP;
+    }
+
     #[BeforeTest]
     public function setUpDirectory(): void
     {
