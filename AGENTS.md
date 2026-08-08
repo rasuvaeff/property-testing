@@ -207,9 +207,10 @@ verbatim. Each row is pinned by tests in `PropertyInterceptorTest`.
   `ValueCodec::decodeFloat()` computes it with `fdiv(0.0, 0.0)` for that reason;
   re-check before replacing it with `NAN`.
 - `Classify` carries a second static: coverage requirements from `cover()`,
-  scoped per PROPERTY (not per run). The runner drains them once after
-  the run loop via `flushRequirements()` and defensively before it — a
-  falsified property returns early and would otherwise leak its requirements
+  scoped per PROPERTY (not per run). The runner drains them via
+  `flushRequirements()` on every exit path of the random phase (including
+  falsification, since stage D) and defensively at the start of `run()` — an
+  aborted property (e.g. a throwing listener) must not leak its requirements
   into the next one.
 - `Gen::filter()` retries up to 100 times then throws `GenerationExhausted`
   (never yields a value that fails the predicate); the runner catches it at

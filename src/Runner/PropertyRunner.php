@@ -270,6 +270,12 @@ final readonly class PropertyRunner
                 $this->emit($listeners, new RunFailed($property->id, $attempts, $arguments, $this->drawArguments($draws), $outcome->failure, $runElapsedNs));
                 [$shrunk, $shrunkDraws, $shrinkSteps, $shrunkFailure, $shrinkTrials] = $this->shrink($property->id, $executor, $trees, $draws, $random, $maxShrinks, $listeners);
 
+                // Drain the coverage requirements like every other exit path:
+                // the 2.8 interceptor left them armed here and relied on the
+                // next property's defensive flush, which a standalone runner
+                // caller does not get between run() calls.
+                Classify::flushRequirements();
+
                 return new Falsified(new PropertyViolationException(new CounterExample(
                     seed: $seed,
                     runsBeforeFailure: $checks,

@@ -159,6 +159,23 @@ final class PropertyRunnerTest
         Assert::same($bodies, 1);
     }
 
+    public function falsificationDrainsTheCoverageRequirements(): void
+    {
+        $result = (new PropertyRunner())->run(
+            $this->definition(runs: 10),
+            new CallableTrialExecutor(static function (int $value): void {
+                Classify::cover($value < 0, 'negative', 99.0);
+
+                throw new \RuntimeException('always fails');
+            }),
+        );
+
+        Assert::instanceOf($result, Falsified::class);
+        // Uniform with every other exit path: no armed requirements survive
+        // the run for a standalone caller to trip over.
+        Assert::same(Classify::flushRequirements(), []);
+    }
+
     public function fixedSeedReproducesTheSameCounterexample(): void
     {
         $body = static function (int $value): void {
