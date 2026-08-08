@@ -4,10 +4,23 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\PropertyTesting\Tests;
 
+use Rasuvaeff\PropertyTesting\CoverageViolationException;
+use Rasuvaeff\PropertyTesting\DeadlineExceededException;
+use Rasuvaeff\PropertyTesting\ExampleViolationException;
+use Rasuvaeff\PropertyTesting\GaveUpException;
+use Rasuvaeff\PropertyTesting\GenerationExhausted;
+use Rasuvaeff\PropertyTesting\Internal\CorpusStorage;
 use Rasuvaeff\PropertyTesting\PropertyViolationException;
+use Rasuvaeff\PropertyTesting\RegressionViolationException;
 use Rasuvaeff\PropertyTesting\Tests\Fixture\AssumeDiscardFixture;
+use Rasuvaeff\PropertyTesting\Tests\Fixture\CorpusRegressionFixture;
+use Rasuvaeff\PropertyTesting\Tests\Fixture\CoverageFixture;
+use Rasuvaeff\PropertyTesting\Tests\Fixture\DeadlineFixture;
 use Rasuvaeff\PropertyTesting\Tests\Fixture\DrawPropertyFixture;
+use Rasuvaeff\PropertyTesting\Tests\Fixture\ExampleFailingFixture;
+use Rasuvaeff\PropertyTesting\Tests\Fixture\ExhaustedFixture;
 use Rasuvaeff\PropertyTesting\Tests\Fixture\FalsifyingPropertyFixture;
+use Rasuvaeff\PropertyTesting\Tests\Fixture\GaveUpFixture;
 use Testo\Assert;
 use Testo\Codecov\CoversNothing;
 use Testo\Core\Value\Status;
@@ -80,5 +93,85 @@ final class PropertyRunnerE2ETest
         $result = TestRunner::runTest([AssumeDiscardFixture::class, 'holdsOnlyForPositiveValues']);
 
         Assert::same($result->status, Status::Passed);
+    }
+
+    public function failingExampleShortCircuitsThroughTheRealRunner(): void
+    {
+        $result = TestRunner::runTest([ExampleFailingFixture::class, 'everyValueIsSmall']);
+
+        Assert::true($result->status->isFailure());
+        Assert::instanceOf($result->failure, ExampleViolationException::class);
+        Assert::string($result->failure->getMessage())->contains('Explicit example #0');
+    }
+
+    public function unmetCoverageFailsThroughTheRealRunner(): void
+    {
+        $result = TestRunner::runTest([CoverageFixture::class, 'coversValuesAboveAThousand']);
+
+        Assert::true($result->status->isFailure());
+        Assert::instanceOf($result->failure, CoverageViolationException::class);
+    }
+
+    public function allDiscardedRunsGiveUpThroughTheRealRunner(): void
+    {
+        $result = TestRunner::runTest([GaveUpFixture::class, 'neverChecksAnything']);
+
+        Assert::true($result->status->isFailure());
+        Assert::instanceOf($result->failure, GaveUpException::class);
+        Assert::same($result->failure->successfulRuns, 0);
+    }
+
+    public function exhaustedGenerationFailsCleanlyThroughTheRealRunner(): void
+    {
+        $result = TestRunner::runTest([ExhaustedFixture::class, 'neverGetsAValue']);
+
+        Assert::true($result->status->isFailure());
+        Assert::instanceOf($result->failure, GenerationExhausted::class);
+    }
+
+    public function overlongRunMissesItsDeadlineThroughTheRealRunner(): void
+    {
+        $result = TestRunner::runTest([DeadlineFixture::class, 'everyRunIsSlow']);
+
+        Assert::true($result->status->isFailure());
+        Assert::instanceOf($result->failure, DeadlineExceededException::class);
+        Assert::same($result->failure->timeoutMs, 5);
+    }
+
+    /**
+     * The full corpus lifecycle against the real runner: a falsified property
+     * records its minimised input, the next run replays it as a regression, and
+     * once the "bug" is fixed the entry replays green and is pruned.
+     */
+    public function corpusRecordsReplaysAndPrunesThroughTheRealRunner(): void
+    {
+        $dir = sys_get_temp_dir() . '/e2e-corpus-' . bin2hex(random_bytes(6));
+        mkdir($dir, 0o777, true);
+        putenv('PROPERTY_DB=' . $dir);
+        $propertyId = CorpusRegressionFixture::class . '::everyValueIsAtMostFifty';
+
+        try {
+            $recorded = TestRunner::runTest([CorpusRegressionFixture::class, 'everyValueIsAtMostFifty']);
+            Assert::instanceOf($recorded->failure, PropertyViolationException::class);
+            Assert::same(count((new CorpusStorage($dir))->recall($propertyId, ['x'])), 1);
+
+            $replayed = TestRunner::runTest([CorpusRegressionFixture::class, 'everyValueIsAtMostFifty']);
+            Assert::instanceOf($replayed->failure, RegressionViolationException::class);
+            Assert::same(
+                $replayed->failure->getArguments(),
+                $recorded->failure->getCounterExample()->shrunkArguments,
+            );
+
+            putenv('FIXTURE_PASS=1');
+            $fixed = TestRunner::runTest([CorpusRegressionFixture::class, 'everyValueIsAtMostFifty']);
+            Assert::same($fixed->status, Status::Passed);
+            // The replay passed, so the entry served its purpose and is gone.
+            Assert::same((new CorpusStorage($dir))->recall($propertyId, ['x']), []);
+        } finally {
+            putenv('FIXTURE_PASS');
+            putenv('PROPERTY_DB');
+            array_map(unlink(...), array_merge(glob($dir . '/*.json') ?: [], glob($dir . '/*.lock') ?: []));
+            rmdir($dir);
+        }
     }
 }

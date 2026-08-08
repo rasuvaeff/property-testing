@@ -113,6 +113,31 @@ final class CounterExampleTest
     {
         (new CounterExample(1, 0, [], ['dto' => new CounterExampleDto(1)]))->toExamplesCode('examples');
     }
+
+    /**
+     * Byte-exact golden of the pretty JSON report, against the committed
+     * fixture — reporters and tooling parse this shape, and the package split
+     * must keep producing it. A deliberate change regenerates the fixture in
+     * the same commit.
+     */
+    public function prettyJsonMatchesTheCommittedFixture(): void
+    {
+        $counterExample = new CounterExample(
+            seed: 4242,
+            runsBeforeFailure: 3,
+            originalArguments: ['x' => 100, 's' => 'hi'],
+            shrunkArguments: ['x' => 51, 's' => ''],
+            shrinkSteps: 2,
+            failure: new \RuntimeException('x>50'),
+            skips: 1,
+            shrinkTrials: 5,
+        );
+
+        Assert::same(
+            $counterExample->toJson(pretty: true),
+            file_get_contents(__DIR__ . '/fixtures/counterexample.json'),
+        );
+    }
 }
 
 final readonly class CounterExampleDto
