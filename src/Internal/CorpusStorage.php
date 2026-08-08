@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Rasuvaeff\PropertyTesting\Internal;
 
 use Rasuvaeff\PropertyTesting\CounterExample;
+use Rasuvaeff\PropertyTesting\Runner\Corpus;
 
 /**
  * Opt-in on-disk corpus of a property's past failures, replayed before the random
@@ -23,7 +24,7 @@ use Rasuvaeff\PropertyTesting\CounterExample;
  *
  * @internal
  */
-final readonly class CorpusStorage
+final readonly class CorpusStorage implements Corpus
 {
     /**
      * On-disk layout version. A file written by a different version is ignored
@@ -82,6 +83,7 @@ final readonly class CorpusStorage
      * @param list<string> $parameterNames The property method's current parameters, in order.
      * @return list<CorpusEntry>
      */
+    #[\Override]
     public function recall(string $id, array $parameterNames): array
     {
         $values = [];
@@ -110,6 +112,7 @@ final readonly class CorpusStorage
      *
      * @param list<string> $parameterNames The property method's current parameters, in order.
      */
+    #[\Override]
     public function remember(string $id, CounterExample $counterExample, array $parameterNames): void
     {
         $this->withLock(
@@ -133,6 +136,7 @@ final readonly class CorpusStorage
      * Drops $entry from $id's corpus — the replay no longer fails, so the
      * regression is fixed and the entry has served its purpose.
      */
+    #[\Override]
     public function prune(string $id, CorpusEntry $entry): void
     {
         $this->withLock(

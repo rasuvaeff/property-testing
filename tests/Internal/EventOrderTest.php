@@ -26,6 +26,7 @@ use Rasuvaeff\PropertyTesting\Internal\PropertyInterceptor;
 use Rasuvaeff\PropertyTesting\PropertyListener;
 use Rasuvaeff\PropertyTesting\PropertyViolationException;
 use Rasuvaeff\PropertyTesting\RegressionViolationException;
+use Rasuvaeff\PropertyTesting\Runner\PropertyRunner;
 use Rasuvaeff\PropertyTesting\Tests\Support\CollectingListener;
 use Rasuvaeff\PropertyTesting\Tests\Support\FakeClock;
 use Testo\Application\Internal\MessengerHub;
@@ -52,6 +53,7 @@ use Testo\Test;
  */
 #[Test]
 #[Covers(PropertyInterceptor::class)]
+#[Covers(PropertyRunner::class)]
 final class EventOrderTest
 {
     public function passingPropertyEmitsStartRunPairsFinish(): void
@@ -381,8 +383,8 @@ final class EventOrderTest
         return new TestInfo(
             name: $method,
             caseInfo: new CaseInfo(
-                suiteIdentity: new SuiteIdentity('Unit'),
                 definition: new CaseDefinition(name: 'Stub', type: 'test', file: Path::create(__FILE__)),
+                suiteIdentity: new SuiteIdentity('Unit'),
             ),
             testDefinition: new TestDefinition(reflection: $reflection),
         );

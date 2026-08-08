@@ -5,35 +5,17 @@ declare(strict_types=1);
 namespace Rasuvaeff\PropertyTesting\Internal;
 
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
-use Rasuvaeff\PropertyTesting\AssumptionSkipped;
-use Rasuvaeff\PropertyTesting\Classify;
-use Rasuvaeff\PropertyTesting\CounterExample;
-use Rasuvaeff\PropertyTesting\CoverageViolationException;
-use Rasuvaeff\PropertyTesting\DeadlineExceededException;
-use Rasuvaeff\PropertyTesting\Event\CorpusPruned;
-use Rasuvaeff\PropertyTesting\Event\CorpusReplayed;
-use Rasuvaeff\PropertyTesting\Event\CorpusStored;
-use Rasuvaeff\PropertyTesting\Event\ExampleFinished;
-use Rasuvaeff\PropertyTesting\Event\ExampleStarted;
-use Rasuvaeff\PropertyTesting\Event\PropertyEvent;
-use Rasuvaeff\PropertyTesting\Event\PropertyFinished;
-use Rasuvaeff\PropertyTesting\Event\PropertyStarted;
-use Rasuvaeff\PropertyTesting\Event\RunDiscarded;
-use Rasuvaeff\PropertyTesting\Event\RunFailed;
-use Rasuvaeff\PropertyTesting\Event\RunPassed;
-use Rasuvaeff\PropertyTesting\Event\RunStarted;
-use Rasuvaeff\PropertyTesting\Event\ShrinkAccepted;
-use Rasuvaeff\PropertyTesting\Event\ShrinkTried;
-use Rasuvaeff\PropertyTesting\ExampleViolationException;
-use Rasuvaeff\PropertyTesting\GaveUpException;
-use Rasuvaeff\PropertyTesting\GenerationExhausted;
 use Rasuvaeff\PropertyTesting\Property;
 use Rasuvaeff\PropertyTesting\PropertyListener;
-use Rasuvaeff\PropertyTesting\PropertyViolationException;
-use Rasuvaeff\PropertyTesting\Random;
-use Rasuvaeff\PropertyTesting\RegressionViolationException;
-use Rasuvaeff\PropertyTesting\Shrinkable;
-use Rasuvaeff\PropertyTesting\TimeBudgetExceededException;
+use Rasuvaeff\PropertyTesting\Runner\CoverageFailed;
+use Rasuvaeff\PropertyTesting\Runner\GaveUp;
+use Rasuvaeff\PropertyTesting\Runner\Passed;
+use Rasuvaeff\PropertyTesting\Runner\PropertyConfig;
+use Rasuvaeff\PropertyTesting\Runner\PropertyDefinition;
+use Rasuvaeff\PropertyTesting\Runner\PropertyResult;
+use Rasuvaeff\PropertyTesting\Runner\PropertyRunner;
+use Rasuvaeff\PropertyTesting\Runner\RunStatistics;
+use Rasuvaeff\PropertyTesting\Runner\TimeBudgetExceeded;
 use Testo\Common\Messenger;
 use Testo\Core\Context\TestInfo;
 use Testo\Core\Context\TestResult;
@@ -44,9 +26,11 @@ use Testo\Pipeline\Attribute\InterceptorOptions;
 use Testo\Pipeline\Middleware\TestRunInterceptor;
 
 /**
- * Runs a {@see Property}: generates random arguments, executes the test body
- * until {@see Property::$runs} successful checks complete, and on the first
- * failure shrinks the counterexample to a minimal one.
+ * The Testo adapter for a {@see Property}: resolves the test framework's
+ * conventions — the attribute, the reflection-discovered generators/examples
+ * methods, the environment overrides — into a {@see PropertyDefinition}, runs
+ * it on the framework-agnostic {@see PropertyRunner}, and maps the structured
+ * {@see PropertyResult} back to a single Testo {@see TestResult}.
  *
  * The interceptor self-registers via the {@see Property} attribute's
  * {@see \Testo\Pipeline\Attribute\FallbackInterceptor}, so simply requiring the
@@ -68,16 +52,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
      */
     private const float SKIP_RATE_WARNING_THRESHOLD = 0.9;
 
-    /**
-     * Cap on accepted shrink steps once in-body draws are on the tape. An
-     * accepted candidate can change the body's control flow and regrow the
-     * tape with fresh trees, so tree depth alone no longer bounds the descent;
-     * the cap guarantees termination. An explicit {@see Property::$maxShrinks}
-     * still wins.
-     */
-    private const int MAX_DRAW_SHRINK_STEPS = 1000;
-
-    private Clock $clock;
+    private PropertyRunner $runner;
 
     /** @var list<PropertyListener> */
     private array $listeners;
@@ -92,22 +67,8 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         ?Clock $clock = null,
         iterable $listeners = [],
     ) {
-        $this->clock = $clock ?? new MonotonicClock();
+        $this->runner = new PropertyRunner($clock);
         $this->listeners = array_values(is_array($listeners) ? $listeners : iterator_to_array($listeners));
-    }
-
-    /**
-     * Notifies every listener, in registration order. A listener exception is
-     * deliberately not caught: a listener observes the run, and its failure is
-     * an infrastructure failure of the run itself, not something to hide.
-     *
-     * @param list<PropertyListener> $listeners
-     */
-    private function emit(array $listeners, PropertyEvent $event): void
-    {
-        foreach ($listeners as $listener) {
-            $listener->onEvent($event);
-        }
     }
 
     /**
@@ -130,344 +91,79 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
 
         $property = $attributes[0]->newInstance();
 
-        $generators = $this->resolveGenerators($reflection, $info, $property);
-        $this->validateGenerators($reflection, $generators);
-
-        $parameterNames = array_map(
-            static fn(\ReflectionParameter $p): string => $p->getName(),
-            $reflection->getParameters(),
+        $definition = new PropertyDefinition(
+            id: $reflection->getDeclaringClass()->getName() . '::' . $reflection->getName(),
+            name: $info->name,
+            generators: $this->resolveGenerators($reflection, $info, $property),
+            parameterNames: array_map(
+                static fn(\ReflectionParameter $p): string => $p->getName(),
+                $reflection->getParameters(),
+            ),
+            config: new PropertyConfig(
+                runs: $this->resolveRuns($property->runs),
+                seed: $this->resolveSeed($property->seed),
+                maxShrinks: $property->maxShrinks,
+                maxDiscards: $property->maxDiscards,
+                timeoutMs: $property->timeoutMs,
+                budgetMs: $property->budgetMs,
+            ),
+            examples: $this->resolveExamples($reflection, $info, $property),
+            // A pinned attribute seed wins over the corpus: replaying recorded
+            // failures would break the pinned reproducibility.
+            replayRegressions: $property->seed === null,
         );
-
-        $runs = $this->resolveRuns($property->runs);
-        $maxDiscards = $this->resolveMaxDiscards($property->maxDiscards, $runs);
-        $seed = $this->resolveSeed($property->seed);
-        $random = new Random($seed);
-        $propertyId = $reflection->getDeclaringClass()->getName() . '::' . $reflection->getName();
 
         $listeners = $this->listeners;
         if ($this->resolveVerbose()) {
             $listeners[] = new VerboseListener($this->messenger);
         }
 
-        // Discard requirements and a draw tape a previously aborted property may
-        // have left over.
-        Classify::flushRequirements();
-        DrawContext::disarm();
+        $executor = new TestoTrialExecutor($info, \Closure::fromCallable($next));
 
-        $this->emit($listeners, new PropertyStarted($propertyId, $seed, $runs));
+        $result = $this->runner->run($definition, $executor, $listeners, CorpusStorage::fromEnv());
 
-        $exampleFailure = $this->runExamples($reflection, $info, $next, $property, $seed, $parameterNames, $propertyId, $listeners);
-        if ($exampleFailure instanceof TestResult) {
-            return $this->finish($listeners, $propertyId, $exampleFailure);
-        }
-
-        $storage = CorpusStorage::fromEnv();
-
-        // Opt-in regression replay: re-run every recorded past failure first
-        // (unless the attribute pins its own seed). A reproduced failure is
-        // reported immediately; an entry that no longer fails is pruned.
-        if ($storage instanceof CorpusStorage && $property->seed === null) {
-            foreach ($storage->recall($propertyId, $parameterNames) as $entry) {
-                if ($entry->isValues()) {
-                    $this->emit($listeners, new CorpusReplayed($propertyId, true, $entry->arguments, $entry->seed));
-                    $replay = $this->replayRegression($info, $next, $entry->arguments, $entry->seed, $parameterNames, $property->timeoutMs);
-
-                    if ($replay instanceof TestResult) {
-                        return $this->finish($listeners, $propertyId, $replay);
-                    }
-                } else {
-                    $this->emit($listeners, new CorpusReplayed($propertyId, false, [], $entry->seed));
-                    $replay = $this->runProperty(new Random($entry->seed), $entry->seed, $generators, $parameterNames, $runs, $maxDiscards, $next, $info, $property->maxShrinks, $property->timeoutMs, $property->budgetMs, $propertyId, $listeners);
-
-                    if ($replay->failure instanceof PropertyViolationException) {
-                        return $this->finish($listeners, $propertyId, $replay);
-                    }
-                }
-
-                $storage->prune($propertyId, $entry);
-                $this->emit($listeners, new CorpusPruned($propertyId, $entry->isValues(), $entry->seed));
-            }
-        }
-
-        $result = $this->runProperty($random, $seed, $generators, $parameterNames, $runs, $maxDiscards, $next, $info, $property->maxShrinks, $property->timeoutMs, $property->budgetMs, $propertyId, $listeners);
-
-        if ($storage instanceof CorpusStorage && $result->failure instanceof PropertyViolationException) {
-            $storage->remember($propertyId, $result->failure->getCounterExample(), $parameterNames);
-            $this->emit($listeners, new CorpusStored($propertyId, $result->failure->getCounterExample()));
-        }
-
-        return $this->finish($listeners, $propertyId, $result);
+        return $this->mapResult($info, $result, $executor->attributes());
     }
 
     /**
-     * Emits {@see PropertyFinished} and passes the result through — the single
-     * exit point for every outcome that got past configuration.
+     * Maps the engine's structured result to the one aggregate {@see TestResult}
+     * Testo reports, reporting the classification distribution and the
+     * excessive-discard warning for the outcomes that completed (or exhausted)
+     * their random phase.
      *
-     * @param list<PropertyListener> $listeners
+     * @param array<non-empty-string, mixed> $attributes
      */
-    private function finish(array $listeners, string $propertyId, TestResult $result): TestResult
+    private function mapResult(TestInfo $info, PropertyResult $result, array $attributes): TestResult
     {
-        $this->emit($listeners, new PropertyFinished($propertyId, $result->failure));
+        $statistics = match (true) {
+            $result instanceof Passed => $result->statistics,
+            $result instanceof GaveUp => $result->statistics,
+            $result instanceof CoverageFailed => $result->statistics,
+            $result instanceof TimeBudgetExceeded => $result->statistics,
+            default => null,
+        };
 
-        return $result;
-    }
-
-    /**
-     * The random-input phase: generate until {@see $runs} successful checks have
-     * completed, shrink the first falsifying run into a
-     * {@see PropertyViolationException}, otherwise assess the
-     * {@see Classify::cover()} requirements. Runs once per seed, so the
-     * regression-replay phase can re-run it with a recorded seed.
-     *
-     * @param array<string, ArbitraryInterface> $generators
-     * @param list<string> $parameterNames
-     * @param callable(TestInfo): TestResult $next
-     * @param list<PropertyListener> $listeners
-     */
-    private function runProperty(
-        Random $random,
-        int $seed,
-        array $generators,
-        array $parameterNames,
-        int $runs,
-        int $maxDiscards,
-        callable $next,
-        TestInfo $info,
-        ?int $maxShrinks,
-        ?int $timeoutMs,
-        ?int $budgetMs,
-        string $propertyId,
-        array $listeners,
-    ): TestResult {
-        $skips = 0;
-        $checks = 0;
-        $attempts = 0;
-        $phaseStart = $this->clock->nanoseconds();
-        /** @var array<string, int> $classifications */
-        $classifications = [];
-        /**
-         * Downstream interceptors attach per-run attributes to each run's
-         * TestResult — e.g. Testo's codecov plugin stores its CoverageResult
-         * there. The aggregate result this method returns must carry them,
-         * otherwise the property test vanishes from per-test coverage and
-         * consumers like Infection never select it for mutants. Merged
-         * run-by-run (last write per key wins).
-         *
-         * @var array<non-empty-string, mixed> $runAttributes
-         */
-        $runAttributes = [];
-
-        while ($checks < $runs) {
-            // The budget is a wall-clock cap on the whole phase: once it runs
-            // out, completing the remaining checks would only overrun further,
-            // so the property fails instead of silently checking less.
-            if ($budgetMs !== null) {
-                $phaseElapsedNs = $this->clock->nanoseconds() - $phaseStart;
-
-                if ($phaseElapsedNs > $budgetMs * 1_000_000) {
-                    $this->warnOnExcessiveSkips($info->name, $skips, $attempts);
-                    $this->reportClassifications($info->name, $classifications, $checks);
-                    Classify::flushRequirements();
-
-                    return new TestResult(
-                        info: $info,
-                        status: Status::Failed,
-                        failure: new TimeBudgetExceededException(
-                            propertyName: $info->name,
-                            budgetMs: $budgetMs,
-                            elapsedMs: (float) $phaseElapsedNs / 1e6,
-                            successfulRuns: $checks,
-                            requiredRuns: $runs,
-                        ),
-                        attributes: $runAttributes,
-                    );
-                }
-            }
-
-            ++$attempts;
-            Classify::beginRun();
-
-            try {
-                $trees = $this->generate($generators, $parameterNames, $random);
-            } catch (GenerationExhausted $exhausted) {
-                // A generator could not produce a valid value (e.g. Gen::filter()
-                // whose predicate rejected every draw). Report it as a clean
-                // failure rather than let it crash the run as an uncaught error.
-                Classify::flushRun();
-                Classify::flushRequirements();
-
-                return new TestResult(
-                    info: $info,
-                    status: Status::Failed,
-                    failure: $exhausted,
-                    attributes: $runAttributes,
-                );
-            }
-
-            $arguments = $this->values($trees);
-
-            $this->emit($listeners, new RunStarted($propertyId, $attempts, $arguments));
-
-            DrawContext::arm($random);
-            $runStart = $this->clock->nanoseconds();
-            $result = $next($info->with(arguments: array_values($arguments)));
-            $runElapsedNs = $this->clock->nanoseconds() - $runStart;
-            $draws = DrawContext::disarm();
-            $runAttributes = array_merge($runAttributes, $result->attributes);
-            $labels = Classify::flushRun();
-
-            // A discarded run is neither a failure nor a check.
-            if ($result->failure instanceof AssumptionSkipped) {
-                $this->emit($listeners, new RunDiscarded($propertyId, $attempts, $arguments, $this->drawArguments($draws)));
-                ++$skips;
-
-                if ($skips > $maxDiscards) {
-                    $this->warnOnExcessiveSkips($info->name, $skips, $attempts);
-                    $this->reportClassifications($info->name, $classifications, $checks);
-                    Classify::flushRequirements();
-
-                    return new TestResult(
-                        info: $info,
-                        status: Status::Failed,
-                        failure: new GaveUpException(
-                            propertyName: $info->name,
-                            requiredRuns: $runs,
-                            successfulRuns: $checks,
-                            discardedRuns: $skips,
-                            attempts: $attempts,
-                            maxDiscards: $maxDiscards,
-                        ),
-                        attributes: $runAttributes,
-                    );
-                }
-
-                continue;
-            }
-
-            if ($result->status->isFailure()) {
-                $this->emit($listeners, new RunFailed($propertyId, $attempts, $arguments, $this->drawArguments($draws), $result->failure, $runElapsedNs));
-                [$shrunk, $shrunkDraws, $shrinkSteps, $shrunkFailure, $shrinkTrials] = $this->shrink($info, $next, $trees, $draws, $random, $maxShrinks, $propertyId, $listeners);
-
-                return new TestResult(
-                    info: $info,
-                    status: Status::Failed,
-                    failure: new PropertyViolationException(new CounterExample(
-                        seed: $seed,
-                        runsBeforeFailure: $checks,
-                        originalArguments: array_merge($arguments, $this->drawArguments($draws)),
-                        shrunkArguments: array_merge($shrunk, $shrunkDraws),
-                        shrinkSteps: $shrinkSteps,
-                        // Report the failure of the minimised sequence, not the
-                        // original: for a shrunk counterexample the two can differ
-                        // (e.g. a different failing step), and the developer acts on
-                        // the minimal one. Falls back to the original when nothing shrank.
-                        failure: $shrunkFailure ?? $result->failure,
-                        skips: $skips,
-                        shrinkTrials: $shrinkTrials,
-                    )),
-                    attributes: $runAttributes,
-                );
-            }
-
-            $this->emit($listeners, new RunPassed($propertyId, $attempts, $arguments, $this->drawArguments($draws), $labels, $runElapsedNs));
-
-            // A passing but overlong run is a failure in its own right: the
-            // input is pathological for the code under test. Checked after the
-            // falsification branch so an assertion failure (more actionable)
-            // wins when both happen. Reported unshrunk — shrink acceptance
-            // would have to re-measure wall time, and timing noise makes that
-            // descent non-deterministic.
-            if ($timeoutMs !== null && $runElapsedNs > $timeoutMs * 1_000_000) {
-                Classify::flushRequirements();
-
-                return new TestResult(
-                    info: $info,
-                    status: Status::Failed,
-                    failure: new DeadlineExceededException(
-                        propertyName: $info->name,
-                        arguments: array_merge($arguments, $this->drawArguments($draws)),
-                        elapsedMs: (float) $runElapsedNs / 1e6,
-                        timeoutMs: $timeoutMs,
-                    ),
-                    attributes: $runAttributes,
-                );
-            }
-
-            foreach ($labels as $label) {
-                $classifications[$label] = ($classifications[$label] ?? 0) + 1;
-            }
-
-            ++$checks;
+        if ($statistics instanceof RunStatistics) {
+            $this->warnOnExcessiveSkips($info->name, $statistics->discards, $statistics->attempts);
+            $this->reportClassifications($info->name, $statistics->classifications, $statistics->checks);
         }
 
-        $this->warnOnExcessiveSkips($info->name, $skips, $attempts);
-        $this->reportClassifications($info->name, $classifications, $checks);
+        $failure = $result->failure();
 
-        $requirements = Classify::flushRequirements();
-
-        $violation = $this->coverageViolation($info->name, $requirements, $classifications, $checks);
-
-        if ($violation instanceof CoverageViolationException) {
+        if (!$failure instanceof \Throwable) {
             return new TestResult(
                 info: $info,
-                status: Status::Failed,
-                failure: $violation,
-                attributes: $runAttributes,
+                status: Status::Passed,
+                attributes: $attributes,
             );
         }
 
         return new TestResult(
             info: $info,
-            status: Status::Passed,
-            attributes: $runAttributes,
+            status: Status::Failed,
+            failure: $failure,
+            attributes: $attributes,
         );
-    }
-
-    /**
-     * Check the {@see Classify::cover()} requirements against the label counts
-     * of the passing runs; every run passed, but an under-covered label means
-     * the pass is (partially) vacuous and must fail. The successful-run loop
-     * guarantees the denominator is always positive.
-     *
-     * @param array<string, float> $requirements
-     * @param array<string, int> $classifications
-     */
-    private function coverageViolation(
-        string $name,
-        array $requirements,
-        array $classifications,
-        int $checks,
-    ): ?CoverageViolationException {
-        if ($requirements === []) {
-            return null;
-        }
-
-        $unmet = [];
-        foreach ($requirements as $label => $minPercent) {
-            $count = $classifications[$label] ?? 0;
-            $percent = ((float) $count / (float) $checks) * 100.0;
-
-            if ($percent < $minPercent) {
-                $unmet[] = sprintf(
-                    '"%s" %.1f%% < required %.1f%% (%d/%d)',
-                    $label,
-                    $percent,
-                    $minPercent,
-                    $count,
-                    $checks,
-                );
-            }
-        }
-
-        if ($unmet === []) {
-            return null;
-        }
-
-        return new CoverageViolationException(sprintf(
-            'Property "%s" coverage not met: %s',
-            $name,
-            implode('; ', $unmet),
-        ));
     }
 
     /**
@@ -487,15 +183,6 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         }
 
         return (int) $env;
-    }
-
-    private function resolveMaxDiscards(?int $maxDiscards, int $runs): int
-    {
-        if ($maxDiscards !== null) {
-            return $maxDiscards;
-        }
-
-        return $runs > intdiv(PHP_INT_MAX, 10) ? PHP_INT_MAX : $runs * 10;
     }
 
     /**
@@ -532,34 +219,6 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         }
 
         return (int) $env;
-    }
-
-    /**
-     * @param array<string, ArbitraryInterface> $generators
-     * @param list<string> $parameterNames
-     * @return array<string, Shrinkable>
-     */
-    private function generate(array $generators, array $parameterNames, Random $random): array
-    {
-        return array_combine(
-            $parameterNames,
-            array_map(
-                static fn(string $name): Shrinkable => $generators[$name]->generate($random),
-                $parameterNames,
-            ),
-        );
-    }
-
-    /**
-     * @param array<string, Shrinkable> $trees
-     * @return array<string, mixed>
-     */
-    private function values(array $trees): array
-    {
-        return array_map(
-            static fn(Shrinkable $tree): mixed => $tree->value,
-            $trees,
-        );
     }
 
     /**
@@ -609,153 +268,6 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         }
 
         return $typed;
-    }
-
-    /**
-     * @param array<string, ArbitraryInterface> $generators
-     */
-    private function validateGenerators(\ReflectionMethod $testMethod, array $generators): void
-    {
-        foreach ($testMethod->getParameters() as $parameter) {
-            $name = $parameter->getName();
-
-            if (!array_key_exists($name, $generators)) {
-                throw new \InvalidArgumentException(sprintf(
-                    'No generator for parameter "%s"',
-                    $name,
-                ));
-            }
-        }
-    }
-
-    /**
-     * Runs the fixed examples (if any) before the random inputs, short-circuiting
-     * on the first failure — a pinned example is already minimal, so it is not
-     * shrunk. Returns the failing {@see TestResult}, or null when all pass.
-     *
-     * @param callable(TestInfo): TestResult $next
-     * @param list<string> $parameterNames
-     * @param list<PropertyListener> $listeners
-     */
-    private function runExamples(\ReflectionMethod $testMethod, TestInfo $info, callable $next, Property $property, int $seed, array $parameterNames, string $propertyId, array $listeners): ?TestResult
-    {
-        $index = 0;
-        // Examples may call Gen::draw(); their draws come from a dedicated
-        // deterministic stream so the random phase's sequence is untouched.
-        $random = new Random($seed);
-
-        foreach ($this->resolveExamples($testMethod, $info, $property) as $arguments) {
-            $this->emit($listeners, new ExampleStarted($propertyId, $index, $arguments));
-            Classify::beginRun();
-            DrawContext::arm($random);
-            $runStart = $this->clock->nanoseconds();
-            $result = $next($info->with(arguments: $arguments));
-            $runElapsedNs = $this->clock->nanoseconds() - $runStart;
-            DrawContext::disarm();
-            Classify::flushRun();
-
-            $exampleFailed = !$result->failure instanceof AssumptionSkipped && $result->status->isFailure();
-
-            // The per-run deadline applies to examples too: a pinned input can
-            // be the pathological one. Example arity matches the parameter
-            // list, so positional arguments are reported under their names.
-            // Evaluated before ExampleFinished so a timed-out example is not
-            // announced to listeners as successful; the assertion failure
-            // still wins when both happen.
-            $deadlineFailure = !$exampleFailed && $property->timeoutMs !== null && $runElapsedNs > $property->timeoutMs * 1_000_000
-                ? new DeadlineExceededException(
-                    propertyName: $info->name,
-                    arguments: array_combine($parameterNames, $arguments),
-                    elapsedMs: (float) $runElapsedNs / 1e6,
-                    timeoutMs: $property->timeoutMs,
-                )
-                : null;
-
-            $this->emit($listeners, new ExampleFinished($propertyId, $index, $arguments, $exampleFailed ? $result->failure : $deadlineFailure));
-
-            if ($exampleFailed) {
-                return new TestResult(
-                    info: $info,
-                    status: Status::Failed,
-                    failure: new ExampleViolationException($index, $arguments, $result->failure),
-                    // Keep the failing run's attributes (e.g. codecov's
-                    // CoverageResult) on the aggregate result — see runProperty().
-                    attributes: $result->attributes,
-                );
-            }
-
-            if ($deadlineFailure instanceof DeadlineExceededException) {
-                return new TestResult(
-                    info: $info,
-                    status: Status::Failed,
-                    failure: $deadlineFailure,
-                    attributes: $result->attributes,
-                );
-            }
-
-            ++$index;
-        }
-
-        return null;
-    }
-
-    /**
-     * Replays one recorded regression: the minimised input of an earlier failure,
-     * run once with the very values that failed. Returns the failing result, or
-     * null when the input no longer falsifies the property (the caller then prunes
-     * the entry) — including when the run is discarded, which means the recorded
-     * input has fallen out of the property's domain.
-     *
-     * Mirrors {@see runExamples()}'s lifecycle discipline: the input is not
-     * shrunk (it is already minimal) and the per-run deadline applies.
-     *
-     * @param callable(TestInfo): TestResult $next
-     * @param array<string, mixed> $arguments The recorded input, keyed by parameter name.
-     * @param int $seed Seed of the run that recorded it.
-     * @param list<string> $parameterNames
-     */
-    private function replayRegression(TestInfo $info, callable $next, array $arguments, int $seed, array $parameterNames, ?int $timeoutMs): ?TestResult
-    {
-        // Recall validated the key set against the live signature; order the
-        // values the way the method declares its parameters.
-        $positional = array_map(static fn(string $name): mixed => $arguments[$name], $parameterNames);
-
-        Classify::beginRun();
-        // A recorded regression may call Gen::draw(); its draws come from a
-        // dedicated deterministic stream keyed on the recording run's seed.
-        DrawContext::arm(new Random($seed));
-        $runStart = $this->clock->nanoseconds();
-        $result = $next($info->with(arguments: $positional));
-        $runElapsedNs = $this->clock->nanoseconds() - $runStart;
-        DrawContext::disarm();
-        Classify::flushRun();
-
-        if ($this->isFailingResult($result)) {
-            return new TestResult(
-                info: $info,
-                status: Status::Failed,
-                failure: new RegressionViolationException($arguments, $seed, $result->failure),
-                // Keep the failing run's attributes (e.g. codecov's
-                // CoverageResult) on the aggregate result — see runProperty().
-                attributes: $result->attributes,
-            );
-        }
-
-        if ($timeoutMs !== null && $runElapsedNs > $timeoutMs * 1_000_000) {
-            return new TestResult(
-                info: $info,
-                status: Status::Failed,
-                failure: new DeadlineExceededException(
-                    propertyName: $info->name,
-                    arguments: $arguments,
-                    elapsedMs: (float) $runElapsedNs / 1e6,
-                    timeoutMs: $timeoutMs,
-                ),
-                attributes: $result->attributes,
-            );
-        }
-
-        return null;
     }
 
     /**
@@ -829,196 +341,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
     }
 
     /**
-     * Greedy per-parameter descent through each parameter's shrink tree: try the
-     * candidates of one parameter's current node, accept the first that still
-     * fails (descending into that candidate's subtree), and keep iterating until
-     * a full pass produces no improvement. Termination is guaranteed by the
-     * {@see ArbitraryInterface} contract: every branch of a shrink tree is finite.
-     *
-     * In-body draws shrink through a replay tape walked like extra parameters:
-     * each trial re-runs the body with the modified tape, and the draws that
-     * trial actually used (the replayed prefix plus a freshly generated suffix,
-     * when control flow changed) become the tape of the next round on
-     * acceptance. Because an accepted candidate can regrow the tape with fresh
-     * trees, the finite-tree argument no longer bounds the descent — with a
-     * non-empty tape the accepted steps are additionally capped by
-     * {@see self::MAX_DRAW_SHRINK_STEPS}.
-     *
-     * @param array<string, Shrinkable> $trees The failing arguments' shrink trees.
-     * @param list<Shrinkable> $tape The failing run's recorded in-body draws.
-     * @param callable(TestInfo): TestResult $next
-     * @param ?int $maxShrinks Cap on accepted shrink steps; null means no cap, 0 disables shrinking.
-     * @param list<PropertyListener> $listeners
-     * @return array{0: array<string, mixed>, 1: array<string, mixed>, 2: int, 3: ?\Throwable, 4: int} The
-     *         minimised arguments, the minimised draws (as `draw#N` pseudo-arguments), the number
-     *         of accepted shrink steps, the failure of the last accepted candidate (null when
-     *         nothing shrank), and the total number of candidates tried (accepted and rejected).
-     */
-    private function shrink(
-        TestInfo $info,
-        callable $next,
-        array $trees,
-        array $tape,
-        Random $random,
-        ?int $maxShrinks,
-        string $propertyId,
-        array $listeners,
-    ): array {
-        $current = $trees;
-        $currentTape = $tape;
-        $steps = 0;
-        $trials = 0;
-        $acceptedFailure = null;
-
-        do {
-            $improved = false;
-
-            foreach (array_keys($current) as $name) {
-                // Stop before accepting any further candidate once the cap is hit.
-                // Checking here (before the per-parameter search) makes maxShrinks=0
-                // return the original counterexample with zero accepted steps.
-                if ($this->capReached($maxShrinks, $currentTape, $steps)) {
-                    return [$this->values($current), $this->drawArguments($currentTape), $steps, $acceptedFailure, $trials];
-                }
-
-                foreach ($current[$name]->shrinks() as $candidate) {
-                    // A candidate whose value equals the current one (possible under a
-                    // non-injective map) makes no progress; skip it and its subtree.
-                    if ($candidate->value === $current[$name]->value) {
-                        continue;
-                    }
-
-                    // Replace one parameter in place: array_replace keeps $current's
-                    // key order, so array_values() still maps each value to the right
-                    // parameter. Array union ([$name => ...] + $current) would move
-                    // $name to the front and scramble non-leading parameters.
-                    $trial = array_replace($current, [$name => $candidate]);
-                    [$trialResult, $recorded] = $this->trial($info, $next, $trial, $currentTape, $random);
-                    ++$trials;
-
-                    $accepted = $this->isFailingResult($trialResult);
-                    $this->emit($listeners, new ShrinkTried($propertyId, $name, $candidate->value, $accepted));
-
-                    if ($accepted) {
-                        $this->emit($listeners, new ShrinkAccepted($propertyId, $steps + 1, $name, $current[$name]->value, $candidate->value));
-
-                        $current = $trial;
-                        $currentTape = $recorded;
-                        $acceptedFailure = $trialResult->failure;
-                        ++$steps;
-                        $improved = true;
-
-                        break;
-                    }
-                }
-            }
-
-            // Walk the tape positions like extra parameters. The bound is re-read
-            // every iteration (a while, NOT a hoisted-count for): an accepted
-            // candidate truncates the tape when the body draws fewer values under
-            // the smaller prefix.
-            $position = 0;
-
-            while ($position < count($currentTape)) {
-                if ($this->capReached($maxShrinks, $currentTape, $steps)) {
-                    return [$this->values($current), $this->drawArguments($currentTape), $steps, $acceptedFailure, $trials];
-                }
-
-                foreach ($currentTape[$position]->shrinks() as $candidate) {
-                    if ($candidate->value === $currentTape[$position]->value) {
-                        continue;
-                    }
-
-                    $trialTape = array_replace($currentTape, [$position => $candidate]);
-                    [$trialResult, $recorded] = $this->trial($info, $next, $current, $trialTape, $random);
-                    ++$trials;
-
-                    $accepted = $this->isFailingResult($trialResult);
-                    $this->emit($listeners, new ShrinkTried($propertyId, 'draw#' . ($position + 1), $candidate->value, $accepted));
-
-                    if ($accepted) {
-                        $this->emit($listeners, new ShrinkAccepted($propertyId, $steps + 1, 'draw#' . ($position + 1), $currentTape[$position]->value, $candidate->value));
-
-                        $currentTape = $recorded;
-                        $acceptedFailure = $trialResult->failure;
-                        ++$steps;
-                        $improved = true;
-
-                        break;
-                    }
-                }
-
-                ++$position;
-            }
-        } while ($improved);
-
-        return [$this->values($current), $this->drawArguments($currentTape), $steps, $acceptedFailure, $trials];
-    }
-
-    /**
-     * One shrink trial: run the body with the candidate arguments while the
-     * draw context replays $tape, and report the result together with the
-     * draws the body actually used.
-     *
-     * @param array<string, Shrinkable> $trees
-     * @param list<Shrinkable> $tape
-     * @param callable(TestInfo): TestResult $next
-     * @return array{0: TestResult, 1: list<Shrinkable>}
-     */
-    private function trial(TestInfo $info, callable $next, array $trees, array $tape, Random $random): array
-    {
-        DrawContext::arm($random, $tape);
-        $result = $next($info->with(arguments: array_values($this->values($trees))));
-
-        return [$result, DrawContext::disarm()];
-    }
-
-    /**
-     * Whether shrinking must stop before accepting another candidate. The cap
-     * is re-derived from the CURRENT tape: a body that drew nothing on the
-     * original run can still start drawing once a shrunk parameter changes its
-     * control flow, and from that point the draw cap must engage.
-     *
-     * @param list<Shrinkable> $tape
-     */
-    private function capReached(?int $maxShrinks, array $tape, int $steps): bool
-    {
-        $cap = $maxShrinks ?? ($tape === [] ? null : self::MAX_DRAW_SHRINK_STEPS);
-
-        return $cap !== null && $steps >= $cap;
-    }
-
-    /**
-     * Render in-body draws as pseudo-arguments (`draw#1`, `draw#2`, ...) for
-     * counterexample reporting. `#` cannot occur in a PHP parameter name, so
-     * the keys never collide with real parameters.
-     *
-     * @param list<Shrinkable> $draws
-     * @return array<string, mixed>
-     */
-    private function drawArguments(array $draws): array
-    {
-        return array_combine(
-            array_map(static fn(int $index): string => 'draw#' . ($index + 1), array_keys($draws)),
-            array_map(static fn(Shrinkable $draw): mixed => $draw->value, $draws),
-        );
-    }
-
-    /**
-     * A run counts as a shrink failure when it failed for a real reason — a
-     * discarded run ({@see AssumptionSkipped}) is not a smaller counterexample.
-     */
-    private function isFailingResult(TestResult $result): bool
-    {
-        if ($result->failure instanceof AssumptionSkipped) {
-            return false;
-        }
-
-        return $result->status->isFailure();
-    }
-
-    /**
-     * Print the share of (passing) runs that hit each {@see Classify} label.
+     * Print the share of (passing) runs that hit each {@see \Rasuvaeff\PropertyTesting\Classify} label.
      *
      * @param array<string, int> $classifications
      */
