@@ -40,7 +40,7 @@ final class SeedDeterminismVectorsTest
         $random = new Random($seed);
 
         $actual = [];
-        foreach (array_keys($expected) as $_index) {
+        for ($i = 0, $count = count($expected); $i < $count; ++$i) {
             $actual[] = self::normalize($arbitrary->generate($random)->value);
         }
 

@@ -121,7 +121,9 @@ final class PropertyResultSerializationTest
             }
 
             Assert::instanceOf($thrown, \Exception::class);
-            Assert::string($thrown->getMessage())->contains("Serialization of 'Closure'");
+            // The failure mode is what matters (a closure in the graph refuses
+            // native serialization); PHP owns the exact message wording.
+            Assert::string($thrown->getMessage())->contains('Closure');
         });
     }
 
