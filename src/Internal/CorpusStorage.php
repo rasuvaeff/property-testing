@@ -112,16 +112,21 @@ final readonly class CorpusStorage
      */
     public function remember(string $id, CounterExample $counterExample, array $parameterNames): void
     {
-        $entry = $this->encodeEntry($counterExample, $parameterNames);
-        $key = $this->keyOf($entry);
+        $this->withLock(
+            $id,
+            function () use ($id, $counterExample, $parameterNames): void {
+                $entry = $this->encodeEntry($counterExample, $parameterNames);
+                $key = $this->keyOf($entry);
 
-        // Newest first, without the previous copy of the same input.
-        $kept = array_values(array_filter(
-            $this->read($id),
-            fn(array $raw): bool => $this->keyOf($raw) !== $key,
-        ));
+                // Newest first, without the previous copy of the same input.
+                $kept = array_filter(
+                    $this->read($id),
+                    fn(array $raw): bool => $this->keyOf($raw) !== $key,
+                );
 
-        $this->write($id, $this->cap([$entry, ...$kept]));
+                $this->write($id, $this->cap([$entry, ...$kept]));
+            },
+        );
     }
 
     /**
@@ -130,19 +135,24 @@ final readonly class CorpusStorage
      */
     public function prune(string $id, CorpusEntry $entry): void
     {
-        // A hydrated entry re-encodes to the very bytes it was read from, so the
-        // key identifies the same stored entry.
-        $encoded = $entry->isValues()
-            ? $this->valuesEntry($entry->arguments, array_keys($entry->arguments), $entry->seed)
-            : $this->seedEntry($entry->seed);
-        $key = $encoded === null ? null : $this->keyOf($encoded);
+        $this->withLock(
+            $id,
+            function () use ($id, $entry): void {
+                // A hydrated entry re-encodes to the very bytes it was read from,
+                // so the key identifies the same stored entry.
+                $encoded = $entry->isValues()
+                    ? $this->valuesEntry($entry->arguments, array_keys($entry->arguments), $entry->seed)
+                    : $this->seedEntry($entry->seed);
+                $key = $encoded === null ? null : $this->keyOf($encoded);
 
-        $kept = array_values(array_filter(
-            $this->read($id),
-            fn(array $raw): bool => $this->keyOf($raw) !== $key,
-        ));
+                $kept = array_values(array_filter(
+                    $this->read($id),
+                    fn(array $raw): bool => $this->keyOf($raw) !== $key,
+                ));
 
-        $this->write($id, $kept);
+                $this->write($id, $kept);
+            },
+        );
     }
 
     /**
@@ -198,20 +208,63 @@ final readonly class CorpusStorage
 
         if ($entries === []) {
             if (is_file($file)) {
-                unlink($file);
+                // @ suppresses the benign "no such file" warning when a
+                // concurrent prune already removed it.
+                @unlink($file);
             }
 
             return;
         }
 
-        if (!is_dir($this->directory)) {
-            mkdir($this->directory, 0o777, true);
-        }
-
-        file_put_contents($file, json_encode(
+        $payload = json_encode(
             ['format' => self::FORMAT_VERSION, 'property' => $id, 'entries' => $entries],
             JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES,
-        ));
+        );
+
+        // Temp file + atomic rename: a reader sees either the previous or the
+        // new document, never a partial one; a process killed mid-write (OOM,
+        // signal, full disk) leaves the previous file intact rather than a
+        // truncated JSON document that read() would silently drop.
+        $pid = getmypid();
+
+        if ($pid === false) {
+            throw new \RuntimeException('Could not determine the current process id');
+        }
+
+        $tmp = dirname($file) . '/.' . basename($file) . '.' . $pid . '.tmp';
+        file_put_contents($tmp, $payload);
+        rename($tmp, $file);
+    }
+
+    /**
+     * Runs $action under an exclusive cross-process lock keyed by $id, so the
+     * read-modify-write in {@see remember()} and {@see prune()} stays consistent
+     * under `infection --threads=max` and parallel CI jobs sharing a corpus
+     * directory. The runner is sequential within a single PHP process, so the
+     * lock only mediates inter-process access.
+     */
+    private function withLock(string $id, \Closure $action): void
+    {
+        if (!is_dir($this->directory)) {
+            // @ suppresses the benign "file exists" warning when a concurrent
+            // writer already created the directory.
+            @mkdir($this->directory, 0o777, true);
+        }
+
+        $lock = fopen($this->path($id) . '.lock', 'c');
+
+        if ($lock === false) {
+            throw new \RuntimeException(sprintf('Could not open lock file for property "%s"', $id));
+        }
+
+        try {
+            flock($lock, LOCK_EX);
+
+            $action();
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
     }
 
     /**

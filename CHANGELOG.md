@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.8.1 — 2026-08-08
+
+- Make `CorpusStorage` writes atomic and serialise the read-modify-write in
+  `remember()`/`prune()` with a cross-process flock. Without this, two
+  concurrent writers (e.g. `infection --threads=max`, parallel CI jobs sharing
+  a corpus dir) could each read the same on-disk state and the second commit
+  would silently lose the first; and a process killed mid-write would leave a
+  truncated JSON document that the next `recall()` silently drops. Writes now
+  go through a temp file + atomic `rename()`, so a reader sees either the
+  previous or the new document, never a partial one.
+
 ## 2.8.0 — 2026-07-30
 
 Regression corpus. `PROPERTY_DB` graduates from "remember the last failing seed"

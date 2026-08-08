@@ -432,6 +432,64 @@ final class CorpusStorageTest
         }
     }
 
+    /**
+     * Atomic write via temp + rename must not leave `.tmp` orphan files behind
+     * once `remember()` returns.
+     */
+    public function writeLeavesNoTempFilesBehind(): void
+    {
+        $this->storage()->remember(self::ID, $this->counterExample(['x' => 1], 1), ['x']);
+
+        $leftovers = glob($this->dir . '/.*.tmp') ?: [];
+
+        Assert::same($leftovers, []);
+    }
+
+    /**
+     * The lock file lives next to the corpus file so each property id gets its
+     * own lock. After a write it must exist (it is not removed: it is reused
+     * across calls and costs nothing on disk).
+     */
+    public function lockFileLivesNextToTheCorpus(): void
+    {
+        $this->storage()->remember(self::ID, $this->counterExample(['x' => 1], 1), ['x']);
+
+        Assert::true(is_file($this->dir . '/' . sha1(self::ID) . '.json.lock'));
+    }
+
+    /**
+     * A second `remember()` on the same property reuses the existing lock file
+     * rather than recreating it — verified by checking the lock file's inode
+     * stays the same across calls. (Regression guard for `fopen(…, 'c')`
+     * semantics: it must not truncate or recreate.)
+     */
+    public function lockFileIsReusedAcrossCalls(): void
+    {
+        $this->storage()->remember(self::ID, $this->counterExample(['x' => 1], 1), ['x']);
+        $lockPath = $this->dir . '/' . sha1(self::ID) . '.json.lock';
+        $inodeBefore = fileinode($lockPath);
+
+        $this->storage()->remember(self::ID, $this->counterExample(['x' => 2], 2), ['x']);
+        $inodeAfter = fileinode($lockPath);
+
+        Assert::same($inodeAfter, $inodeBefore);
+    }
+
+    /**
+     * Two property ids get two separate lock files. The corpus path includes
+     * the property id hash, so a mangled path (e.g. mutant dropping the id from
+     * the path) would have both properties share a single lock and serialise
+     * unrelated writes.
+     */
+    public function lockFilesAreKeyedByPropertyId(): void
+    {
+        $this->storage()->remember('A::a', $this->counterExample(['x' => 1], 1), ['x']);
+        $this->storage()->remember('B::b', $this->counterExample(['x' => 2], 2), ['x']);
+
+        Assert::true(is_file($this->dir . '/' . sha1('A::a') . '.json.lock'));
+        Assert::true(is_file($this->dir . '/' . sha1('B::b') . '.json.lock'));
+    }
+
     #[BeforeTest]
     public function setUpDirectory(): void
     {
