@@ -187,7 +187,12 @@ verbatim. Each row is pinned by tests in `PropertyInterceptorTest`.
     release that shifts the generated sequence for a given seed (new boundary
     bias, changed draw order, a rewritten arbitrary) — otherwise an old seed
     replays a different input while claiming to be a regression. Values entries
-    carry the input and are deliberately exempt.
+    carry the input and are deliberately exempt. The observable definition of
+    "the sequence shifted" is `tests/SeedDeterminismVectorsTest.php`: it pins
+    the exact values every representative generator produces for a fixed seed.
+    A diff there means revert the change or bump `SEQUENCE_EPOCH` in the same
+    commit — never repin silently. The vectors move to property-testing-core
+    verbatim during the split.
 - **CorpusStorage writes are atomic and serialised by a cross-process flock.**
   `remember()`/`prune()` do read-modify-write; without serialisation,
   `infection --threads=max` or parallel CI jobs sharing `PROPERTY_DB` would
