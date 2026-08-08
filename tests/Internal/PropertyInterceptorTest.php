@@ -16,8 +16,13 @@ use Rasuvaeff\PropertyTesting\GaveUpException;
 use Rasuvaeff\PropertyTesting\Gen;
 use Rasuvaeff\PropertyTesting\Internal\CorpusStorage;
 use Rasuvaeff\PropertyTesting\Internal\PropertyInterceptor;
+use Rasuvaeff\PropertyTesting\Internal\TestoTrialExecutor;
 use Rasuvaeff\PropertyTesting\PropertyViolationException;
 use Rasuvaeff\PropertyTesting\RegressionViolationException;
+use Rasuvaeff\PropertyTesting\Runner\DeadlineExceeded;
+use Rasuvaeff\PropertyTesting\Runner\PropertyRunner;
+use Rasuvaeff\PropertyTesting\Runner\RegressionFailed;
+use Rasuvaeff\PropertyTesting\Runner\TimeBudgetExceeded;
 use Rasuvaeff\PropertyTesting\TimeBudgetExceededException;
 use Testo\Application\Internal\MessengerHub;
 use Testo\Assert;
@@ -36,6 +41,11 @@ use Testo\Test;
 
 #[Test]
 #[Covers(PropertyInterceptor::class)]
+#[Covers(PropertyRunner::class)]
+#[Covers(TestoTrialExecutor::class)]
+#[Covers(DeadlineExceeded::class)]
+#[Covers(TimeBudgetExceeded::class)]
+#[Covers(RegressionFailed::class)]
 #[Covers(CoverageViolationException::class)]
 final class PropertyInterceptorTest
 {
@@ -1421,8 +1431,8 @@ final class PropertyInterceptorTest
         return new TestInfo(
             name: $method,
             caseInfo: new CaseInfo(
-                suiteIdentity: new SuiteIdentity('Unit'),
                 definition: new CaseDefinition(name: 'Stub', type: 'test', file: Path::create(__FILE__)),
+                suiteIdentity: new SuiteIdentity('Unit'),
             ),
             testDefinition: new TestDefinition(reflection: $reflection),
         );

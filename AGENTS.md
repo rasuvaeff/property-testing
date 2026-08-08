@@ -11,7 +11,28 @@ of: the `#[Property]` attribute, the `Gen` static facade of generators
 node (integrated shrinking: `generate()` returns the value plus its shrink
 tree; there is no `shrink(mixed)` method), the `Assume::that()` discard helper,
 the `PropertyViolationException`/`CounterExample` failure carriers, and the
-self-registering `PropertyInterceptor` that drives the run/falsify/shrink loop.
+self-registering `PropertyInterceptor` that adapts a property test to the
+engine.
+
+Since the stage-D runner split (evolution plan) the run/falsify/shrink loop
+lives in the framework-agnostic `Rasuvaeff\PropertyTesting\Runner` namespace:
+`PropertyRunner` (examples → corpus replay → random phase → shrink),
+`PropertyDefinition`/`PropertyConfig` (fully resolved input — no attribute, no
+reflection, no environment), the `TrialExecutor`/`TrialOutcome` seam
+(`CallableTrialExecutor` for standalone harnesses), the `Corpus` interface, and
+the closed `PropertyResult` hierarchy (`Passed`, `Falsified`, `GaveUp`,
+`CoverageFailed`, `DeadlineExceeded`, `TimeBudgetExceeded`, `GenerationFailed`,
+`ExampleFailed`, `RegressionFailed`) whose failing members carry the package's
+established exception types, constructed by the runner. `PropertyInterceptor`
+is the Testo adapter: it resolves reflection conventions and env overrides into
+a definition, executes bodies through the attribute-aggregating
+`TestoTrialExecutor`, and maps the structured result to one Testo `TestResult`
+(printing the distribution report / discard warning via `Messenger`). The
+`Runner` namespace is `@internal` until property-testing-core 1.0 ships it as
+`@api`. Engine directories (`src/Runner`, `src/Event`, `src/Arbitrary`,
+`src/StateMachine`, and everything in `src/Internal` except the interceptor,
+`TestoTrialExecutor` and `VerboseListener`) must stay free of `Testo\`
+references — that boundary is the split's exit criterion.
 
 Stateful / model-based testing lives in the `Rasuvaeff\PropertyTesting\StateMachine`
 namespace: the `Command` interface (`preCondition`/`nextState`/`run`/`postCondition`,
@@ -27,11 +48,11 @@ explicit examples (`#[Property(examples: …)]` / `<testMethod>Examples`, failin
 via `ExampleViolationException`); and opt-in failure persistence/replay via the
 internal `CorpusStorage` (`PROPERTY_DB`).
 
-The `2.8.0` addition: the regression corpus — `CorpusStorage` keeps several past
-failures per property (`CorpusEntry`, encoded by the internal `ValueCodec`),
-preferring the minimised input as data over the bare seed, and the interceptor
-replays them all before the random phase (`RegressionViolationException` for a
-values entry).
+The `2.8.0` addition: the regression corpus — `CorpusStorage` (the filesystem
+`Runner\Corpus` implementation) keeps several past failures per property
+(`CorpusEntry`, encoded by the internal `ValueCodec`), preferring the minimised
+input as data over the bare seed, and the runner replays them all before the
+random phase (`RegressionViolationException` for a values entry).
 
 The `2.4.0` addition: in-body dependent draw — `Gen::draw($arb)` inside the
 property body, backed by the internal `DrawContext` replay tape (fast-check's
@@ -39,9 +60,12 @@ property body, backed by the internal `DrawContext` replay tape (fast-check's
 `Shrinkable`s, shrunk like extra parameters, and replayed by position on every
 shrink trial; counterexamples report them as `draw#N` pseudo-arguments.
 
-It is a Testo plugin, not a standalone runner. It depends on Testo's stable
-`@api` surfaces: `TestRunInterceptor`, `TestInfo`, `TestResult`, `Messenger`,
-the `Interceptable`/`FallbackInterceptor`/`InterceptorOptions` attributes.
+It ships as a Testo plugin; the engine itself is framework-free and drivable
+directly (see `examples/standalone_runner.php`). Only the adapter classes —
+`Property`, `PropertyInterceptor`, `TestoTrialExecutor`, `VerboseListener` —
+depend on Testo's stable `@api` surfaces: `TestRunInterceptor`, `TestInfo`,
+`TestResult`, `Messenger`, the
+`Interceptable`/`FallbackInterceptor`/`InterceptorOptions` attributes.
 
 ## Golden rules
 
@@ -54,7 +78,7 @@ the `Interceptable`/`FallbackInterceptor`/`InterceptorOptions` attributes.
 4. **Preserve shrinking termination.** Every branch of a `Shrinkable` tree
    must be finite and no candidate may equal its parent value (each builder
    guarantees a strictly decreasing measure: distance to target, length,
-   non-'a' count, list index). The interceptor additionally skips candidates
+   non-'a' count, list index). The runner additionally skips candidates
    whose value equals the current one (possible under a non-injective map).
 5. **Preserve the public contract.** Update README + tests with any API change.
 
@@ -88,11 +112,11 @@ make release-check
 
 ## Environment contract
 
-The exact semantics of every supported variable. After the package split this
-resolution belongs to the framework adapters (the core runner takes a resolved
-`PropertyConfig`/`Corpus` and never reads the process environment); adapters
-must reproduce this table verbatim. Each row is pinned by tests in
-`PropertyInterceptorTest`.
+The exact semantics of every supported variable. This resolution belongs to
+the framework adapter (`PropertyInterceptor` resolves the table below into a
+`PropertyConfig`/`Corpus`; `PropertyRunner` never reads the process
+environment); after the physical split every adapter must reproduce this table
+verbatim. Each row is pinned by tests in `PropertyInterceptorTest`.
 
 | Variable | Read when | Accepts | Effect | Invalid value |
 |---|---|---|---|---|
@@ -134,7 +158,7 @@ must reproduce this table verbatim. Each row is pinned by tests in
   state: `Random` (advances its engine on each draw), `Classify` (a
   process-local static buffer of the current run's distribution labels) and
   `DrawContext` (the process-local replay tape for `Gen::draw()`). `Classify`
-  is the body↔runner channel for `classify`/`collect`; the interceptor clears
+  is the body↔runner channel for `classify`/`collect`; the runner clears
   it via `beginRun()` and drains it via `flushRun()` each run, so it is never
   shared concurrently (property runs are sequential). `DrawContext` follows
   the same discipline: `arm()` before every body execution, `disarm()` after
@@ -146,7 +170,7 @@ must reproduce this table verbatim. Each row is pinned by tests in
   tape's end generate anew from the run's `Random`; an accepted trial's
   actually-used draws become the next tape (this is what truncates unreachable
   tails). Because a regrown tape carries fresh trees, the finite-tree
-  termination argument alone does not bound the descent — the interceptor caps
+  termination argument alone does not bound the descent — the runner caps
   accepted steps via `MAX_DRAW_SHRINK_STEPS` whenever the tape is non-empty.
   Do not remove the cap or add re-validation to the replay.
 - **The regression corpus must never replay a different input than it recorded.**
@@ -183,13 +207,14 @@ must reproduce this table verbatim. Each row is pinned by tests in
   `ValueCodec::decodeFloat()` computes it with `fdiv(0.0, 0.0)` for that reason;
   re-check before replacing it with `NAN`.
 - `Classify` carries a second static: coverage requirements from `cover()`,
-  scoped per PROPERTY (not per run). The interceptor drains them once after
-  the run loop via `flushRequirements()` and defensively before it — a
-  falsified property returns early and would otherwise leak its requirements
+  scoped per PROPERTY (not per run). The runner drains them via
+  `flushRequirements()` on every exit path of the random phase (including
+  falsification, since stage D) and defensively at the start of `run()` — an
+  aborted property (e.g. a throwing listener) must not leak its requirements
   into the next one.
 - `Gen::filter()` retries up to 100 times then throws `GenerationExhausted`
-  (never yields a value that fails the predicate); the interceptor catches it at
-  the generation step and reports a clean failure. Prefer `Assume::that()` in the
+  (never yields a value that fails the predicate); the runner catches it at
+  the generation step and reports a clean failure (`GenerationFailed`). Prefer `Assume::that()` in the
   property body when the rejection rate is high, or `Gen::flatMap()` for
   dependent domains instead of filtering.
 - Sized collections guarantee their minimum: `dictOf`/`uniqueArrayOf` (distinct
@@ -218,17 +243,18 @@ must reproduce this table verbatim. Each row is pinned by tests in
 - `CommandSequence` and every `Command` are `\Stringable` so counterexamples
   render as a readable trace; the `PropertyViolationException`/interceptor
   renderers have a `\Stringable` arm before their `default` (class-name) arm.
-- The interceptor reports the SHRUNK run's failure (`shrink()` returns the last
+- The runner reports the SHRUNK run's failure (`shrink()` returns the last
   accepted candidate's throwable), not the original draw's — so the `Failure:`
   line matches the `Shrunk:` arguments. Keep these in sync.
 - **Aggregate results must carry per-run `TestResult` attributes.** Downstream
   interceptors attach per-run attributes to each `$next()` result — Testo
   codecov's `CoverageResult` among them (its interceptor is innermost, order
-  `PHP_INT_MAX`). Every `TestResult` the interceptor constructs (pass,
-  falsified, coverage violation, failing example) must pass the merged
-  `$runAttributes` along; a bare `new TestResult(info, status)` makes property
-  tests vanish from per-test coverage and Infection then never runs them
-  against mutants.
+  `PHP_INT_MAX`). `TestoTrialExecutor` merges every executed run's attributes
+  (last write per key wins) and the interceptor puts that aggregate on the one
+  `TestResult` it returns; dropping that merge makes property tests vanish
+  from per-test coverage and Infection then never runs them against mutants.
+  Since the runner split the merge covers shrink trials and passing examples
+  too — strictly more coverage data than 2.8 kept.
 - Shrinking is a greedy per-parameter tree descent and best-effort minimal,
   not provably minimal (no exhaustive search). For monotone predicates the
   int ladder is an exact binary search.
