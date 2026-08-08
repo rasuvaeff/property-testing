@@ -3,6 +3,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface",
         "kind": "interface",
         "isApi": true,
+        "summary": "Describes a space of random values with integrated shrinking.\n\nAn arbitrary produces a Shrinkable via generate(): the\ngenerated value together with a lazy tree of smaller candidates, each\ncarrying its own subtree. The property runner reads the value, and on a\nfailure descends through the tree, accepting the first candidate that still\nfails, until no smaller value fails \u2014 yielding a minimal counterexample.\n\nBecause shrink candidates are attached at generation time, combinators such\nas Gen::map() and Gen::flatMap() shrink in the source domain\nand re-apply their transformation; implementations never need to invert a\ntransformed value.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -12,10 +13,12 @@
                 "params": [
                     {
                         "name": "random",
-                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                        "type": "Rasuvaeff\\PropertyTesting\\Random",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable",
+                "summary": "Produce one random value from this arbitrary's space, together with its\nshrink tree. Candidates must be ordered most aggressive first (typically\ntoward a zero/empty/identity element) and every branch of the tree must\nbe finite, so shrinking terminates."
             }
         ]
     },
@@ -23,6 +26,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\ArrayArbitrary",
         "kind": "class",
         "isApi": true,
+        "summary": "Generates lists whose elements come from a delegate arbitrary and shrinks\nthem by length toward the empty array, then element-by-element through each\nelement's own shrink tree.\n\nElement shrink trees are captured at generation time, so elements produced\nby transformed arbitraries (\\Rasuvaeff\\PropertyTesting\\Gen::map(),\n\\Rasuvaeff\\PropertyTesting\\Gen::flatMap()) shrink correctly.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -32,10 +36,12 @@
                 "params": [
                     {
                         "name": "random",
-                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                        "type": "Rasuvaeff\\PropertyTesting\\Random",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable",
+                "summary": ""
             }
         ]
     },
@@ -43,6 +49,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\BoolArbitrary",
         "kind": "class",
         "isApi": true,
+        "summary": "Generates booleans. false is the \"smaller\" boolean: true shrinks to false,\nfalse is terminal.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -52,10 +59,12 @@
                 "params": [
                     {
                         "name": "random",
-                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                        "type": "Rasuvaeff\\PropertyTesting\\Random",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable",
+                "summary": ""
             }
         ]
     },
@@ -63,6 +72,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\BytesArbitrary",
         "kind": "class",
         "isApi": true,
+        "summary": "Generates raw byte strings (every byte 0..255, not printable text) and\nshrinks them by length toward the empty string, then byte-by-byte toward\nNUL (\"\\x00\"). Useful for parsers, codecs and binary protocols.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -72,10 +82,12 @@
                 "params": [
                     {
                         "name": "random",
-                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                        "type": "Rasuvaeff\\PropertyTesting\\Random",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable",
+                "summary": ""
             }
         ]
     },
@@ -83,6 +95,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\CharsetStringArbitrary",
         "kind": "class",
         "isApi": true,
+        "summary": "Generates strings whose characters come from a fixed alphabet, and shrinks\nthem by length toward the empty string, then character-by-character toward\nthe first alphabet character (list simpler characters first).\n\nThe alphabet is split per Unicode codepoint, so multibyte alphabets work;\nduplicate characters are collapsed. Length is chosen uniformly within an\ninclusive range.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -92,10 +105,12 @@
                 "params": [
                     {
                         "name": "random",
-                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                        "type": "Rasuvaeff\\PropertyTesting\\Random",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable",
+                "summary": ""
             }
         ]
     },
@@ -103,6 +118,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\CommandSequenceArbitrary",
         "kind": "class",
         "isApi": true,
+        "summary": "Generates valid Command sequences for stateful / model-based testing\nand shrinks them by dropping and simplifying steps.\n\nGeneration is model-aware: at each step a command generator is drawn at\nrandom, and the produced command is appended only if its\nCommand::preCondition() holds in the running model, which is then\nadvanced via Command::nextState(). The sequence is therefore valid by\nconstruction; if no applicable command is found within a bounded number of\nattempts the sequence stops early.\n\nShrinking removes whole blocks of commands (most aggressive first, down to a\nsingle command so a failing step in the middle can be isolated) and then\nsimplifies individual commands through their own shrink trees. Dropped or\nsimplified sequences are not re-validated here \u2014 \\Rasuvaeff\\PropertyTesting\\StateMachine\\StateMachine::check()\nskips any command whose precondition a change invalidated, keeping every\ncandidate sound.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -112,10 +128,12 @@
                 "params": [
                     {
                         "name": "random",
-                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                        "type": "Rasuvaeff\\PropertyTesting\\Random",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable",
+                "summary": ""
             }
         ]
     },
@@ -123,6 +141,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\ConstantArbitrary",
         "kind": "class",
         "isApi": true,
+        "summary": "Always produces the same fixed value. Useful as a building block for composite\ngenerators (e.g. a `record` field that is held constant) and for pinning one\nparameter while others vary.\n\nThere is nothing smaller than a constant, so it does not shrink.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -132,10 +151,12 @@
                 "params": [
                     {
                         "name": "random",
-                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                        "type": "Rasuvaeff\\PropertyTesting\\Random",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable",
+                "summary": ""
             }
         ]
     },
@@ -143,6 +164,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\DateTimeArbitrary",
         "kind": "class",
         "isApi": true,
+        "summary": "Generates UTC DateTimeImmutable values with a Unix timestamp drawn\nuniformly from an inclusive range, and shrinks toward the Unix epoch\n(1970-01-01T00:00:00Z), clamped to the configured range.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -152,10 +174,12 @@
                 "params": [
                     {
                         "name": "random",
-                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                        "type": "Rasuvaeff\\PropertyTesting\\Random",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable",
+                "summary": ""
             }
         ]
     },
@@ -163,6 +187,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\DictionaryArbitrary",
         "kind": "class",
         "isApi": true,
+        "summary": "Generates associative arrays (maps) whose keys come from a key arbitrary and\nwhose values come from a value arbitrary, then shrinks them by size toward the\nempty map and value-by-value through each value's own shrink tree (keys are\nnever shrunk).\n\nKeys must be PHP array keys (int or string); a key arbitrary that produces\nanything else is a configuration error and throws. Generation draws a size,\nthen draws distinct keys (each paired with a value) up to an attempt budget,\nso seeded runs are reproducible. When the key space runs out of fresh keys the\nmap may be smaller than the drawn size, but it is NEVER smaller than\n$minSize: an unreachable minimum throws GenerationExhausted\nrather than hand the property a too-small map.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -172,10 +197,12 @@
                 "params": [
                     {
                         "name": "random",
-                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                        "type": "Rasuvaeff\\PropertyTesting\\Random",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable",
+                "summary": ""
             }
         ]
     },
@@ -183,6 +210,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\FilteredArbitrary",
         "kind": "class",
         "isApi": true,
+        "summary": "Generates values from a delegate arbitrary, retrying until a predicate holds.\n\nFiltering is bounded: after self::MAX_ATTEMPTS consecutive rejections\nthe generator throws GenerationExhausted rather than yield a value that\nfails the predicate \u2014 a property never receives an out-of-domain input. Use\n\\Rasuvaeff\\PropertyTesting\\Assume::that() inside the property when the\nrejection rate is high, which skips discarded runs cleanly, or\n\\Rasuvaeff\\PropertyTesting\\Gen::flatMap() to construct dependent values\nwithout filtering at all.\n\nShrinking walks the inner value's tree, keeping only branches whose value\nsatisfies the predicate (a rejected candidate's subtree is pruned with it).",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -192,10 +220,12 @@
                 "params": [
                     {
                         "name": "random",
-                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                        "type": "Rasuvaeff\\PropertyTesting\\Random",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable",
+                "summary": ""
             }
         ]
     },
@@ -203,6 +233,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\FlatMappedArbitrary",
         "kind": "class",
         "isApi": true,
+        "summary": "Dependent generators (monadic bind): each value produced by the source\narbitrary is fed into a closure that returns the arbitrary generating the\nfinal value. Use it when one input's domain depends on another, e.g. a list\nplus a valid index into that list \u2014 instead of discarding invalid pairs via\n\\Rasuvaeff\\PropertyTesting\\Assume::that().\n\nShrinking works on both levels: first the source value shrinks (the closure\nis re-applied and the dependent arbitrary regenerates with the same captured\nseed, so runs stay reproducible), then the dependent value shrinks through\nits own tree with the source value held fixed. The closure must be pure \u2014 it\nruns once per generated value and once per visited source candidate.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -212,10 +243,12 @@
                 "params": [
                     {
                         "name": "random",
-                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                        "type": "Rasuvaeff\\PropertyTesting\\Random",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable",
+                "summary": ""
             }
         ]
     },
@@ -223,6 +256,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\FloatArbitrary",
         "kind": "class",
         "isApi": true,
+        "summary": "Generates floats in the half-open range [min, max).\n\nGeneration is biased: roughly one draw in BIAS_DENOMINATOR returns an\nin-range boundary value (0.0 or min) instead of a uniform one, because bugs\ncluster at edges. The exclusive upper bound is never emitted.\n\nShrinking floats reliably is hard (no natural \"smallest\" value), so the\nshrink tree has a single candidate: zero, clamped into the configured range.\nFor fine-grained shrinking on a numeric input, generate an integer and\n\\Rasuvaeff\\PropertyTesting\\Gen::map() it to a float \u2014 with integrated\nshrinking the mapped value shrinks through the integer's tree.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -232,10 +266,12 @@
                 "params": [
                     {
                         "name": "random",
-                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                        "type": "Rasuvaeff\\PropertyTesting\\Random",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable",
+                "summary": ""
             }
         ]
     },
@@ -243,6 +279,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\FrequencyArbitrary",
         "kind": "class",
         "isApi": true,
+        "summary": "Weighted choice among several arbitraries: each `[weight, arbitrary]` pair is\npicked with probability proportional to its (positive integer) weight, then\nthe chosen arbitrary produces the value.\n\nThe chosen branch's shrink tree is returned as-is, so shrinking stays within\nthe branch that actually generated the value.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -252,10 +289,12 @@
                 "params": [
                     {
                         "name": "random",
-                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                        "type": "Rasuvaeff\\PropertyTesting\\Random",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable",
+                "summary": ""
             }
         ]
     },
@@ -263,6 +302,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\IntArbitrary",
         "kind": "class",
         "isApi": true,
+        "summary": "Generates integers within an inclusive range and shrinks them toward zero\n(clamped into the range, so the target of a zero-free range is its nearest\nbound).\n\nGeneration is biased: roughly one draw in BIAS_DENOMINATOR returns an\nin-range boundary value (0, \u00b11, min, max) instead of a uniform one, because\nbugs cluster at edges.\n\nThe shrink tree halves the distance to the target: the target itself first,\nthen candidates progressively closer to the failing value, each with its own\nsubtree toward the same target \u2014 a binary search for the minimal failing\ninteger.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -272,10 +312,12 @@
                 "params": [
                     {
                         "name": "random",
-                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                        "type": "Rasuvaeff\\PropertyTesting\\Random",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable",
+                "summary": ""
             }
         ]
     },
@@ -283,6 +325,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\MappedArbitrary",
         "kind": "class",
         "isApi": true,
+        "summary": "Transforms each value produced by a delegate arbitrary through a pure function.\n\nThe whole shrink tree is mapped: shrinking happens in the inner (source)\ndomain and the function is re-applied to every candidate, so the shrunk\ncounterexample is reported in the transformed domain. The function must be\npure \u2014 it runs once per generated value and once per visited candidate.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -292,10 +335,12 @@
                 "params": [
                     {
                         "name": "random",
-                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                        "type": "Rasuvaeff\\PropertyTesting\\Random",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable",
+                "summary": ""
             }
         ]
     },
@@ -303,6 +348,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\NullableArbitrary",
         "kind": "class",
         "isApi": true,
+        "summary": "Wraps another arbitrary and additionally yields `null` with roughly even odds.\n\nShrinking prefers `null` over descending into the inner value's tree.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -312,10 +358,12 @@
                 "params": [
                     {
                         "name": "random",
-                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                        "type": "Rasuvaeff\\PropertyTesting\\Random",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable",
+                "summary": ""
             }
         ]
     },
@@ -323,6 +371,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\OneOfArbitrary",
         "kind": "class",
         "isApi": true,
+        "summary": "Picks a value uniformly at random from a fixed set.\n\nValues are used verbatim (they are not arbitraries). Earlier values are\nconsidered \"smaller\": a failing value shrinks through the distinct values\nlisted before it, so put simpler values first. Because the index strictly\ndecreases on every step, shrinking terminates even when several values keep\nfailing. Use this for enumerations and small tagged unions.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -332,10 +381,12 @@
                 "params": [
                     {
                         "name": "random",
-                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                        "type": "Rasuvaeff\\PropertyTesting\\Random",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable",
+                "summary": ""
             }
         ]
     },
@@ -343,6 +394,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\RecordArbitrary",
         "kind": "class",
         "isApi": true,
+        "summary": "Fixed-shape associative array: produces a map with one value per named field,\neach drawn from that field's arbitrary. Useful for generating DTO-shaped\npayloads where every key is known up front (the property receives the record\nas a single string-keyed array argument).\n\nShrinking keeps the key set fixed and shrinks one field at a time through\nthat field's own shrink tree, so each value shrinks within its domain.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -352,10 +404,12 @@
                 "params": [
                     {
                         "name": "random",
-                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                        "type": "Rasuvaeff\\PropertyTesting\\Random",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable",
+                "summary": ""
             }
         ]
     },
@@ -363,6 +417,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\StringArbitrary",
         "kind": "class",
         "isApi": true,
+        "summary": "Generates random strings and shrinks them by length toward the empty string,\nthen character-by-character toward 'a'.\n\nTwo alphabets are available: an ASCII printable subset (32..126) and the\nfull Unicode space via mb_chr(). Length is chosen uniformly within an\ninclusive range.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -372,10 +427,12 @@
                 "params": [
                     {
                         "name": "random",
-                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                        "type": "Rasuvaeff\\PropertyTesting\\Random",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable",
+                "summary": ""
             }
         ]
     },
@@ -383,6 +440,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\TupleArbitrary",
         "kind": "class",
         "isApi": true,
+        "summary": "Fixed-arity tuple: produces a list with one value per element arbitrary, in\norder. Useful for generating several correlated parameters as a single value\n(the property receives the tuple as one array argument and destructures it).\n\nShrinking keeps the arity fixed and shrinks one position at a time through\nthat position's own shrink tree, so each component shrinks within its domain.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -392,10 +450,12 @@
                 "params": [
                     {
                         "name": "random",
-                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                        "type": "Rasuvaeff\\PropertyTesting\\Random",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable",
+                "summary": ""
             }
         ]
     },
@@ -403,6 +463,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\UniqueArrayArbitrary",
         "kind": "class",
         "isApi": true,
+        "summary": "Generates lists of pairwise-distinct elements (strict comparison) drawn from\na delegate arbitrary, and shrinks them by length toward the empty array, then\nelement-by-element through each element's own tree \u2014 accepting only\ncandidates that keep the list distinct.\n\nGeneration draws a size, then draws elements, skipping duplicates. Drawing is\nbounded: after self::MAX_ATTEMPTS_PER_ELEMENT attempts per requested\nelement the generator settles for the distinct elements found so far \u2014 the\nresult may be smaller than the drawn size, mirroring dictOf's key-collision\nbehaviour. An element space too small to reach the minimum size throws\nGenerationExhausted rather than hand the property a too-small list.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -412,10 +473,12 @@
                 "params": [
                     {
                         "name": "random",
-                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                        "type": "Rasuvaeff\\PropertyTesting\\Random",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable",
+                "summary": ""
             }
         ]
     },
@@ -423,6 +486,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Arbitrary\\UuidArbitrary",
         "kind": "class",
         "isApi": true,
+        "summary": "Generates RFC 4122 version 4 (random) UUID strings in the canonical\n`xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx` form, where the version nibble is `4`\nand the variant nibble is one of `8`, `9`, `a`, `b`.\n\nA UUID is an opaque identifier with no meaningful ordering, so it does not\nshrink. Randomness comes from the seeded Random, so generated UUIDs are\nreproducible but NOT suitable for security purposes.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -432,10 +496,12 @@
                 "params": [
                     {
                         "name": "random",
-                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                        "type": "Rasuvaeff\\PropertyTesting\\Random",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable",
+                "summary": ""
             }
         ]
     },
@@ -443,6 +509,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Assume",
         "kind": "class",
         "isApi": true,
+        "summary": "Discard a property run when a precondition does not hold.\n\nAn attempt discarded via Assume::that() is neither a failure nor a\nsuccessful check: the property runner retries with another random input. Use\nit to skip combinations of generated values that are out of the\nproperty's domain (e.g. \"cap must be >= baseSeconds\") instead of rejecting\nthem with a narrow Gen::filter(), which is slower.\n\nDiscards do not consume Property::$runs. The runner warns when more\nthan 90% of attempts are discarded and fails with GaveUpException when\nProperty::$maxDiscards is exceeded.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -452,10 +519,12 @@
                 "params": [
                     {
                         "name": "condition",
-                        "type": "bool"
+                        "type": "bool",
+                        "description": ""
                     }
                 ],
-                "returnType": "void"
+                "returnType": "void",
+                "summary": "Discard the current run unless the condition is true."
             }
         ]
     },
@@ -463,6 +532,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\AssumptionSkipped",
         "kind": "class",
         "isApi": false,
+        "summary": "Thrown by Assume::that() to discard the current property run without\ncounting it as a failure or a successful check.",
         "extends": "RuntimeException",
         "publicProperties": [],
         "publicMethods": []
@@ -471,6 +541,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Classify",
         "kind": "class",
         "isApi": true,
+        "summary": "Records distribution labels for the current property run so the runner can\nreport how often each case occurred. Use it to confirm a property is not\npassing vacuously \u2014 that the generators actually exercise the interesting\ninputs.\n\n```php\n#[Property(runs: 500)]\npublic function holds(int $n): void\n{\n    Classify::when($n === 0, 'zero');\n    Classify::when($n < 0, 'negative');\n    Classify::label($n % 2 === 0 ? 'even' : 'odd');\n    // ... assertions ...\n}\n```\n\nAfter a fully passing property the runner prints the share of runs that hit\neach label. A label recorded several times within one run still counts once\nfor that run.\n\nState is per-run and process-local: the runner clears it before each run via\nbeginRun() and drains it via flushRun(). Property runs are\nsequential, so the static buffer is never shared concurrently.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -480,10 +551,12 @@
                 "params": [
                     {
                         "name": "label",
-                        "type": "string"
+                        "type": "string",
+                        "description": ""
                     }
                 ],
-                "returnType": "void"
+                "returnType": "void",
+                "summary": "Record $label for the current run."
             },
             {
                 "name": "when",
@@ -491,14 +564,17 @@
                 "params": [
                     {
                         "name": "condition",
-                        "type": "bool"
+                        "type": "bool",
+                        "description": ""
                     },
                     {
                         "name": "label",
-                        "type": "string"
+                        "type": "string",
+                        "description": ""
                     }
                 ],
-                "returnType": "void"
+                "returnType": "void",
+                "summary": "Record $label for the current run only when $condition holds."
             },
             {
                 "name": "cover",
@@ -506,36 +582,43 @@
                 "params": [
                     {
                         "name": "condition",
-                        "type": "bool"
+                        "type": "bool",
+                        "description": ""
                     },
                     {
                         "name": "label",
-                        "type": "string"
+                        "type": "string",
+                        "description": ""
                     },
                     {
                         "name": "minPercent",
-                        "type": "float"
+                        "type": "float",
+                        "description": ""
                     }
                 ],
-                "returnType": "void"
+                "returnType": "void",
+                "summary": "Like when(), but additionally REQUIRES the label to occur in at\nleast $minPercent of the property's passing runs. When the requirement is\nnot met the property fails with a CoverageViolationException even\nthough every run passed \u2014 turning \"the distribution looks wrong\" from a\nprinted hint into a CI failure.\n\n```php\nClassify::cover($n % 2 === 0, 'even', 30.0);\n```"
             },
             {
                 "name": "beginRun",
                 "static": true,
                 "params": [],
-                "returnType": "void"
+                "returnType": "void",
+                "summary": "Clear the labels buffered for the current run."
             },
             {
                 "name": "flushRun",
                 "static": true,
                 "params": [],
-                "returnType": "array"
+                "returnType": "array",
+                "summary": "Return the labels recorded during the current run and clear the buffer."
             },
             {
                 "name": "flushRequirements",
                 "static": true,
                 "params": [],
-                "returnType": "array"
+                "returnType": "array",
+                "summary": "Return the coverage requirements registered during the property and clear\nthem. The runner drains this once after the run loop (and defensively\nbefore it, in case a previous property aborted mid-flight)."
             }
         ]
     },
@@ -543,6 +626,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\CounterExample",
         "kind": "class",
         "isApi": true,
+        "summary": "Minimal failing input for a property, captured at falsification time.\n\nCarries both the original (randomly generated) counterexample and the\nshrunk (minimised) one, plus the seed needed to reproduce the run.",
         "extends": null,
         "publicProperties": [
             {
@@ -591,7 +675,8 @@
                 "name": "toArray",
                 "static": false,
                 "params": [],
-                "returnType": "array"
+                "returnType": "array",
+                "summary": "Machine-readable representation suitable for reporters and serialization."
             },
             {
                 "name": "toJson",
@@ -599,10 +684,12 @@
                 "params": [
                     {
                         "name": "pretty",
-                        "type": "bool"
+                        "type": "bool",
+                        "description": ""
                     }
                 ],
-                "returnType": "string"
+                "returnType": "string",
+                "summary": ""
             },
             {
                 "name": "toExamplesCode",
@@ -610,10 +697,12 @@
                 "params": [
                     {
                         "name": "methodName",
-                        "type": "string"
+                        "type": "string",
+                        "description": ""
                     }
                 ],
-                "returnType": "string"
+                "returnType": "string",
+                "summary": ""
             }
         ]
     },
@@ -621,6 +710,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\CoverageViolationException",
         "kind": "class",
         "isApi": true,
+        "summary": "Thrown (as the failure of an otherwise passing property) when a coverage\nrequirement registered via Classify::cover() is not met: the property\nheld on every run, but the generators did not exercise a labelled case often\nenough, so the pass would be (partially) vacuous.",
         "extends": "RuntimeException",
         "publicProperties": [],
         "publicMethods": []
@@ -629,6 +719,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\DeadlineExceededException",
         "kind": "class",
         "isApi": true,
+        "summary": "Thrown (as the failure of a property) when a single run's body takes longer\nthan the Property::$timeoutMs deadline. The offending input is the\ncounterexample: it is pathological for the code under test (catastrophic\nregex, deep recursion, unbounded backoff) \u2014 or the deadline is too tight.\n\nThe input is reported as-is, NOT shrunk: shrink acceptance would have to\nre-measure wall time, and timing noise makes that descent non-deterministic.",
         "extends": "RuntimeException",
         "publicProperties": [
             {
@@ -655,9 +746,394 @@
         "publicMethods": []
     },
     {
+        "class": "Rasuvaeff\\PropertyTesting\\Event\\CorpusPruned",
+        "kind": "class",
+        "isApi": false,
+        "summary": "A recorded entry no longer fails and was removed from the corpus.",
+        "extends": null,
+        "publicProperties": [
+            {
+                "name": "propertyId",
+                "type": "string",
+                "readonly": true
+            },
+            {
+                "name": "isValues",
+                "type": "bool",
+                "readonly": true
+            },
+            {
+                "name": "seed",
+                "type": "int",
+                "readonly": true
+            }
+        ],
+        "publicMethods": []
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Event\\CorpusReplayed",
+        "kind": "class",
+        "isApi": false,
+        "summary": "A recorded regression entry is about to replay before the random phase.",
+        "extends": null,
+        "publicProperties": [
+            {
+                "name": "propertyId",
+                "type": "string",
+                "readonly": true
+            },
+            {
+                "name": "isValues",
+                "type": "bool",
+                "readonly": true
+            },
+            {
+                "name": "arguments",
+                "type": "array",
+                "readonly": true
+            },
+            {
+                "name": "seed",
+                "type": "int",
+                "readonly": true
+            }
+        ],
+        "publicMethods": []
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Event\\CorpusStored",
+        "kind": "class",
+        "isApi": false,
+        "summary": "A falsification's minimised counterexample was recorded in the corpus.",
+        "extends": null,
+        "publicProperties": [
+            {
+                "name": "propertyId",
+                "type": "string",
+                "readonly": true
+            },
+            {
+                "name": "counterExample",
+                "type": "Rasuvaeff\\PropertyTesting\\CounterExample",
+                "readonly": true
+            }
+        ],
+        "publicMethods": []
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Event\\ExampleFinished",
+        "kind": "class",
+        "isApi": false,
+        "summary": "An explicit example finished. A null $failure means it passed or was\ndiscarded via Assume.",
+        "extends": null,
+        "publicProperties": [
+            {
+                "name": "propertyId",
+                "type": "string",
+                "readonly": true
+            },
+            {
+                "name": "index",
+                "type": "int",
+                "readonly": true
+            },
+            {
+                "name": "arguments",
+                "type": "array",
+                "readonly": true
+            },
+            {
+                "name": "failure",
+                "type": "?Throwable",
+                "readonly": true
+            }
+        ],
+        "publicMethods": []
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Event\\ExampleStarted",
+        "kind": "class",
+        "isApi": false,
+        "summary": "An explicit example is about to execute, before the random phase.",
+        "extends": null,
+        "publicProperties": [
+            {
+                "name": "propertyId",
+                "type": "string",
+                "readonly": true
+            },
+            {
+                "name": "index",
+                "type": "int",
+                "readonly": true
+            },
+            {
+                "name": "arguments",
+                "type": "array",
+                "readonly": true
+            }
+        ],
+        "publicMethods": []
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Event\\PropertyEvent",
+        "kind": "interface",
+        "isApi": false,
+        "summary": "Marker for the engine's lifecycle events.\n\nEvents carry engine data only \u2014 property id, seed, attempt numbers,\narguments, labels, elapsed time, failures, counterexamples. Framework types\n(Testo's TestInfo/TestResult/Messenger, PHPUnit's) never appear here.",
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": []
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Event\\PropertyFinished",
+        "kind": "class",
+        "isApi": false,
+        "summary": "The property finished. A null $failure is a pass; otherwise the failure is\nthe outcome's exception (falsified, gave up, coverage, deadline, budget,\ngeneration exhausted, example or regression violation).",
+        "extends": null,
+        "publicProperties": [
+            {
+                "name": "propertyId",
+                "type": "string",
+                "readonly": true
+            },
+            {
+                "name": "failure",
+                "type": "?Throwable",
+                "readonly": true
+            }
+        ],
+        "publicMethods": []
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Event\\PropertyStarted",
+        "kind": "class",
+        "isApi": false,
+        "summary": "The property is about to run: examples first, then corpus replay, then the\nrandom phase.",
+        "extends": null,
+        "publicProperties": [
+            {
+                "name": "propertyId",
+                "type": "string",
+                "readonly": true
+            },
+            {
+                "name": "seed",
+                "type": "int",
+                "readonly": true
+            },
+            {
+                "name": "runs",
+                "type": "int",
+                "readonly": true
+            }
+        ],
+        "publicMethods": []
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Event\\RunDiscarded",
+        "kind": "class",
+        "isApi": false,
+        "summary": "A random-phase attempt was discarded via Assume \u2014 neither a failure nor a\nsuccessful check.",
+        "extends": null,
+        "publicProperties": [
+            {
+                "name": "propertyId",
+                "type": "string",
+                "readonly": true
+            },
+            {
+                "name": "attempt",
+                "type": "int",
+                "readonly": true
+            },
+            {
+                "name": "arguments",
+                "type": "array",
+                "readonly": true
+            },
+            {
+                "name": "draws",
+                "type": "array",
+                "readonly": true
+            }
+        ],
+        "publicMethods": []
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Event\\RunFailed",
+        "kind": "class",
+        "isApi": false,
+        "summary": "A random-phase attempt falsified the property; shrinking follows.",
+        "extends": null,
+        "publicProperties": [
+            {
+                "name": "propertyId",
+                "type": "string",
+                "readonly": true
+            },
+            {
+                "name": "attempt",
+                "type": "int",
+                "readonly": true
+            },
+            {
+                "name": "arguments",
+                "type": "array",
+                "readonly": true
+            },
+            {
+                "name": "draws",
+                "type": "array",
+                "readonly": true
+            },
+            {
+                "name": "failure",
+                "type": "?Throwable",
+                "readonly": true
+            },
+            {
+                "name": "elapsedNs",
+                "type": "int",
+                "readonly": true
+            }
+        ],
+        "publicMethods": []
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Event\\RunPassed",
+        "kind": "class",
+        "isApi": false,
+        "summary": "A random-phase attempt completed without failing.",
+        "extends": null,
+        "publicProperties": [
+            {
+                "name": "propertyId",
+                "type": "string",
+                "readonly": true
+            },
+            {
+                "name": "attempt",
+                "type": "int",
+                "readonly": true
+            },
+            {
+                "name": "arguments",
+                "type": "array",
+                "readonly": true
+            },
+            {
+                "name": "draws",
+                "type": "array",
+                "readonly": true
+            },
+            {
+                "name": "labels",
+                "type": "array",
+                "readonly": true
+            },
+            {
+                "name": "elapsedNs",
+                "type": "int",
+                "readonly": true
+            }
+        ],
+        "publicMethods": []
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Event\\RunStarted",
+        "kind": "class",
+        "isApi": false,
+        "summary": "A random-phase attempt is about to execute the property body.",
+        "extends": null,
+        "publicProperties": [
+            {
+                "name": "propertyId",
+                "type": "string",
+                "readonly": true
+            },
+            {
+                "name": "attempt",
+                "type": "int",
+                "readonly": true
+            },
+            {
+                "name": "arguments",
+                "type": "array",
+                "readonly": true
+            }
+        ],
+        "publicMethods": []
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Event\\ShrinkAccepted",
+        "kind": "class",
+        "isApi": false,
+        "summary": "A shrink candidate still failed and became the new current counterexample.",
+        "extends": null,
+        "publicProperties": [
+            {
+                "name": "propertyId",
+                "type": "string",
+                "readonly": true
+            },
+            {
+                "name": "step",
+                "type": "int",
+                "readonly": true
+            },
+            {
+                "name": "parameter",
+                "type": "string",
+                "readonly": true
+            },
+            {
+                "name": "before",
+                "type": "mixed",
+                "readonly": true
+            },
+            {
+                "name": "after",
+                "type": "mixed",
+                "readonly": true
+            }
+        ],
+        "publicMethods": []
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Event\\ShrinkTried",
+        "kind": "class",
+        "isApi": false,
+        "summary": "One shrink trial executed the body with a smaller candidate for a single\nparameter (or `draw#N` tape position).",
+        "extends": null,
+        "publicProperties": [
+            {
+                "name": "propertyId",
+                "type": "string",
+                "readonly": true
+            },
+            {
+                "name": "parameter",
+                "type": "string",
+                "readonly": true
+            },
+            {
+                "name": "candidate",
+                "type": "mixed",
+                "readonly": true
+            },
+            {
+                "name": "accepted",
+                "type": "bool",
+                "readonly": true
+            }
+        ],
+        "publicMethods": []
+    },
+    {
         "class": "Rasuvaeff\\PropertyTesting\\ExampleViolationException",
         "kind": "class",
         "isApi": true,
+        "summary": "Reported when an explicit example (a fixed input declared via the property's\n`Examples` method) fails. Examples run before the random inputs and are not\nshrunk \u2014 they are already the minimal case the developer pinned \u2014 so this\ncarries the example's index and arguments verbatim.",
         "extends": "RuntimeException",
         "publicProperties": [],
         "publicMethods": [
@@ -665,13 +1141,15 @@
                 "name": "getIndex",
                 "static": false,
                 "params": [],
-                "returnType": "int"
+                "returnType": "int",
+                "summary": ""
             },
             {
                 "name": "getArguments",
                 "static": false,
                 "params": [],
-                "returnType": "array"
+                "returnType": "array",
+                "summary": ""
             }
         ]
     },
@@ -679,6 +1157,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\GaveUpException",
         "kind": "class",
         "isApi": true,
+        "summary": "Thrown (as the failure of a property) when discarded inputs exceed the\nconfigured budget before the requested number of successful checks completes.\nIt exposes successful, discarded and total attempt counts so the result cannot\nhide a weak input distribution.\n\nThe fix is almost always to construct valid inputs directly (e.g.\nGen::flatMap() / Gen::draw()) rather than generating broadly and\ndiscarding, so runs are valid by construction.",
         "extends": "RuntimeException",
         "publicProperties": [
             {
@@ -718,6 +1197,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Gen",
         "kind": "class",
         "isApi": true,
+        "summary": "Facade with static factories for the built-in ArbitraryInterfaces.\n\nEach factory returns a ready-to-use arbitrary; values are never generated\ndirectly through Gen \u2014 that happens inside the property runner, which threads\nthe seedable Random through every generator so runs are reproducible.\nThe one exception is sample(), a debugging aid that eagerly generates\nvalues from a given arbitrary.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -725,7 +1205,8 @@
                 "name": "int",
                 "static": true,
                 "params": [],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\IntArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\IntArbitrary",
+                "summary": "Integers spanning PHP_INT_MIN..PHP_INT_MAX."
             },
             {
                 "name": "intBetween",
@@ -733,26 +1214,31 @@
                 "params": [
                     {
                         "name": "min",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     },
                     {
                         "name": "max",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\IntArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\IntArbitrary",
+                "summary": ""
             },
             {
                 "name": "intPositive",
                 "static": true,
                 "params": [],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\IntArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\IntArbitrary",
+                "summary": "Positive integers (1..PHP_INT_MAX)."
             },
             {
                 "name": "float",
                 "static": true,
                 "params": [],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\FloatArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\FloatArbitrary",
+                "summary": "Floats in the half-open range [0.0, 1.0)."
             },
             {
                 "name": "floatBetween",
@@ -760,32 +1246,38 @@
                 "params": [
                     {
                         "name": "min",
-                        "type": "float"
+                        "type": "float",
+                        "description": ""
                     },
                     {
                         "name": "max",
-                        "type": "float"
+                        "type": "float",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\FloatArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\FloatArbitrary",
+                "summary": ""
             },
             {
                 "name": "bool",
                 "static": true,
                 "params": [],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\BoolArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\BoolArbitrary",
+                "summary": ""
             },
             {
                 "name": "string",
                 "static": true,
                 "params": [],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\StringArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\StringArbitrary",
+                "summary": "Unicode strings of length 0..100."
             },
             {
                 "name": "stringAscii",
                 "static": true,
                 "params": [],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\StringArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\StringArbitrary",
+                "summary": "Printable ASCII strings of length 0..100."
             },
             {
                 "name": "stringOf",
@@ -793,20 +1285,24 @@
                 "params": [
                     {
                         "name": "minLength",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     },
                     {
                         "name": "maxLength",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\StringArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\StringArbitrary",
+                "summary": ""
             },
             {
                 "name": "char",
                 "static": true,
                 "params": [],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\StringArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\StringArbitrary",
+                "summary": "A single printable ASCII character."
             },
             {
                 "name": "stringFrom",
@@ -814,18 +1310,22 @@
                 "params": [
                     {
                         "name": "alphabet",
-                        "type": "string"
+                        "type": "string",
+                        "description": ""
                     },
                     {
                         "name": "minLength",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     },
                     {
                         "name": "maxLength",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\CharsetStringArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\CharsetStringArbitrary",
+                "summary": "Strings whose characters come from a fixed alphabet (split per Unicode\ncodepoint). Shrinks by length toward '', then each character toward the\nfirst alphabet character \u2014 list simpler characters first."
             },
             {
                 "name": "bytes",
@@ -833,14 +1333,17 @@
                 "params": [
                     {
                         "name": "minLength",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     },
                     {
                         "name": "maxLength",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\BytesArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\BytesArbitrary",
+                "summary": "Raw byte strings (every byte 0..255). Shrinks by length toward '', then\neach byte toward \"\\x00\"."
             },
             {
                 "name": "arrayOf",
@@ -848,18 +1351,22 @@
                 "params": [
                     {
                         "name": "element",
-                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface",
+                        "description": ""
                     },
                     {
                         "name": "minSize",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     },
                     {
                         "name": "maxSize",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\ArrayArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\ArrayArbitrary",
+                "summary": "Lists whose elements are drawn from $element."
             },
             {
                 "name": "nonEmptyArrayOf",
@@ -867,14 +1374,17 @@
                 "params": [
                     {
                         "name": "element",
-                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface",
+                        "description": ""
                     },
                     {
                         "name": "maxSize",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\ArrayArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\ArrayArbitrary",
+                "summary": "Non-empty lists whose elements are drawn from $element."
             },
             {
                 "name": "uniqueArrayOf",
@@ -882,18 +1392,22 @@
                 "params": [
                     {
                         "name": "element",
-                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface",
+                        "description": ""
                     },
                     {
                         "name": "minSize",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     },
                     {
                         "name": "maxSize",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\UniqueArrayArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\UniqueArrayArbitrary",
+                "summary": "Lists of pairwise-distinct elements (strict comparison) drawn from\n$element. Element shrinking keeps the list distinct; the result may be\nsmaller than the drawn size when the element space runs out of fresh\nvalues, but never below $minSize \u2014 an unreachable minimum throws\nGenerationExhausted."
             },
             {
                 "name": "dictOf",
@@ -901,22 +1415,27 @@
                 "params": [
                     {
                         "name": "key",
-                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface",
+                        "description": ""
                     },
                     {
                         "name": "value",
-                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface",
+                        "description": ""
                     },
                     {
                         "name": "minSize",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     },
                     {
                         "name": "maxSize",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\DictionaryArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\DictionaryArbitrary",
+                "summary": "Associative arrays (maps) with keys from $key and values from $value.\nKeys must be int or string; only distinct keys are kept, so the result\nmay be smaller than the drawn size when the key space runs out, but never\nbelow $minSize \u2014 an unreachable minimum throws GenerationExhausted."
             },
             {
                 "name": "record",
@@ -924,10 +1443,12 @@
                 "params": [
                     {
                         "name": "shape",
-                        "type": "array"
+                        "type": "array",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\RecordArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\RecordArbitrary",
+                "summary": "Fixed-shape associative array: each field is generated from its own\narbitrary, keyed by field name. The property receives a single string-keyed\narray; shrinking reduces each field through its arbitrary while keeping the\nkey set fixed."
             },
             {
                 "name": "oneOf",
@@ -935,10 +1456,12 @@
                 "params": [
                     {
                         "name": "values",
-                        "type": "mixed"
+                        "type": "mixed",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\OneOfArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\OneOfArbitrary",
+                "summary": "Picks one of the given values at random."
             },
             {
                 "name": "elements",
@@ -946,10 +1469,12 @@
                 "params": [
                     {
                         "name": "values",
-                        "type": "array"
+                        "type": "array",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\OneOfArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\OneOfArbitrary",
+                "summary": "Picks one value at random from an array (the array form of oneOf())."
             },
             {
                 "name": "constant",
@@ -957,10 +1482,12 @@
                 "params": [
                     {
                         "name": "value",
-                        "type": "mixed"
+                        "type": "mixed",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\ConstantArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\ConstantArbitrary",
+                "summary": "Always produces $value; does not shrink."
             },
             {
                 "name": "enum",
@@ -968,16 +1495,19 @@
                 "params": [
                     {
                         "name": "enum",
-                        "type": "string"
+                        "type": "string",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\OneOfArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\OneOfArbitrary",
+                "summary": "One case of a PHP enum, in declaration order. Shrinks toward\nearlier-declared cases, so declare simpler cases first."
             },
             {
                 "name": "floatSpecial",
                 "static": true,
                 "params": [],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\OneOfArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\OneOfArbitrary",
+                "summary": "Special float values (NaN, \u00b1INF, -0.0 and the representation edges) where\nfloat bugs cluster \u2014 an opt-in complement to float(), which stays\ninside its finite range. Shrinks toward earlier-listed specials."
             },
             {
                 "name": "intRange",
@@ -985,14 +1515,17 @@
                 "params": [
                     {
                         "name": "min",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     },
                     {
                         "name": "max",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\FlatMappedArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\FlatMappedArbitrary",
+                "summary": "Ordered integer pairs `[lo, hi]` with $min <= lo <= hi <= $max \u2014 the\n\"range/interval\" input without an Assume::that() discard. Built on\nflatMap(), so both bounds shrink while `lo <= hi` always holds."
             },
             {
                 "name": "recursive",
@@ -1000,18 +1533,22 @@
                 "params": [
                     {
                         "name": "leaf",
-                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface",
+                        "description": ""
                     },
                     {
                         "name": "wrap",
-                        "type": "Closure"
+                        "type": "Closure",
+                        "description": ""
                     },
                     {
                         "name": "maxDepth",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                "returnType": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface",
+                "summary": "Recursive structures with a bounded depth: $wrap receives the arbitrary\nfor the previous level and returns the next one (e.g. wrap a value in an\narray). At every level generation picks the leaf or the wrapped branch\nwith equal odds, so nesting is possible but not forced. Keep the branch\nfan-out small (bounded array sizes) \u2014 breadth multiplies per level."
             },
             {
                 "name": "nullable",
@@ -1019,10 +1556,12 @@
                 "params": [
                     {
                         "name": "inner",
-                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\NullableArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\NullableArbitrary",
+                "summary": "Yields null or a value from $inner with roughly even odds."
             },
             {
                 "name": "map",
@@ -1030,14 +1569,17 @@
                 "params": [
                     {
                         "name": "inner",
-                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface",
+                        "description": ""
                     },
                     {
                         "name": "map",
-                        "type": "Closure"
+                        "type": "Closure",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\MappedArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\MappedArbitrary",
+                "summary": "Transforms each value produced by $inner through a pure function.\nShrinking happens in the source domain and the function is re-applied,\nso mapped values shrink through the inner arbitrary's tree."
             },
             {
                 "name": "flatMap",
@@ -1045,14 +1587,17 @@
                 "params": [
                     {
                         "name": "inner",
-                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface",
+                        "description": ""
                     },
                     {
                         "name": "flatMap",
-                        "type": "Closure"
+                        "type": "Closure",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\FlatMappedArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\FlatMappedArbitrary",
+                "summary": "Dependent generators (aka `bind`): feeds each value produced by $inner\ninto $flatMap, which returns the arbitrary generating the final value.\nUse it when one input's domain depends on another (e.g. an array plus a\nvalid index into it) instead of discarding invalid combinations with\nAssume::that()."
             },
             {
                 "name": "filter",
@@ -1060,14 +1605,17 @@
                 "params": [
                     {
                         "name": "inner",
-                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface",
+                        "description": ""
                     },
                     {
                         "name": "predicate",
-                        "type": "Closure"
+                        "type": "Closure",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\FilteredArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\FilteredArbitrary",
+                "summary": "Generates values from $inner, retrying until $predicate holds."
             },
             {
                 "name": "draw",
@@ -1075,10 +1623,12 @@
                 "params": [
                     {
                         "name": "arbitrary",
-                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface",
+                        "description": ""
                     }
                 ],
-                "returnType": "mixed"
+                "returnType": "mixed",
+                "summary": "In-body dependent draw: generates one value from $arbitrary inside the\nproperty body \u2014 for when several dependent values make nested\nflatMap() awkward. The domain may depend on anything already in\nscope, including previously drawn values:\n\n```php\n#[Property(runs: 200)]\npublic function sliceIsContained(array $xs): void\n{\n    $from = Gen::draw(Gen::intBetween(0, count($xs)));\n    $to = Gen::draw(Gen::intBetween($from, count($xs)));\n    // ... assertions on array_slice($xs, $from, $to - $from) ...\n}\n```\n\nDrawn values shrink together with the parameters: the runner records\nevery draw on a replay tape, shrinks each recorded draw through its own\ntree, and re-runs the body with the tape replayed by position. A run\nthat draws past the tape's end (control flow changed under a smaller\nprefix) generates the extra values anew. Counterexamples report draws\nas `draw#1`, `draw#2`, ... alongside the named parameters.\n\nOnly valid while the property runner executes the body; anywhere else\nit throws."
             },
             {
                 "name": "tuple",
@@ -1086,10 +1636,12 @@
                 "params": [
                     {
                         "name": "elements",
-                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\TupleArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\TupleArbitrary",
+                "summary": "Fixed-arity tuple: one value per element arbitrary, in order. The property\nreceives the tuple as a single array argument; shrinking reduces each\nposition through its own arbitrary while keeping the arity fixed."
             },
             {
                 "name": "frequency",
@@ -1097,16 +1649,19 @@
                 "params": [
                     {
                         "name": "pairs",
-                        "type": "iterable"
+                        "type": "iterable",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\FrequencyArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\FrequencyArbitrary",
+                "summary": "Weighted choice among `[weight, arbitrary]` pairs: a branch is picked with\nprobability proportional to its weight, then produces the value. Shrinking\nstays within the branch that generated the value."
             },
             {
                 "name": "uuid",
                 "static": true,
                 "params": [],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\UuidArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\UuidArbitrary",
+                "summary": "Canonical RFC 4122 version 4 UUID strings. Does not shrink."
             },
             {
                 "name": "datetime",
@@ -1114,32 +1669,38 @@
                 "params": [
                     {
                         "name": "min",
-                        "type": "?DateTimeImmutable"
+                        "type": "?DateTimeImmutable",
+                        "description": ""
                     },
                     {
                         "name": "max",
-                        "type": "?DateTimeImmutable"
+                        "type": "?DateTimeImmutable",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\DateTimeArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\DateTimeArbitrary",
+                "summary": "UTC DateTimeImmutable values with a timestamp in the inclusive range\n`[$min, $max]` (defaults: 1970-01-01 .. 2100-01-01). Shrinks toward the\nUnix epoch, clamped to the range."
             },
             {
                 "name": "ipv4",
                 "static": true,
                 "params": [],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\MappedArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\MappedArbitrary",
+                "summary": "IPv4 dotted-quad address strings (`\"0.0.0.0\"`..`\"255.255.255.255\"`). Each\noctet shrinks toward 0 through its own integer tree."
             },
             {
                 "name": "email",
                 "static": true,
                 "params": [],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\MappedArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\MappedArbitrary",
+                "summary": "Syntactically valid `local@label.tld` email addresses over a lowercase\nalphanumeric alphabet and a small TLD set. Shrinks toward the shortest\nlocal part / label and the first TLD."
             },
             {
                 "name": "url",
                 "static": true,
                 "params": [],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\MappedArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\MappedArbitrary",
+                "summary": "HTTP/HTTPS URLs `scheme://host.tld[/segment...]` over a lowercase\nalphanumeric alphabet. Shrinks toward `http://a.com` (no path)."
             },
             {
                 "name": "json",
@@ -1147,10 +1708,12 @@
                 "params": [
                     {
                         "name": "maxDepth",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                "returnType": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface",
+                "summary": "A JSON-encodable value \u2014 null, bool, int, float, string, or nested\nlists/objects thereof \u2014 bounded to $maxDepth levels of nesting. Produces\nthe decoded PHP value; use jsonString() for the encoded text."
             },
             {
                 "name": "jsonString",
@@ -1158,10 +1721,12 @@
                 "params": [
                     {
                         "name": "maxDepth",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\MappedArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\MappedArbitrary",
+                "summary": "The JSON text of json() (`json_encode` of each generated value),\nfor exercising JSON parsers and decoders."
             },
             {
                 "name": "regex",
@@ -1169,14 +1734,17 @@
                 "params": [
                     {
                         "name": "pattern",
-                        "type": "string"
+                        "type": "string",
+                        "description": ""
                     },
                     {
                         "name": "maxRepeat",
-                        "type": "int"
+                        "type": "int",
+                        "description": "Upper bound generation uses for unbounded quantifiers (`*`, `+`, `{n,}`)."
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                "returnType": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface",
+                "summary": "Strings matching a regular-expression subset. The pattern is compiled to\nordinary combinators, so matches shrink toward shorter/simpler strings.\n\nSupported: literals, `.`, character classes `[...]` (ranges, negation,\n`\\d\\w\\s` and their negations), the escapes `\\d\\w\\s\\D\\W\\S\\t\\n\\r` plus\n`\\`-escaped metacharacters, quantifiers `* + ? {n} {n,} {n,m}`,\nalternation `|`, and groups `(...)` / `(?:...)`. A single leading `^` and\ntrailing `$` are accepted as no-ops. Anchors elsewhere, backreferences,\nlookaround, named/inline groups, and flags throw an\n\\InvalidArgumentException naming the construct."
             },
             {
                 "name": "stringMatching",
@@ -1184,14 +1752,17 @@
                 "params": [
                     {
                         "name": "pattern",
-                        "type": "string"
+                        "type": "string",
+                        "description": ""
                     },
                     {
                         "name": "maxRepeat",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                "returnType": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface",
+                "summary": "Alias of regex() for parity with fast-check/Hypothesis naming."
             },
             {
                 "name": "commands",
@@ -1199,22 +1770,27 @@
                 "params": [
                     {
                         "name": "initialModel",
-                        "type": "mixed"
+                        "type": "mixed",
+                        "description": ""
                     },
                     {
                         "name": "commandGenerators",
-                        "type": "array"
+                        "type": "array",
+                        "description": "Each must produce a \\Rasuvaeff\\PropertyTesting\\StateMachine\\Command."
                     },
                     {
                         "name": "minLength",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     },
                     {
                         "name": "maxLength",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\CommandSequenceArbitrary"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Arbitrary\\CommandSequenceArbitrary",
+                "summary": "A valid \\Rasuvaeff\\PropertyTesting\\StateMachine\\Command sequence for\nstateful / model-based testing. Starting from $initialModel, each step draws\na command generator and appends its command when the command's precondition\nholds in the running model, advancing the model \u2014 so the sequence is valid\nby construction. Shrinking drops individual steps and simplifies each command\nthrough its own tree. A sequence shorter than $minLength (no applicable\ncommand reached it) throws GenerationExhausted.\n\nFeed the generated \\Rasuvaeff\\PropertyTesting\\StateMachine\\CommandSequence\nto \\Rasuvaeff\\PropertyTesting\\StateMachine\\StateMachine::check() in the\nproperty body, passing a factory that builds a fresh system under test."
             },
             {
                 "name": "sample",
@@ -1222,18 +1798,22 @@
                 "params": [
                     {
                         "name": "arbitrary",
-                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface",
+                        "description": ""
                     },
                     {
                         "name": "count",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     },
                     {
                         "name": "seed",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     }
                 ],
-                "returnType": "array"
+                "returnType": "array",
+                "summary": "Eagerly generate $count values from $arbitrary using a fixed $seed. A\ndebugging aid for inspecting a generator's output and distribution; unlike\nthe other factories it returns values, not an arbitrary."
             },
             {
                 "name": "sampleShrinks",
@@ -1241,18 +1821,22 @@
                 "params": [
                     {
                         "name": "arbitrary",
-                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface",
+                        "description": ""
                     },
                     {
                         "name": "seed",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     },
                     {
                         "name": "limit",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     }
                 ],
-                "returnType": "array"
+                "returnType": "array",
+                "summary": "Eagerly generate one value from $arbitrary for a fixed $seed and collect\nits first direct shrink candidates. A debugging aid for authors of custom\nArbitraryInterfaces: eyeball what the shrink tree offers before\nwiring the arbitrary into a property."
             }
         ]
     },
@@ -1260,6 +1844,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\GenerationExhausted",
         "kind": "class",
         "isApi": true,
+        "summary": "Thrown when a bounded-attempt generator cannot produce a value that satisfies\nits constraint within its attempt budget: \\Rasuvaeff\\PropertyTesting\\Arbitrary\\FilteredArbitrary\nwhose predicate rejected every draw, or a sized collection\n(\\Rasuvaeff\\PropertyTesting\\Arbitrary\\DictionaryArbitrary,\n\\Rasuvaeff\\PropertyTesting\\Arbitrary\\UniqueArrayArbitrary,\n\\Rasuvaeff\\PropertyTesting\\Arbitrary\\CommandSequenceArbitrary) that\ncould not reach its declared minimum.\n\nA generator NEVER yields a value outside its declared domain \u2014 it fails loudly\nwith this exception instead, so a property never silently receives an\nout-of-domain input. Exhaustion can be transient (a satisfiable-but-rare\npredicate) or structural (a domain too small to ever meet the minimum); the\nmessage describes what happened and how to widen the domain.",
         "extends": "RuntimeException",
         "publicProperties": [
             {
@@ -1279,6 +1864,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Internal\\Boundary",
         "kind": "class",
         "isApi": false,
+        "summary": "Computes the in-range boundary values that numeric arbitraries bias toward,\nbecause bugs cluster at edges (0, \u00b11, the range ends) far more than in the\nuniform interior.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -1288,14 +1874,17 @@
                 "params": [
                     {
                         "name": "min",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     },
                     {
                         "name": "max",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     }
                 ],
-                "returnType": "array"
+                "returnType": "array",
+                "summary": "Distinct in-range integers from {0, 1, -1, min, max}, in interest order."
             },
             {
                 "name": "floats",
@@ -1303,14 +1892,34 @@
                 "params": [
                     {
                         "name": "min",
-                        "type": "float"
+                        "type": "float",
+                        "description": ""
                     },
                     {
                         "name": "max",
-                        "type": "float"
+                        "type": "float",
+                        "description": ""
                     }
                 ],
-                "returnType": "array"
+                "returnType": "array",
+                "summary": "Distinct boundary floats from {0.0, min}. The upper bound is excluded\nbecause \\Rasuvaeff\\PropertyTesting\\Arbitrary\\FloatArbitrary generates\nthe half-open range [min, max), so max is never a valid value."
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Internal\\Clock",
+        "kind": "interface",
+        "isApi": false,
+        "summary": "Monotonic time source behind the per-run deadline and the phase budget.\n\nThe seam exists so deadline/budget behaviour can be characterised\ndeterministically (a fake clock advances by exact amounts) instead of by\nsleeping; production code always uses MonotonicClock.",
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "nanoseconds",
+                "static": false,
+                "params": [],
+                "returnType": "int",
+                "summary": "Current reading of a monotonic clock, in nanoseconds. Only differences\nbetween two readings are meaningful."
             }
         ]
     },
@@ -1318,6 +1927,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Internal\\CorpusEntry",
         "kind": "class",
         "isApi": false,
+        "summary": "One recorded regression in a property's corpus: either the minimised failing\ninput itself (a \"values\" entry \u2014 replayed as a single run, immune to changes in\nthe generation sequence) or the seed of the run that failed (a \"seed\" entry \u2014\nthe fallback for inputs no ValueCodec can represent, replayed by\nre-running the whole random phase).",
         "extends": null,
         "publicProperties": [
             {
@@ -1338,14 +1948,17 @@
                 "params": [
                     {
                         "name": "arguments",
-                        "type": "array"
+                        "type": "array",
+                        "description": ""
                     },
                     {
                         "name": "seed",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Internal\\CorpusEntry"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Internal\\CorpusEntry",
+                "summary": ""
             },
             {
                 "name": "seed",
@@ -1353,16 +1966,19 @@
                 "params": [
                     {
                         "name": "seed",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Internal\\CorpusEntry"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Internal\\CorpusEntry",
+                "summary": ""
             },
             {
                 "name": "isValues",
                 "static": false,
                 "params": [],
-                "returnType": "bool"
+                "returnType": "bool",
+                "summary": ""
             }
         ]
     },
@@ -1370,6 +1986,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Internal\\CorpusStorage",
         "kind": "class",
         "isApi": false,
+        "summary": "Opt-in on-disk corpus of a property's past failures, replayed before the random\nphase so a fixed bug stays fixed (fast regression replay).\n\nA failure is recorded as its minimised input whenever ValueCodec can\nrepresent every argument as data \u2014 such an entry replays as a single run and\nsurvives changes to the generation sequence. Inputs that cannot be represented\n(objects, closures, in-body `Gen::draw()` pseudo-arguments) fall back to storing\nthe run's seed, which reproduces the failure only while the generation sequence\nis unchanged; SEQUENCE_EPOCH fences those entries off when it is not.\n\nEnabled solely when the `PROPERTY_DB` environment variable points at a\ndirectory; otherwise storage is off and nothing is written. One file per\nproperty (`<sha1(id)>.json`) keeps it gitignore-friendly.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -1377,7 +1994,8 @@
                 "name": "fromEnv",
                 "static": true,
                 "params": [],
-                "returnType": "?Rasuvaeff\\PropertyTesting\\Internal\\CorpusStorage"
+                "returnType": "?Rasuvaeff\\PropertyTesting\\Internal\\CorpusStorage",
+                "summary": "The storage configured by `PROPERTY_DB` (a directory path), or null when\nthe variable is unset/empty (storage disabled \u2014 no files are written)."
             },
             {
                 "name": "recall",
@@ -1385,14 +2003,17 @@
                 "params": [
                     {
                         "name": "id",
-                        "type": "string"
+                        "type": "string",
+                        "description": ""
                     },
                     {
                         "name": "parameterNames",
-                        "type": "array"
+                        "type": "array",
+                        "description": "The property method's current parameters, in order."
                     }
                 ],
-                "returnType": "array"
+                "returnType": "array",
+                "summary": "The usable entries recorded for $id, cheapest first (values before seeds,\nmost recently recorded first within each kind).\n\nUnusable entries are silently skipped: a corrupt file, a foreign format\nversion, a value the codec can no longer decode (renamed enum), a seed from\na superseded SEQUENCE_EPOCH, or a values entry whose argument names\nno longer match $parameterNames (the property's signature changed, so\nreplaying it would feed the body a different input)."
             },
             {
                 "name": "remember",
@@ -1400,18 +2021,22 @@
                 "params": [
                     {
                         "name": "id",
-                        "type": "string"
+                        "type": "string",
+                        "description": ""
                     },
                     {
                         "name": "counterExample",
-                        "type": "Rasuvaeff\\PropertyTesting\\CounterExample"
+                        "type": "Rasuvaeff\\PropertyTesting\\CounterExample",
+                        "description": ""
                     },
                     {
                         "name": "parameterNames",
-                        "type": "array"
+                        "type": "array",
+                        "description": "The property method's current parameters, in order."
                     }
                 ],
-                "returnType": "void"
+                "returnType": "void",
+                "summary": "Records $counterExample as the newest entry for $id, preferring its\nminimised arguments over the bare seed."
             },
             {
                 "name": "prune",
@@ -1419,14 +2044,17 @@
                 "params": [
                     {
                         "name": "id",
-                        "type": "string"
+                        "type": "string",
+                        "description": ""
                     },
                     {
                         "name": "entry",
-                        "type": "Rasuvaeff\\PropertyTesting\\Internal\\CorpusEntry"
+                        "type": "Rasuvaeff\\PropertyTesting\\Internal\\CorpusEntry",
+                        "description": ""
                     }
                 ],
-                "returnType": "void"
+                "returnType": "void",
+                "summary": "Drops $entry from $id's corpus \u2014 the replay no longer fails, so the\nregression is fixed and the entry has served its purpose."
             }
         ]
     },
@@ -1434,6 +2062,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Internal\\DrawContext",
         "kind": "class",
         "isApi": false,
+        "summary": "Process-local channel between \\Rasuvaeff\\PropertyTesting\\Gen::draw()\ncalls in a property body and the property runner \u2014 the replay tape that makes in-body draws\nshrinkable.\n\nDuring a normal run the tape is empty: every draw generates a fresh\nShrinkable from the run's Random and records it. During a\nshrink trial the runner replays a (possibly modified) tape: draws are served\nfrom it by position, and only draws past its end \u2014 a longer draw sequence\ncaused by changed control flow \u2014 generate anew. The runner collects what was\nactually used via disarm() and adopts it as the next tape when the\ntrial still fails.\n\nLike \\Rasuvaeff\\PropertyTesting\\Classify, this is a mutable static \u2014\nan accepted exception to the \"only Random is mutable\" invariant. Property\nruns are sequential, so the state is never shared concurrently.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -1443,14 +2072,17 @@
                 "params": [
                     {
                         "name": "random",
-                        "type": "Rasuvaeff\\PropertyTesting\\Random"
+                        "type": "Rasuvaeff\\PropertyTesting\\Random",
+                        "description": ""
                     },
                     {
                         "name": "tape",
-                        "type": "array"
+                        "type": "array",
+                        "description": ""
                     }
                 ],
-                "returnType": "void"
+                "returnType": "void",
+                "summary": "Prepare the context for one execution of the property body."
             },
             {
                 "name": "draw",
@@ -1458,16 +2090,36 @@
                 "params": [
                     {
                         "name": "arbitrary",
-                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                        "type": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface",
+                        "description": ""
                     }
                 ],
-                "returnType": "mixed"
+                "returnType": "mixed",
+                "summary": "Serve one draw: replay the tape while it lasts, generate past its end.\nA replayed node is served as-is \u2014 it is not re-validated against\n$arbitrary, which may differ from the one that generated it when an\nearlier shrink changed the body's control flow."
             },
             {
                 "name": "disarm",
                 "static": true,
                 "params": [],
-                "returnType": "array"
+                "returnType": "array",
+                "summary": "Return the nodes served during the run and reset the context."
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Internal\\MonotonicClock",
+        "kind": "class",
+        "isApi": false,
+        "summary": "",
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "nanoseconds",
+                "static": false,
+                "params": [],
+                "returnType": "int",
+                "summary": ""
             }
         ]
     },
@@ -1475,6 +2127,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Internal\\PropertyInterceptor",
         "kind": "class",
         "isApi": true,
+        "summary": "Runs a Property: generates random arguments, executes the test body\nuntil Property::$runs successful checks complete, and on the first\nfailure shrinks the counterexample to a minimal one.\n\nThe interceptor self-registers via the Property attribute's\n\\Testo\\Pipeline\\Attribute\\FallbackInterceptor, so simply requiring the\npackage is enough \u2014 no plugin registration in testo.php is needed.\n\nIt sits close to the test function in the pipeline (after data providers,\nrepeat and retry policies) so it owns argument generation for property tests.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -1484,14 +2137,17 @@
                 "params": [
                     {
                         "name": "info",
-                        "type": "Testo\\Core\\Context\\TestInfo"
+                        "type": "Testo\\Core\\Context\\TestInfo",
+                        "description": ""
                     },
                     {
                         "name": "next",
-                        "type": "callable"
+                        "type": "callable",
+                        "description": ""
                     }
                 ],
-                "returnType": "Testo\\Core\\Context\\TestResult"
+                "returnType": "Testo\\Core\\Context\\TestResult",
+                "summary": ""
             }
         ]
     },
@@ -1499,6 +2155,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Internal\\RegexCompiler",
         "kind": "class",
         "isApi": false,
+        "summary": "Compiles a regular-expression subset into ordinary combinators so generated\nstrings shrink through the existing arbitrary trees (no bespoke shrink logic).\n\nGrammar (recursive descent): alternation `|` -> FrequencyArbitrary;\nconcatenation -> `tuple(...)` mapped through `implode`; quantifier\n(`* + ? {n} {n,} {n,m}`) -> `arrayOf(atom, lo, hi)` mapped through `implode`;\natom -> group `(...)`/`(?:...)`, class `[...]`, escape `\\x`, `.`, or a literal.\nUnsupported constructs (anchors other than a single leading `^`/trailing `$`,\nbackreferences, lookaround, named/inline groups, flags) throw, naming the\nconstruct \u2014 a generator that silently ignored them would emit non-matching\nstrings.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -1508,14 +2165,17 @@
                 "params": [
                     {
                         "name": "pattern",
-                        "type": "string"
+                        "type": "string",
+                        "description": ""
                     },
                     {
                         "name": "maxRepeat",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface"
+                "returnType": "Rasuvaeff\\PropertyTesting\\ArbitraryInterface",
+                "summary": ""
             }
         ]
     },
@@ -1523,6 +2183,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Internal\\ValueCodec",
         "kind": "class",
         "isApi": false,
+        "summary": "Lossless JSON codec for counterexample values, used by CorpusStorage to\npersist a minimised failing input as data rather than as a seed.\n\nA stored value must replay to a value *identical* to the one that failed \u2014\notherwise the regression replay silently tests something else. Everything JSON\ncannot represent exactly travels in a tagged envelope: floats (as text, so an\nintegral one stays a float), binary strings, enum cases, and arrays (as an\nordered list of key/value pairs, so integer keys and their order survive the\nround trip).\n\nAnything with no data-only representation \u2014 objects other than enums,\nresources, closures \u2014 is refused: encode() returns null and the caller\nfalls back to storing the run's seed.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -1532,10 +2193,12 @@
                 "params": [
                     {
                         "name": "value",
-                        "type": "mixed"
+                        "type": "mixed",
+                        "description": ""
                     }
                 ],
-                "returnType": "?array"
+                "returnType": "?array",
+                "summary": "The JSON-safe representation of $value wrapped in a single-element list,\nor null when the value has no data-only representation.\n\nThe wrapper distinguishes \"encoded to null\" from \"cannot encode\"."
             },
             {
                 "name": "decode",
@@ -1543,10 +2206,12 @@
                 "params": [
                     {
                         "name": "encoded",
-                        "type": "mixed"
+                        "type": "mixed",
+                        "description": ""
                     }
                 ],
-                "returnType": "?array"
+                "returnType": "?array",
+                "summary": "Rebuilds the value encoded by encode(), wrapped the same way, or\nnull when the payload is not a valid encoding (a corrupt or\nforward-version corpus file)."
             }
         ]
     },
@@ -1554,6 +2219,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Internal\\ValueRenderer",
         "kind": "class",
         "isApi": false,
+        "summary": "Renders an arbitrary value into a compact, human-readable string for\ncounterexample reporting. Unlike a bare `[N element(s)]`/class-name summary it\ndescends into arrays and simple objects so the shrunk value is actually\nvisible, while staying bounded: depth, element count and string length are all\ncapped, special floats and binary strings are labelled, and object recursion\nis guarded against cycles.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -1563,10 +2229,12 @@
                 "params": [
                     {
                         "name": "value",
-                        "type": "mixed"
+                        "type": "mixed",
+                        "description": ""
                     }
                 ],
-                "returnType": "string"
+                "returnType": "string",
+                "summary": ""
             },
             {
                 "name": "normalize",
@@ -1574,10 +2242,12 @@
                 "params": [
                     {
                         "name": "value",
-                        "type": "mixed"
+                        "type": "mixed",
+                        "description": ""
                     }
                 ],
-                "returnType": "mixed"
+                "returnType": "mixed",
+                "summary": ""
             },
             {
                 "name": "exportPhp",
@@ -1585,10 +2255,35 @@
                 "params": [
                     {
                         "name": "value",
-                        "type": "mixed"
+                        "type": "mixed",
+                        "description": ""
                     }
                 ],
-                "returnType": "string"
+                "returnType": "string",
+                "summary": ""
+            }
+        ]
+    },
+    {
+        "class": "Rasuvaeff\\PropertyTesting\\Internal\\VerboseListener",
+        "kind": "class",
+        "isApi": false,
+        "summary": "The `PROPERTY_VERBOSE` trace as a listener: one line per attempt's\narguments, one per attempt's in-body draws, one per accepted shrink step.\nLine formats are the package's characterised output \u2014 change them only with\nthe golden tests, in the same commit.\n\nException-hardened by policy: a listener exception normally aborts the run\nas an infrastructure failure, but a bug in this built-in trace must not fail\nevery verbose consumer, so it swallows its own errors instead.",
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "onEvent",
+                "static": false,
+                "params": [
+                    {
+                        "name": "event",
+                        "type": "Rasuvaeff\\PropertyTesting\\Event\\PropertyEvent",
+                        "description": ""
+                    }
+                ],
+                "returnType": "void",
+                "summary": ""
             }
         ]
     },
@@ -1596,6 +2291,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Property",
         "kind": "class",
         "isApi": true,
+        "summary": "Marks a test method as a property: the PropertyInterceptor takes over,\ngenerating random arguments from a generators method until the property has\ncompleted $runs successful checks or exhausted its discard budget.\n\nAttribute arguments in PHP must be constant expressions, so the generators\ncannot be passed inline. Instead name a method (on the same test case) that\nreturns `array<string, ArbitraryInterface>`, keyed by parameter name. When\n$generators is null the runner falls back to a method named\n`<testMethod>Generators`.",
         "extends": null,
         "publicProperties": [
             {
@@ -1642,9 +2338,33 @@
         "publicMethods": []
     },
     {
+        "class": "Rasuvaeff\\PropertyTesting\\PropertyListener",
+        "kind": "interface",
+        "isApi": false,
+        "summary": "Observer of a property run's lifecycle events.\n\nListeners receive events in registration order, sequentially. A listener\nexception is not swallowed: it aborts the property run as an infrastructure\nfailure. A listener observes \u2014 it can never change a property's outcome.\n\nEvent payloads may hold the very object instances the engine keeps using\n(generated arguments, the counterexample): the identity is deliberate, so a\nreporter can correlate what it saw with what the property reports. The other\nside of that coin is a contract, not a defence \u2014 a listener must not mutate\nobjects reachable from a payload. Deep-detaching every value on the hot path\nis not generally possible (closures, resources, identity-bearing DTOs) and\nis not attempted.",
+        "extends": null,
+        "publicProperties": [],
+        "publicMethods": [
+            {
+                "name": "onEvent",
+                "static": false,
+                "params": [
+                    {
+                        "name": "event",
+                        "type": "Rasuvaeff\\PropertyTesting\\Event\\PropertyEvent",
+                        "description": ""
+                    }
+                ],
+                "returnType": "void",
+                "summary": ""
+            }
+        ]
+    },
+    {
         "class": "Rasuvaeff\\PropertyTesting\\PropertyViolationException",
         "kind": "class",
         "isApi": true,
+        "summary": "Reported when a property is falsified.\n\nCarries the CounterExample so reporters (and tests of this package)\ncan inspect the seed and the shrunk arguments. Its message renders a\nhuman-readable summary.",
         "extends": "RuntimeException",
         "publicProperties": [],
         "publicMethods": [
@@ -1652,7 +2372,8 @@
                 "name": "getCounterExample",
                 "static": false,
                 "params": [],
-                "returnType": "Rasuvaeff\\PropertyTesting\\CounterExample"
+                "returnType": "Rasuvaeff\\PropertyTesting\\CounterExample",
+                "summary": ""
             }
         ]
     },
@@ -1660,6 +2381,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Random",
         "kind": "class",
         "isApi": true,
+        "summary": "Seedable, deterministic pseudo-random number generator.\n\nTwo instances created with the same seed produce identical sequences, which\nis what makes counterexamples reproducible. Backed by an object-scoped\nMersenne Twister (MT19937) engine via ext-random's Randomizer, so it\nis independent of PHP's global mt_rand state \u2014 important inside a test runner\nwhere other code may draw random numbers between runs.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -1669,20 +2391,24 @@
                 "params": [
                     {
                         "name": "min",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     },
                     {
                         "name": "max",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     }
                 ],
-                "returnType": "int"
+                "returnType": "int",
+                "summary": "Uniform integer in the inclusive range [$min, $max]."
             },
             {
                 "name": "float",
                 "static": false,
                 "params": [],
-                "returnType": "float"
+                "returnType": "float",
+                "summary": "Uniform float in the half-open range [0.0, 1.0)."
             },
             {
                 "name": "bytes",
@@ -1690,10 +2416,12 @@
                 "params": [
                     {
                         "name": "length",
-                        "type": "int"
+                        "type": "int",
+                        "description": ""
                     }
                 ],
-                "returnType": "string"
+                "returnType": "string",
+                "summary": "Random byte string of the given length (bytes in 0..255)."
             }
         ]
     },
@@ -1701,6 +2429,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\RegressionViolationException",
         "kind": "class",
         "isApi": true,
+        "summary": "Reported when a recorded regression fails again: the minimised input of an\nearlier failure, replayed from the on-disk corpus (`PROPERTY_DB`) before the\nrandom phase.\n\nThe input is already minimal \u2014 it is the shrunk counterexample of the run that\nrecorded it \u2014 so it is replayed once and reported verbatim, without shrinking.\nA regression stored as a bare seed instead of values replays the whole random\nphase and reports the usual PropertyViolationException.",
         "extends": "RuntimeException",
         "publicProperties": [],
         "publicMethods": [
@@ -1708,13 +2437,15 @@
                 "name": "getArguments",
                 "static": false,
                 "params": [],
-                "returnType": "array"
+                "returnType": "array",
+                "summary": ""
             },
             {
                 "name": "getSeed",
                 "static": false,
                 "params": [],
-                "returnType": "int"
+                "returnType": "int",
+                "summary": ""
             }
         ]
     },
@@ -1722,6 +2453,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\Shrinkable",
         "kind": "class",
         "isApi": true,
+        "summary": "A generated value together with a lazy tree of progressively \"smaller\"\nvariants of it \u2014 the unit of integrated shrinking.\n\nEvery ArbitraryInterface::generate() call returns one of these. The\nproperty runner reads $value, and when the property fails it walks\nshrinks(): each child is a smaller candidate that carries its own\nsubtree, so accepting a candidate immediately provides the next round of\neven smaller candidates. Because the tree is built at generation time, a\ntransformed arbitrary (Gen::map(), Gen::flatMap()) shrinks in\nthe source domain and re-applies the transformation \u2014 no inverse function\nis ever needed.\n\nChildren are produced lazily (the closure runs only when the runner asks),\nso building a node costs nothing until shrinking actually happens.",
         "extends": null,
         "publicProperties": [
             {
@@ -1737,10 +2469,12 @@
                 "params": [
                     {
                         "name": "value",
-                        "type": "mixed"
+                        "type": "mixed",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable",
+                "summary": "A value with no smaller variants (terminal node)."
             },
             {
                 "name": "of",
@@ -1748,20 +2482,24 @@
                 "params": [
                     {
                         "name": "value",
-                        "type": "mixed"
+                        "type": "mixed",
+                        "description": ""
                     },
                     {
                         "name": "shrinks",
-                        "type": "Closure"
+                        "type": "Closure",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable",
+                "summary": "A value with lazily-computed smaller variants, ordered most aggressive\nfirst (typically toward a zero/empty/identity element)."
             },
             {
                 "name": "shrinks",
                 "static": false,
                 "params": [],
-                "returnType": "iterable"
+                "returnType": "iterable",
+                "summary": "The smaller variants of this value, each with its own subtree."
             },
             {
                 "name": "map",
@@ -1769,10 +2507,12 @@
                 "params": [
                     {
                         "name": "map",
-                        "type": "Closure"
+                        "type": "Closure",
+                        "description": ""
                     }
                 ],
-                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable"
+                "returnType": "Rasuvaeff\\PropertyTesting\\Shrinkable",
+                "summary": "Transform the whole tree through a pure function: the value and, lazily,\nevery shrink candidate. This is what makes Gen::map() shrink."
             }
         ]
     },
@@ -1780,6 +2520,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\StateMachine\\Command",
         "kind": "interface",
         "isApi": true,
+        "summary": "A single operation in a stateful / model-based test.\n\nA command bundles the four responsibilities of model-based testing:\nwhether it may run in a given model state (preCondition()), how the\nmodel evolves (nextState()), how the real system executes it\n(run()), and how the observed result is checked against the model\n(postCondition()). Sequences of commands are generated by\n\\Rasuvaeff\\PropertyTesting\\Gen::commands() and driven by\nStateMachine::check().\n\nThe model is an immutable value threaded through the sequence: nextState()\nmust return the new model rather than mutate the given one, so the runner and\nthe generator can replay it deterministically. preCondition(),\nnextState() and postCondition() must be pure \u2014 only run()\ntouches the system under test.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -1789,10 +2530,12 @@
                 "params": [
                     {
                         "name": "model",
-                        "type": "mixed"
+                        "type": "mixed",
+                        "description": ""
                     }
                 ],
-                "returnType": "bool"
+                "returnType": "bool",
+                "summary": "May this command run in the given (pre-state) model? Gates both generation\nand, during replay, whether the runner executes or skips the command."
             },
             {
                 "name": "nextState",
@@ -1800,10 +2543,12 @@
                 "params": [
                     {
                         "name": "model",
-                        "type": "mixed"
+                        "type": "mixed",
+                        "description": ""
                     }
                 ],
-                "returnType": "mixed"
+                "returnType": "mixed",
+                "summary": "The model's expected state after this command. Pure; returns the new model\nand never touches the system under test."
             },
             {
                 "name": "run",
@@ -1811,14 +2556,17 @@
                 "params": [
                     {
                         "name": "model",
-                        "type": "mixed"
+                        "type": "mixed",
+                        "description": ""
                     },
                     {
                         "name": "system",
-                        "type": "mixed"
+                        "type": "mixed",
+                        "description": ""
                     }
                 ],
-                "returnType": "mixed"
+                "returnType": "mixed",
+                "summary": "Execute this command against the system under test and return the observed\nresult for postCondition() to check. The pre-state model is provided\nfor commands whose action depends on it."
             },
             {
                 "name": "postCondition",
@@ -1826,14 +2574,17 @@
                 "params": [
                     {
                         "name": "model",
-                        "type": "mixed"
+                        "type": "mixed",
+                        "description": ""
                     },
                     {
                         "name": "result",
-                        "type": "mixed"
+                        "type": "mixed",
+                        "description": ""
                     }
                 ],
-                "returnType": "bool"
+                "returnType": "bool",
+                "summary": "Verify the observed result against the pre-state model. Return false (or\nthrow) to falsify the property."
             }
         ]
     },
@@ -1841,6 +2592,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\StateMachine\\CommandSequence",
         "kind": "class",
         "isApi": true,
+        "summary": "A generated, valid-by-construction sequence of Commands together with\nthe initial model it was generated against.\n\nThis is the value a \\Rasuvaeff\\PropertyTesting\\Gen::commands() arbitrary\nproduces; the property body hands it to StateMachine::check(). It is\n\\Stringable so a falsified property renders the failing sequence as a\nreadable trace instead of `[N element(s)]`.",
         "extends": null,
         "publicProperties": [
             {
@@ -1859,7 +2611,8 @@
                 "name": "__toString",
                 "static": false,
                 "params": [],
-                "returnType": "string"
+                "returnType": "string",
+                "summary": ""
             }
         ]
     },
@@ -1867,6 +2620,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\StateMachine\\PostconditionViolation",
         "kind": "class",
         "isApi": true,
+        "summary": "Thrown by StateMachine::check() when a command's\nCommand::postCondition() returns false.\n\nCarries the executed trace (command labels up to and including the failing\none), the failing command, and the pre-state model and observed result, so\nthe property runner surfaces exactly which step of the sequence broke.",
         "extends": "RuntimeException",
         "publicProperties": [
             {
@@ -1901,6 +2655,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\StateMachine\\StateMachine",
         "kind": "class",
         "isApi": true,
+        "summary": "Drives a CommandSequence against a fresh system under test for\nstateful / model-based testing.\n\nCall it from a property body with the generated sequence and a factory that\nbuilds a fresh system per run:\n\n```php\n#[Property]\npublic function stackMatchesModel(CommandSequence $sequence): void\n{\n    StateMachine::check($sequence, static fn(): Stack => new Stack());\n}\n```\n\nFor each command it re-checks Command::preCondition() against the\nrunning model and skips the command if it no longer holds \u2014 shrinking may have\ndropped an earlier step that a later precondition depended on, so a replayed\nsequence stays sound without the arbitrary re-validating every candidate. A\npassing precondition runs the command, asserts Command::postCondition()\n(throwing PostconditionViolation on failure), then advances the model.",
         "extends": null,
         "publicProperties": [],
         "publicMethods": [
@@ -1910,14 +2665,17 @@
                 "params": [
                     {
                         "name": "sequence",
-                        "type": "Rasuvaeff\\PropertyTesting\\StateMachine\\CommandSequence"
+                        "type": "Rasuvaeff\\PropertyTesting\\StateMachine\\CommandSequence",
+                        "description": ""
                     },
                     {
                         "name": "system",
-                        "type": "Closure"
+                        "type": "Closure",
+                        "description": ""
                     }
                 ],
-                "returnType": "void"
+                "returnType": "void",
+                "summary": ""
             }
         ]
     },
@@ -1925,6 +2683,7 @@
         "class": "Rasuvaeff\\PropertyTesting\\TimeBudgetExceededException",
         "kind": "class",
         "isApi": true,
+        "summary": "Thrown (as the failure of a property) when the random phase's wall-clock\ntime exceeds the Property::$budgetMs budget before the requested\nnumber of successful checks completes. It exposes the completed and required\nrun counts so a slow property cannot silently check less than it claims.\n\nThe fix is to raise the budget, lower the run count, or speed up the\nproperty body (often by narrowing the generators).",
         "extends": "RuntimeException",
         "publicProperties": [
             {

@@ -122,7 +122,10 @@ foreach (findPhpFiles($srcDir) as $path) {
 
     $reflection = new ReflectionClass($className);
     $docComment = $reflection->getDocComment();
-    $isApi = $docComment !== false && str_contains($docComment, '@api');
+    // A real `@api` TAG at the start of a docblock line — not any mention of
+    // the token in prose (an @internal class legitimately says it "becomes
+    // @api after the split", and that must not classify it as public API).
+    $isApi = $docComment !== false && preg_match('/^\s*\*\s*@api\b/m', $docComment) === 1;
     $classDoc = parseDocComment($docComment);
 
     $methods = [];
