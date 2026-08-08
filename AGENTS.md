@@ -134,6 +134,15 @@ make release-check
     bias, changed draw order, a rewritten arbitrary) — otherwise an old seed
     replays a different input while claiming to be a regression. Values entries
     carry the input and are deliberately exempt.
+- **CorpusStorage writes are atomic and serialised by a cross-process flock.**
+  `remember()`/`prune()` do read-modify-write; without serialisation,
+  `infection --threads=max` or parallel CI jobs sharing `PROPERTY_DB` would
+  each read the same state and the second commit would silently lose the first.
+  `write()` goes through a temp file + `rename()` so a process killed mid-write
+  (OOM, signal) leaves the previous file intact rather than a truncated JSON
+  the next `recall()` would silently drop. The lock file (`.json.lock` next to
+  the corpus file) is reused across calls and keyed by property id; do not
+  remove it or switch `write()` back to a bare `file_put_contents()`.
 - `ValueCodec` sends EVERY float through a tagged envelope, as text.
   `json_encode()` renders an integral float as an integer literal (`0.0` -> `0`),
   so an unenveloped float decodes back as an int — the package's own property
