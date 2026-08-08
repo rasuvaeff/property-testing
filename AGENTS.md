@@ -86,6 +86,24 @@ make release-check
 `make test-coverage` and `make mutation` bootstrap `pcov` inside the
 `composer:2` container because the base image has no coverage driver.
 
+## Environment contract
+
+The exact semantics of every supported variable. After the package split this
+resolution belongs to the framework adapters (the core runner takes a resolved
+`PropertyConfig`/`Corpus` and never reads the process environment); adapters
+must reproduce this table verbatim. Each row is pinned by tests in
+`PropertyInterceptorTest`.
+
+| Variable | Read when | Accepts | Effect | Invalid value |
+|---|---|---|---|---|
+| `PROPERTY_RUNS` | Always (`false`/`''` = unset) | `/^\d+\z/`, `>= 1` | Overrides every property's run count, including the attribute's | `InvalidArgumentException` |
+| `PROPERTY_SEED` | Only when the attribute omits `seed` (attribute wins) | `/^-?\d+\z/` | Seeds every unseeded property; unset means `random_int(0, PHP_INT_MAX)` per property | `InvalidArgumentException` |
+| `PROPERTY_VERBOSE` | Always | Any value except `''` and `'0'` enables | Logs every run's arguments/draws and each accepted shrink step to stdout | n/a (falsy values disable) |
+| `PROPERTY_DB` | Always (`false`/`''` = off, nothing written) | Directory path (created on demand) | Enables the regression corpus: record on falsification, replay before the random phase, prune on green replay. An attribute `seed` disables replay for that property | n/a |
+
+`maxDiscards` has no env override: unset means `runs * 10`, saturating to
+`PHP_INT_MAX` when `runs > PHP_INT_MAX / 10`.
+
 ## Invariants & gotchas
 
 - Attribute arguments are constant expressions in PHP. Generators CANNOT be

@@ -426,3 +426,15 @@ final class DeadlineExampleStub
         return [[7]];
     }
 }
+
+final class ExhaustedStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'provide')]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::filter(Gen::intBetween(1, 10), static fn(int $n): bool => $n > 10)];
+    }
+}

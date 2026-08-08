@@ -62,9 +62,14 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
      */
     private const int MAX_DRAW_SHRINK_STEPS = 1000;
 
+    private Clock $clock;
+
     public function __construct(
         private Messenger $messenger,
-    ) {}
+        ?Clock $clock = null,
+    ) {
+        $this->clock = $clock ?? new MonotonicClock();
+    }
 
     /**
      * @param callable(TestInfo): TestResult $next
@@ -173,7 +178,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         $skips = 0;
         $checks = 0;
         $attempts = 0;
-        $phaseStart = hrtime(true);
+        $phaseStart = $this->clock->nanoseconds();
         /** @var array<string, int> $classifications */
         $classifications = [];
         /**
@@ -193,7 +198,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             // out, completing the remaining checks would only overrun further,
             // so the property fails instead of silently checking less.
             if ($budgetMs !== null) {
-                $phaseElapsedNs = hrtime(true) - $phaseStart;
+                $phaseElapsedNs = $this->clock->nanoseconds() - $phaseStart;
 
                 if ($phaseElapsedNs > $budgetMs * 1_000_000) {
                     $this->warnOnExcessiveSkips($info->name, $skips, $attempts);
@@ -246,9 +251,9 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             }
 
             DrawContext::arm($random);
-            $runStart = hrtime(true);
+            $runStart = $this->clock->nanoseconds();
             $result = $next($info->with(arguments: array_values($arguments)));
-            $runElapsedNs = hrtime(true) - $runStart;
+            $runElapsedNs = $this->clock->nanoseconds() - $runStart;
             $draws = DrawContext::disarm();
             $runAttributes = array_merge($runAttributes, $result->attributes);
             $labels = Classify::flushRun();
@@ -604,9 +609,9 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         foreach ($this->resolveExamples($testMethod, $info, $property) as $arguments) {
             Classify::beginRun();
             DrawContext::arm($random);
-            $runStart = hrtime(true);
+            $runStart = $this->clock->nanoseconds();
             $result = $next($info->with(arguments: $arguments));
-            $runElapsedNs = hrtime(true) - $runStart;
+            $runElapsedNs = $this->clock->nanoseconds() - $runStart;
             DrawContext::disarm();
             Classify::flushRun();
 
@@ -669,9 +674,9 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         // A recorded regression may call Gen::draw(); its draws come from a
         // dedicated deterministic stream keyed on the recording run's seed.
         DrawContext::arm(new Random($seed));
-        $runStart = hrtime(true);
+        $runStart = $this->clock->nanoseconds();
         $result = $next($info->with(arguments: $positional));
-        $runElapsedNs = hrtime(true) - $runStart;
+        $runElapsedNs = $this->clock->nanoseconds() - $runStart;
         DrawContext::disarm();
         Classify::flushRun();
 
