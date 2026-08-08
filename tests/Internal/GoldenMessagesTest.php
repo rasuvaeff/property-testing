@@ -42,6 +42,10 @@ use Testo\Test;
  * plan, stage B) is compared against them, and the framework adapters must
  * keep rendering the same report. A deliberate wording change updates the
  * golden here in the same commit.
+ *
+ * Multi-line goldens are written with escaped "\n", never heredocs: git's
+ * autocrlf checkout on the Windows CI runner rewrites heredoc newlines to
+ * \r\n, and the goldens would drift from the runtime output.
  */
 #[Test]
 #[Covers(PropertyInterceptor::class)]
@@ -61,13 +65,11 @@ final class GoldenMessagesTest
         Assert::instanceOf($result->failure, PropertyViolationException::class);
         Assert::same(
             $result->failure->getMessage(),
-            <<<'TXT'
-                Property falsified after 0 successful run(s); seed=1
-                  Original: x=100
-                  Shrunk:   x=51 (1 shrink step(s), 1 trial(s))
-                  Changed:  x=100 -> 51
-                  Failure:  x>50
-                TXT,
+            "Property falsified after 0 successful run(s); seed=1\n"
+                . "  Original: x=100\n"
+                . "  Shrunk:   x=51 (1 shrink step(s), 1 trial(s))\n"
+                . "  Changed:  x=100 -> 51\n"
+                . '  Failure:  x>50',
         );
     }
 
@@ -82,10 +84,7 @@ final class GoldenMessagesTest
         Assert::instanceOf($result->failure, ExampleViolationException::class);
         Assert::same(
             $result->failure->getMessage(),
-            <<<'TXT'
-                Explicit example #0 failed: [100]
-                  Failure:  too big
-                TXT,
+            "Explicit example #0 failed: [100]\n  Failure:  too big",
         );
     }
 
@@ -214,10 +213,7 @@ final class GoldenMessagesTest
             Assert::instanceOf($result->failure, RegressionViolationException::class);
             Assert::same(
                 $result->failure->getMessage(),
-                <<<'TXT'
-                    Recorded regression failed (originally found with seed 7): x=51
-                      Failure:  x>50
-                    TXT,
+                "Recorded regression failed (originally found with seed 7): x=51\n  Failure:  x>50",
             );
         } finally {
             putenv('PROPERTY_DB');
