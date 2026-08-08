@@ -106,6 +106,18 @@ must reproduce this table verbatim. Each row is pinned by tests in
 
 ## Invariants & gotchas
 
+- **The event model (`Event\*`, `PropertyListener`) is `@internal` until the
+  core split ships it as `@api`.** Events carry engine data only — property id,
+  seed, attempts, arguments, labels, elapsed time, failures, counterexamples;
+  Testo types never appear in an event. A listener exception aborts the run
+  (deliberately not caught in `emit()`); the built-in `VerboseListener` is the
+  one hardened exception — it swallows its own errors so a trace bug cannot
+  fail every `PROPERTY_VERBOSE` consumer. The `PROPERTY_VERBOSE` line formats
+  now live in `VerboseListener` and are pinned by `GoldenMessagesTest`; the
+  exact per-outcome event sequences are pinned by `EventOrderTest`. An extra,
+  missing or reordered event is an observable engine change — update those
+  characterizations in the same commit, never loosen them.
+
 - Attribute arguments are constant expressions in PHP. Generators CANNOT be
   passed inline to `#[Property]`; they must come from a named method returning
   `array<string, ArbitraryInterface>` keyed by parameter name.

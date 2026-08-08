@@ -10,10 +10,25 @@ use Rasuvaeff\PropertyTesting\Classify;
 use Rasuvaeff\PropertyTesting\CounterExample;
 use Rasuvaeff\PropertyTesting\CoverageViolationException;
 use Rasuvaeff\PropertyTesting\DeadlineExceededException;
+use Rasuvaeff\PropertyTesting\Event\CorpusPruned;
+use Rasuvaeff\PropertyTesting\Event\CorpusReplayed;
+use Rasuvaeff\PropertyTesting\Event\CorpusStored;
+use Rasuvaeff\PropertyTesting\Event\ExampleFinished;
+use Rasuvaeff\PropertyTesting\Event\ExampleStarted;
+use Rasuvaeff\PropertyTesting\Event\PropertyEvent;
+use Rasuvaeff\PropertyTesting\Event\PropertyFinished;
+use Rasuvaeff\PropertyTesting\Event\PropertyStarted;
+use Rasuvaeff\PropertyTesting\Event\RunDiscarded;
+use Rasuvaeff\PropertyTesting\Event\RunFailed;
+use Rasuvaeff\PropertyTesting\Event\RunPassed;
+use Rasuvaeff\PropertyTesting\Event\RunStarted;
+use Rasuvaeff\PropertyTesting\Event\ShrinkAccepted;
+use Rasuvaeff\PropertyTesting\Event\ShrinkTried;
 use Rasuvaeff\PropertyTesting\ExampleViolationException;
 use Rasuvaeff\PropertyTesting\GaveUpException;
 use Rasuvaeff\PropertyTesting\GenerationExhausted;
 use Rasuvaeff\PropertyTesting\Property;
+use Rasuvaeff\PropertyTesting\PropertyListener;
 use Rasuvaeff\PropertyTesting\PropertyViolationException;
 use Rasuvaeff\PropertyTesting\Random;
 use Rasuvaeff\PropertyTesting\RegressionViolationException;
@@ -64,11 +79,35 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
 
     private Clock $clock;
 
+    /** @var list<PropertyListener> */
+    private array $listeners;
+
+    /**
+     * @param iterable<PropertyListener> $listeners Observers of the run's
+     *   lifecycle events, notified in the given order. The verbose trace
+     *   listener is appended automatically when `PROPERTY_VERBOSE` is on.
+     */
     public function __construct(
         private Messenger $messenger,
         ?Clock $clock = null,
+        iterable $listeners = [],
     ) {
         $this->clock = $clock ?? new MonotonicClock();
+        $this->listeners = array_values(is_array($listeners) ? $listeners : iterator_to_array($listeners));
+    }
+
+    /**
+     * Notifies every listener, in registration order. A listener exception is
+     * deliberately not caught: a listener observes the run, and its failure is
+     * an infrastructure failure of the run itself, not something to hide.
+     *
+     * @param list<PropertyListener> $listeners
+     */
+    private function emit(array $listeners, PropertyEvent $event): void
+    {
+        foreach ($listeners as $listener) {
+            $listener->onEvent($event);
+        }
     }
 
     /**
@@ -102,21 +141,27 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         $runs = $this->resolveRuns($property->runs);
         $maxDiscards = $this->resolveMaxDiscards($property->maxDiscards, $runs);
         $seed = $this->resolveSeed($property->seed);
-        $verbose = $this->resolveVerbose();
         $random = new Random($seed);
+        $propertyId = $reflection->getDeclaringClass()->getName() . '::' . $reflection->getName();
+
+        $listeners = $this->listeners;
+        if ($this->resolveVerbose()) {
+            $listeners[] = new VerboseListener($this->messenger);
+        }
 
         // Discard requirements and a draw tape a previously aborted property may
         // have left over.
         Classify::flushRequirements();
         DrawContext::disarm();
 
-        $exampleFailure = $this->runExamples($reflection, $info, $next, $property, $seed, $parameterNames);
+        $this->emit($listeners, new PropertyStarted($propertyId, $seed, $runs));
+
+        $exampleFailure = $this->runExamples($reflection, $info, $next, $property, $seed, $parameterNames, $propertyId, $listeners);
         if ($exampleFailure instanceof TestResult) {
-            return $exampleFailure;
+            return $this->finish($listeners, $propertyId, $exampleFailure);
         }
 
         $storage = CorpusStorage::fromEnv();
-        $propertyId = $reflection->getDeclaringClass()->getName() . '::' . $reflection->getName();
 
         // Opt-in regression replay: re-run every recorded past failure first
         // (unless the attribute pins its own seed). A reproduced failure is
@@ -124,28 +169,45 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         if ($storage instanceof CorpusStorage && $property->seed === null) {
             foreach ($storage->recall($propertyId, $parameterNames) as $entry) {
                 if ($entry->isValues()) {
+                    $this->emit($listeners, new CorpusReplayed($propertyId, true, $entry->arguments, $entry->seed));
                     $replay = $this->replayRegression($info, $next, $entry->arguments, $entry->seed, $parameterNames, $property->timeoutMs);
 
                     if ($replay instanceof TestResult) {
-                        return $replay;
+                        return $this->finish($listeners, $propertyId, $replay);
                     }
                 } else {
-                    $replay = $this->runProperty(new Random($entry->seed), $entry->seed, $generators, $parameterNames, $runs, $maxDiscards, $verbose, $next, $info, $property->maxShrinks, $property->timeoutMs, $property->budgetMs);
+                    $this->emit($listeners, new CorpusReplayed($propertyId, false, [], $entry->seed));
+                    $replay = $this->runProperty(new Random($entry->seed), $entry->seed, $generators, $parameterNames, $runs, $maxDiscards, $next, $info, $property->maxShrinks, $property->timeoutMs, $property->budgetMs, $propertyId, $listeners);
 
                     if ($replay->failure instanceof PropertyViolationException) {
-                        return $replay;
+                        return $this->finish($listeners, $propertyId, $replay);
                     }
                 }
 
                 $storage->prune($propertyId, $entry);
+                $this->emit($listeners, new CorpusPruned($propertyId, $entry->isValues(), $entry->seed));
             }
         }
 
-        $result = $this->runProperty($random, $seed, $generators, $parameterNames, $runs, $maxDiscards, $verbose, $next, $info, $property->maxShrinks, $property->timeoutMs, $property->budgetMs);
+        $result = $this->runProperty($random, $seed, $generators, $parameterNames, $runs, $maxDiscards, $next, $info, $property->maxShrinks, $property->timeoutMs, $property->budgetMs, $propertyId, $listeners);
 
         if ($storage instanceof CorpusStorage && $result->failure instanceof PropertyViolationException) {
             $storage->remember($propertyId, $result->failure->getCounterExample(), $parameterNames);
+            $this->emit($listeners, new CorpusStored($propertyId, $result->failure->getCounterExample()));
         }
+
+        return $this->finish($listeners, $propertyId, $result);
+    }
+
+    /**
+     * Emits {@see PropertyFinished} and passes the result through — the single
+     * exit point for every outcome that got past configuration.
+     *
+     * @param list<PropertyListener> $listeners
+     */
+    private function finish(array $listeners, string $propertyId, TestResult $result): TestResult
+    {
+        $this->emit($listeners, new PropertyFinished($propertyId, $result->failure));
 
         return $result;
     }
@@ -160,6 +222,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
      * @param array<string, ArbitraryInterface> $generators
      * @param list<string> $parameterNames
      * @param callable(TestInfo): TestResult $next
+     * @param list<PropertyListener> $listeners
      */
     private function runProperty(
         Random $random,
@@ -168,12 +231,13 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         array $parameterNames,
         int $runs,
         int $maxDiscards,
-        bool $verbose,
         callable $next,
         TestInfo $info,
         ?int $maxShrinks,
         ?int $timeoutMs,
         ?int $budgetMs,
+        string $propertyId,
+        array $listeners,
     ): TestResult {
         $skips = 0;
         $checks = 0;
@@ -242,13 +306,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
 
             $arguments = $this->values($trees);
 
-            if ($verbose) {
-                $this->messenger->log(
-                    Messenger::CHANNEL_STDOUT,
-                    sprintf('Property "%s" attempt %d: %s', $info->name, $attempts, $this->formatArguments($arguments)),
-                    Level::Info,
-                );
-            }
+            $this->emit($listeners, new RunStarted($propertyId, $attempts, $arguments));
 
             DrawContext::arm($random);
             $runStart = $this->clock->nanoseconds();
@@ -258,16 +316,9 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             $runAttributes = array_merge($runAttributes, $result->attributes);
             $labels = Classify::flushRun();
 
-            if ($verbose && $draws !== []) {
-                $this->messenger->log(
-                    Messenger::CHANNEL_STDOUT,
-                    sprintf('Property "%s" attempt %d draws: %s', $info->name, $attempts, $this->formatArguments($this->drawArguments($draws))),
-                    Level::Info,
-                );
-            }
-
             // A discarded run is neither a failure nor a check.
             if ($result->failure instanceof AssumptionSkipped) {
+                $this->emit($listeners, new RunDiscarded($propertyId, $attempts, $arguments, $this->drawArguments($draws)));
                 ++$skips;
 
                 if ($skips > $maxDiscards) {
@@ -294,7 +345,8 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             }
 
             if ($result->status->isFailure()) {
-                [$shrunk, $shrunkDraws, $shrinkSteps, $shrunkFailure, $shrinkTrials] = $this->shrink($info, $next, $trees, $draws, $random, $maxShrinks, $verbose);
+                $this->emit($listeners, new RunFailed($propertyId, $attempts, $arguments, $this->drawArguments($draws), $result->failure, $runElapsedNs));
+                [$shrunk, $shrunkDraws, $shrinkSteps, $shrunkFailure, $shrinkTrials] = $this->shrink($info, $next, $trees, $draws, $random, $maxShrinks, $propertyId, $listeners);
 
                 return new TestResult(
                     info: $info,
@@ -316,6 +368,8 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                     attributes: $runAttributes,
                 );
             }
+
+            $this->emit($listeners, new RunPassed($propertyId, $attempts, $arguments, $this->drawArguments($draws), $labels, $runElapsedNs));
 
             // A passing but overlong run is a failure in its own right: the
             // input is pathological for the code under test. Checked after the
@@ -457,23 +511,6 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
     }
 
     /**
-     * One compact `name=value` list per run for verbose logging (mirrors the
-     * counterexample rendering of {@see PropertyViolationException}).
-     *
-     * @param array<string, mixed> $arguments
-     */
-    private function formatArguments(array $arguments): string
-    {
-        $pairs = array_map(
-            static fn(mixed $value, mixed $name): string => $name . '=' . ValueRenderer::render($value),
-            $arguments,
-            array_keys($arguments),
-        );
-
-        return implode(', ', $pairs);
-    }
-
-    /**
      * The attribute seed wins; otherwise `PROPERTY_SEED` fixes the seed for the
      * whole suite (handy for replaying a CI failure); otherwise a random seed is
      * drawn. `PROPERTY_SEED`, when set, must be an integer.
@@ -598,8 +635,9 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
      *
      * @param callable(TestInfo): TestResult $next
      * @param list<string> $parameterNames
+     * @param list<PropertyListener> $listeners
      */
-    private function runExamples(\ReflectionMethod $testMethod, TestInfo $info, callable $next, Property $property, int $seed, array $parameterNames): ?TestResult
+    private function runExamples(\ReflectionMethod $testMethod, TestInfo $info, callable $next, Property $property, int $seed, array $parameterNames, string $propertyId, array $listeners): ?TestResult
     {
         $index = 0;
         // Examples may call Gen::draw(); their draws come from a dedicated
@@ -607,6 +645,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         $random = new Random($seed);
 
         foreach ($this->resolveExamples($testMethod, $info, $property) as $arguments) {
+            $this->emit($listeners, new ExampleStarted($propertyId, $index, $arguments));
             Classify::beginRun();
             DrawContext::arm($random);
             $runStart = $this->clock->nanoseconds();
@@ -615,7 +654,10 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             DrawContext::disarm();
             Classify::flushRun();
 
-            if (!$result->failure instanceof AssumptionSkipped && $result->status->isFailure()) {
+            $exampleFailed = !$result->failure instanceof AssumptionSkipped && $result->status->isFailure();
+            $this->emit($listeners, new ExampleFinished($propertyId, $index, $arguments, $exampleFailed ? $result->failure : null));
+
+            if ($exampleFailed) {
                 return new TestResult(
                     info: $info,
                     status: Status::Failed,
@@ -798,6 +840,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
      * @param list<Shrinkable> $tape The failing run's recorded in-body draws.
      * @param callable(TestInfo): TestResult $next
      * @param ?int $maxShrinks Cap on accepted shrink steps; null means no cap, 0 disables shrinking.
+     * @param list<PropertyListener> $listeners
      * @return array{0: array<string, mixed>, 1: array<string, mixed>, 2: int, 3: ?\Throwable, 4: int} The
      *         minimised arguments, the minimised draws (as `draw#N` pseudo-arguments), the number
      *         of accepted shrink steps, the failure of the last accepted candidate (null when
@@ -810,7 +853,8 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         array $tape,
         Random $random,
         ?int $maxShrinks,
-        bool $verbose,
+        string $propertyId,
+        array $listeners,
     ): array {
         $current = $trees;
         $currentTape = $tape;
@@ -844,10 +888,11 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                     [$trialResult, $recorded] = $this->trial($info, $next, $trial, $currentTape, $random);
                     ++$trials;
 
-                    if ($this->isFailingResult($trialResult)) {
-                        if ($verbose) {
-                            $this->logShrinkStep($info->name, $steps + 1, $name, $current[$name]->value, $candidate->value);
-                        }
+                    $accepted = $this->isFailingResult($trialResult);
+                    $this->emit($listeners, new ShrinkTried($propertyId, $name, $candidate->value, $accepted));
+
+                    if ($accepted) {
+                        $this->emit($listeners, new ShrinkAccepted($propertyId, $steps + 1, $name, $current[$name]->value, $candidate->value));
 
                         $current = $trial;
                         $currentTape = $recorded;
@@ -880,10 +925,11 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                     [$trialResult, $recorded] = $this->trial($info, $next, $current, $trialTape, $random);
                     ++$trials;
 
-                    if ($this->isFailingResult($trialResult)) {
-                        if ($verbose) {
-                            $this->logShrinkStep($info->name, $steps + 1, 'draw#' . ($position + 1), $currentTape[$position]->value, $candidate->value);
-                        }
+                    $accepted = $this->isFailingResult($trialResult);
+                    $this->emit($listeners, new ShrinkTried($propertyId, 'draw#' . ($position + 1), $candidate->value, $accepted));
+
+                    if ($accepted) {
+                        $this->emit($listeners, new ShrinkAccepted($propertyId, $steps + 1, 'draw#' . ($position + 1), $currentTape[$position]->value, $candidate->value));
 
                         $currentTape = $recorded;
                         $acceptedFailure = $trialResult->failure;
@@ -899,28 +945,6 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         } while ($improved);
 
         return [$this->values($current), $this->drawArguments($currentTape), $steps, $acceptedFailure, $trials];
-    }
-
-    /**
-     * `PROPERTY_VERBOSE` trace of the shrink descent: one line per ACCEPTED
-     * candidate (rejected trials are not logged — with wide trees they would
-     * drown the trace), mirroring the `Changed:` diff of the final
-     * counterexample step by step.
-     */
-    private function logShrinkStep(string $property, int $step, string $name, mixed $before, mixed $after): void
-    {
-        $this->messenger->log(
-            Messenger::CHANNEL_STDOUT,
-            sprintf(
-                'Property "%s" shrink step %d: %s=%s -> %s',
-                $property,
-                $step,
-                $name,
-                ValueRenderer::render($before),
-                ValueRenderer::render($after),
-            ),
-            Level::Info,
-        );
     }
 
     /**
