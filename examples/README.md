@@ -8,6 +8,7 @@ Runnable scripts demonstrating `rasuvaeff/property-testing`.
 | `property_test.php` | Canonical `#[Property]` usage as a real Testo test case, including an in-body dependent draw with `Gen::draw()` (run through `vendor/bin/testo`) | No |
 | `generators.php` | `sample`, boundary bias, `uuid`, `datetime`, `dictOf`, `record`, and dependent generation with `flatMap` (uses generators directly, no runner) | No |
 | `standalone_runner.php` | Driving the framework-agnostic engine directly: a hand-built `PropertyDefinition`, `CallableTrialExecutor`, and structured `PropertyResult` inspection — no Testo imports at all | No |
+| `custom_listeners.php` | Custom observers over the engine's event model: a console reporter narrating the shrink descent and a telemetry collector aggregating run counts, timings and labels — pure `PropertyListener` implementations, no engine changes | No |
 | `state_machine.php` | Stateful / model-based testing: a `Command` interface, `Gen::commands()`, and `StateMachine::check()` driving command sequences against a stack (run through `vendor/bin/testo`) | No |
 
 ## Running

@@ -221,6 +221,9 @@ final class ValueCodecTest
         yield 'enum envelope with a non-enum class' => [['#' => 'e', 'c' => \stdClass::class, 'n' => 'High']];
         yield 'enum envelope with an unknown case' => [['#' => 'e', 'c' => Priority::class, 'n' => 'Nope']];
         yield 'enum envelope with a non-string case' => [['#' => 'e', 'c' => Priority::class, 'n' => 7]];
+        // Not an array at all: the guard must refuse it with null, never reach
+        // the tag lookup (an object offset access would be a fatal Error).
+        yield 'bare object' => [new \stdClass()];
     }
 
     /**

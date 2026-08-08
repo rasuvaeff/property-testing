@@ -15,6 +15,14 @@ namespace Rasuvaeff\PropertyTesting\Runner;
  * (invalid runs, a missing generator) remain exceptions — they are programmer
  * errors, not verdicts about the property.
  *
+ * Serialization contract: the engine adds no unserializable state of its own,
+ * so every result survives native `serialize()` when captured stack traces
+ * carry no argument values (`zend.exception_ignore_args=1`). With argument
+ * capture enabled a failing result's trace may hold closures (the executor's
+ * body among them) and native serialization becomes environment-dependent;
+ * the portable machine format is
+ * {@see \Rasuvaeff\PropertyTesting\CounterExample::toArray()}.
+ *
  * @internal Stabilising for the engine split; becomes `@api` in
  *   property-testing-core 1.0.
  */
