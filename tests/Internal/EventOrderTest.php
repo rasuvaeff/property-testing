@@ -8,6 +8,7 @@ use Internal\Path;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Rasuvaeff\PropertyTesting\AssumptionSkipped;
 use Rasuvaeff\PropertyTesting\CounterExample;
+use Rasuvaeff\PropertyTesting\DeadlineExceededException;
 use Rasuvaeff\PropertyTesting\Event\CorpusPruned;
 use Rasuvaeff\PropertyTesting\Event\CorpusReplayed;
 use Rasuvaeff\PropertyTesting\Event\CorpusStored;
@@ -26,6 +27,7 @@ use Rasuvaeff\PropertyTesting\PropertyListener;
 use Rasuvaeff\PropertyTesting\PropertyViolationException;
 use Rasuvaeff\PropertyTesting\RegressionViolationException;
 use Rasuvaeff\PropertyTesting\Tests\Support\CollectingListener;
+use Rasuvaeff\PropertyTesting\Tests\Support\FakeClock;
 use Testo\Application\Internal\MessengerHub;
 use Testo\Assert;
 use Testo\Assert\ExpectException;
@@ -173,6 +175,26 @@ final class EventOrderTest
         Assert::instanceOf($listener->ofType(ExampleFinished::class)[0]->failure, \RuntimeException::class);
     }
 
+    /**
+     * A timed-out example must not be announced as successful: ExampleFinished
+     * carries the deadline failure the property then finishes with.
+     */
+    public function timedOutExampleAnnouncesItsDeadlineFailure(): void
+    {
+        $listener = new CollectingListener();
+        $interceptor = new PropertyInterceptor($this->createMessenger(), new FakeClock(6_000_000), [$listener]);
+
+        $result = $interceptor->runTest($this->info(DeadlineExampleStub::class, 'check'), $this->pass());
+
+        Assert::instanceOf($result->failure, DeadlineExceededException::class);
+        Assert::same($listener->shapes(), [
+            'PropertyStarted',
+            'ExampleStarted', 'ExampleFinished',
+            'PropertyFinished',
+        ]);
+        Assert::instanceOf($listener->ofType(ExampleFinished::class)[0]->failure, DeadlineExceededException::class);
+    }
+
     public function reproducedRegressionEmitsReplayThenFinish(): void
     {
         $listener = new CollectingListener();
@@ -220,6 +242,7 @@ final class EventOrderTest
         $listener = new CollectingListener();
         $dir = sys_get_temp_dir() . '/event-corpus-' . bin2hex(random_bytes(6));
         mkdir($dir, 0o777, true);
+        $previous = getenv('PROPERTY_DB');
         putenv('PROPERTY_DB=' . $dir);
 
         try {
@@ -234,7 +257,7 @@ final class EventOrderTest
                 $result->failure->getCounterExample(),
             );
         } finally {
-            putenv('PROPERTY_DB');
+            $this->restoreEnv('PROPERTY_DB', $previous);
             $this->cleanup($dir);
         }
     }
@@ -263,6 +286,7 @@ final class EventOrderTest
      */
     public function verboseListenerSwallowsItsOwnFailure(): void
     {
+        $previous = getenv('PROPERTY_VERBOSE');
         putenv('PROPERTY_VERBOSE=1');
 
         try {
@@ -278,7 +302,7 @@ final class EventOrderTest
 
             Assert::same($result->status, Status::Passed);
         } finally {
-            putenv('PROPERTY_VERBOSE');
+            $this->restoreEnv('PROPERTY_VERBOSE', $previous);
         }
     }
 
@@ -290,6 +314,7 @@ final class EventOrderTest
     {
         $dir = sys_get_temp_dir() . '/event-corpus-' . bin2hex(random_bytes(6));
         mkdir($dir, 0o777, true);
+        $previous = getenv('PROPERTY_DB');
         putenv('PROPERTY_DB=' . $dir);
 
         try {
@@ -306,9 +331,18 @@ final class EventOrderTest
 
             $scenario($dir);
         } finally {
-            putenv('PROPERTY_DB');
+            $this->restoreEnv('PROPERTY_DB', $previous);
             $this->cleanup($dir);
         }
+    }
+
+    /**
+     * @param string|false $previous The getenv() reading taken before the test
+     *   overrode the variable.
+     */
+    private function restoreEnv(string $variable, string|false $previous): void
+    {
+        putenv($previous === false ? $variable : $variable . '=' . $previous);
     }
 
     private function cleanup(string $dir): void

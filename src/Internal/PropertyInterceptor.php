@@ -655,7 +655,23 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             Classify::flushRun();
 
             $exampleFailed = !$result->failure instanceof AssumptionSkipped && $result->status->isFailure();
-            $this->emit($listeners, new ExampleFinished($propertyId, $index, $arguments, $exampleFailed ? $result->failure : null));
+
+            // The per-run deadline applies to examples too: a pinned input can
+            // be the pathological one. Example arity matches the parameter
+            // list, so positional arguments are reported under their names.
+            // Evaluated before ExampleFinished so a timed-out example is not
+            // announced to listeners as successful; the assertion failure
+            // still wins when both happen.
+            $deadlineFailure = !$exampleFailed && $property->timeoutMs !== null && $runElapsedNs > $property->timeoutMs * 1_000_000
+                ? new DeadlineExceededException(
+                    propertyName: $info->name,
+                    arguments: array_combine($parameterNames, $arguments),
+                    elapsedMs: (float) $runElapsedNs / 1e6,
+                    timeoutMs: $property->timeoutMs,
+                )
+                : null;
+
+            $this->emit($listeners, new ExampleFinished($propertyId, $index, $arguments, $exampleFailed ? $result->failure : $deadlineFailure));
 
             if ($exampleFailed) {
                 return new TestResult(
@@ -668,19 +684,11 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                 );
             }
 
-            // The per-run deadline applies to examples too: a pinned input can
-            // be the pathological one. Example arity matches the parameter
-            // list, so positional arguments are reported under their names.
-            if ($property->timeoutMs !== null && $runElapsedNs > $property->timeoutMs * 1_000_000) {
+            if ($deadlineFailure instanceof DeadlineExceededException) {
                 return new TestResult(
                     info: $info,
                     status: Status::Failed,
-                    failure: new DeadlineExceededException(
-                        propertyName: $info->name,
-                        arguments: array_combine($parameterNames, $arguments),
-                        elapsedMs: (float) $runElapsedNs / 1e6,
-                        timeoutMs: $property->timeoutMs,
-                    ),
+                    failure: $deadlineFailure,
                     attributes: $result->attributes,
                 );
             }
