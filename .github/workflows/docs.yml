@@ -1,17 +1,18 @@
 name: docs
 
+# The package is frozen: this site documents the 2.x line and its content is
+# pinned to the 2.8.1 snapshot in docs/sources/. It no longer rebuilds when
+# README.md, llms.txt or src/ change — those now describe the successor
+# packages, and feeding them to the aggregator would either fail the build or
+# overwrite the guide with a deprecation notice. What remains is a manual
+# trigger plus an edit to docs/ itself, so the last deployment stays the last
+# deployment.
 on:
   push:
     branches:
       - master
     paths:
       - 'docs/**'
-      - 'README.md'
-      - 'README.ru.md'
-      - 'llms.txt'
-      - 'ROADMAP.md'
-      - 'UPGRADE.md'
-      - 'src/**'
       - '.github/workflows/docs.yml'
   workflow_dispatch:
 

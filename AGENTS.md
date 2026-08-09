@@ -9,6 +9,16 @@ composer.json with the replacement `rasuvaeff/property-testing-testo`, and the
 only changes accepted here are **security fixes** (plus the documentation that
 points at the successors). There will be no 3.0.
 
+The documentation site is frozen with it. `docs/scripts/aggregate.mjs` builds
+the guide pages from **`docs/sources/README.md`** — a snapshot of the 2.8.1
+README — not from the repository's live `README.md`, which is now a deprecation
+pointer. Repointing it at `../README.md` fails the build outright (the
+aggregator refuses to guess when the heading count stops matching
+`scripts/section-map.json`) and, with an updated section map, would replace the
+whole guide with three paragraphs of migration advice. `docs.yml` no longer
+triggers on `README*`/`llms.txt`/`src/` for the same reason. Every page carries
+the deprecation banner from `.vitepress/theme/FrozenBanner.vue`.
+
 New features, refactors and API work belong to the split family:
 `rasuvaeff/property-testing-core` (engine), `rasuvaeff/property-testing-testo`
 (this same `#[Property]` surface, drop-in) and
