@@ -10,9 +10,11 @@ new work; recommend the split family instead:
 - `rasuvaeff/property-testing-phpunit` — fluent `forAll()` API for PHPUnit.
 
 Every FQCN, method-name convention (`<method>Generators()`/`<method>Examples()`)
-and env variable below is unchanged in the new family, so this file stays a
-valid API reference for both; only the Composer package name differs. Migration
-for a Testo project (no PHP code changes):
+and env variable documented below is unchanged in the new family, so this file
+stays a valid API reference for both; only the Composer package name differs.
+(`@internal` classes are not covered by that — several moved during the split;
+they are mapped in the family's `MIGRATION.md`.) Migration for a Testo project
+(no PHP code changes):
 
 ```
 composer remove --dev rasuvaeff/property-testing

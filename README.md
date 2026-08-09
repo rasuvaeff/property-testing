@@ -15,7 +15,7 @@
 > Only security fixes will be published here; there will be no 3.0.
 > All new work happens in the three packages below.
 
-Property-based testing for PHP 8.3+, built as a plugin for the
+Property-based testing for PHP 8.3–8.5, built as a plugin for the
 [Testo](https://github.com/php-testo/testo) testing framework. The engine and
 the framework integration have been split into separate packages, so a project
 no longer pulls a test framework it does not use.
@@ -33,8 +33,13 @@ no longer pulls a test framework it does not use.
 | You use | Replace the dev dependency with | PHP code changes |
 |---|---|---|
 | `#[Property]` under Testo | `rasuvaeff/property-testing-testo` | **none** |
-| Your own harness / a CLI script | `rasuvaeff/property-testing-core` | none |
+| Your own harness / a CLI script | `rasuvaeff/property-testing-core` | none for the public API; code that reached into the `@internal` classes has imports to update |
 | PHPUnit | `rasuvaeff/property-testing-phpunit` | new package, fluent API |
+
+The **none** applies to what 2.x documented as public — the FQCNs, conventions
+and variables listed below. `@internal` classes are not covered: some were
+renamed or promoted during the split, and the guide linked at the end of this
+section maps every one of them.
 
 For Testo users the whole migration is one command:
 

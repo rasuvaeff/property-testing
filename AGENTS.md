@@ -12,9 +12,14 @@ points at the successors). There will be no 3.0.
 New features, refactors and API work belong to the split family:
 `rasuvaeff/property-testing-core` (engine), `rasuvaeff/property-testing-testo`
 (this same `#[Property]` surface, drop-in) and
-`rasuvaeff/property-testing-phpunit`. All FQCNs, method conventions, env
-variables and the on-disk corpus format are identical there, so anything the
-sections below describe is also true of the successors — but fix it *there*.
+`rasuvaeff/property-testing-phpunit`. All **public** FQCNs, method conventions,
+env variables and the on-disk corpus format are identical there, so anything
+the sections below describe is also true of the successors — but fix it
+*there*. The `@internal` classes are the exception: several were renamed or
+promoted to `@api` in the move (`Internal\CorpusStorage` →
+`Runner\FilesystemCorpus`, `Internal\Clock`/`MonotonicClock` → `Runner\`,
+`Internal\ValueRenderer` → the package root), so a note here about one of them
+does not transfer verbatim.
 The programme that produced the split is
 `../property-testing-evolution-plan.md`.
 
