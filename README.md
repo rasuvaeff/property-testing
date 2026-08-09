@@ -4,604 +4,110 @@
 [![Total Downloads](https://poser.pugx.org/rasuvaeff/property-testing/downloads)](https://packagist.org/packages/rasuvaeff/property-testing)
 [![Build](https://github.com/rasuvaeff/property-testing/actions/workflows/build.yml/badge.svg)](https://github.com/rasuvaeff/property-testing/actions/workflows/build.yml)
 [![Static analysis](https://github.com/rasuvaeff/property-testing/actions/workflows/static-analysis.yml/badge.svg)](https://github.com/rasuvaeff/property-testing/actions/workflows/static-analysis.yml)
-[![Psalm level](https://img.shields.io/badge/psalm-level_1-blue.svg)](https://github.com/rasuvaeff/property-testing/actions/workflows/static-analysis.yml)
-[![PHP](https://img.shields.io/packagist/dependency-v/rasuvaeff/property-testing/php)](https://packagist.org/packages/rasuvaeff/property-testing)
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE.md)
 [![Docs](https://github.com/rasuvaeff/property-testing/actions/workflows/docs.yml/badge.svg)](https://rasuvaeff.github.io/property-testing/)
 
 [Русская версия](README.ru.md)
 
-**[Documentation](https://rasuvaeff.github.io/property-testing/)** — full guide, generated API reference, and cookbook.
+> **This package is frozen.** `2.8.1` is the last functional release. It is
+> marked abandoned in favour of
+> [`rasuvaeff/property-testing-testo`](https://packagist.org/packages/rasuvaeff/property-testing-testo).
+> Only security fixes will be published here; there will be no 3.0.
+> All new work happens in the three packages below.
 
-Property-based testing for PHP 8.3+, built as a plugin for the
-[Testo](https://github.com/php-testo/testo) testing framework. Generate hundreds
-of random inputs per test, find the failing one, and shrink it to a minimal
-counterexample you can actually read.
+Property-based testing for PHP 8.3–8.5, built as a plugin for the
+[Testo](https://github.com/php-testo/testo) testing framework. The engine and
+the framework integration have been split into separate packages, so a project
+no longer pulls a test framework it does not use.
 
-> Using an AI coding assistant? [llms.txt](llms.txt) contains a compact API reference you can share with the model.
-> Projects using the [llm/skills](https://github.com/roxblnfk/skills) Composer plugin also get this package's agent skill synced into `.agents/skills/` automatically on install.
+## Where the code went
 
-Since 2.0 shrinking is **integrated**: `generate()` returns a
-[`Shrinkable`](src/Shrinkable.php) — the value plus a lazy tree of smaller
-candidates — so transformed generators (`Gen::map()`, `Gen::flatMap()`) shrink
-through their source domain. Upgrading from 1.x? See [UPGRADE.md](UPGRADE.md).
+| Package | Contents |
+|---|---|
+| [`rasuvaeff/property-testing-core`](https://github.com/rasuvaeff/property-testing-core) | Generators, runner, shrinking, corpus, listeners, state machine — no test framework dependency |
+| [`rasuvaeff/property-testing-testo`](https://github.com/rasuvaeff/property-testing-testo) | `#[Property]` and everything Testo-specific |
+| [`rasuvaeff/property-testing-phpunit`](https://github.com/rasuvaeff/property-testing-phpunit) | Fluent `forAll()` API for PHPUnit |
 
-## Requirements
+## Migration
 
-- PHP 8.3+
-- `ext-mbstring`
-- `ext-random`
-- [`testo/testo`](https://packagist.org/packages/testo/testo) `^0.10.25 || ^1.0`
+| You use | Replace the dev dependency with | PHP code changes |
+|---|---|---|
+| `#[Property]` under Testo | `rasuvaeff/property-testing-testo` | **none** |
+| Your own harness / a CLI script | `rasuvaeff/property-testing-core` | none for the public API; code that reached into the `@internal` classes has imports to update |
+| PHPUnit | `rasuvaeff/property-testing-phpunit` | new package, fluent API |
+
+The **none** applies to what 2.x documented as public — the FQCNs, conventions
+and variables listed below. `@internal` classes are not covered: some were
+renamed or promoted during the split, and the guide linked at the end of this
+section maps every one of them.
+
+For Testo users the whole migration is one command:
+
+```bash
+composer remove --dev rasuvaeff/property-testing
+composer require --dev "rasuvaeff/property-testing-testo:^0.1" -W
+```
+
+`composer remove` first is mandatory: core declares
+`conflict: {"rasuvaeff/property-testing": "*"}` because both packages ship
+classes in the `Rasuvaeff\PropertyTesting` namespace, so a mixed install is
+deliberately unsolvable rather than silently duplicated on the autoloader.
+`-W` lets Composer raise `testo/testo` to the version the adapter requires
+(`^0.10.39 || ^1.0`).
+
+Everything that survives the move unchanged:
+
+- every public FQCN — `Rasuvaeff\PropertyTesting\Gen`, `ArbitraryInterface`,
+  `Shrinkable`, `Assume`, `Classify`, `Property`, the state machine and the
+  public exceptions;
+- the `<method>Generators()` and `<method>Examples()` conventions;
+- `PROPERTY_SEED`, `PROPERTY_RUNS`, `PROPERTY_DB`, `PROPERTY_VERBOSE`;
+- the counterexample message format;
+- the regression corpus on disk — a corpus written by 2.8 is read by
+  `-testo` (same `FORMAT_VERSION`, byte-compatible JSON);
+- seed determinism (`SEQUENCE_EPOCH` is unchanged).
+
+The full guide, including the custom-harness and PHPUnit paths, is
+[MIGRATION.md in property-testing-core](https://github.com/rasuvaeff/property-testing-core/blob/master/MIGRATION.md).
+
+## Documentation
+
+The [documentation site](https://rasuvaeff.github.io/property-testing/)
+documents this frozen 2.x line. Its guide chapters still describe the engine
+accurately — the FQCNs and behaviour are the ones core and `-testo` ship — but
+it is not updated with anything released after 2.8.1. The new family documents
+itself in each package's `README.md`/`README.ru.md`, `llms.txt` and
+`examples/`.
+
+[llms.txt](llms.txt) in this repository remains a compact API reference for the
+2.x line.
 
 ## Installation
+
+Still installable and still works; new projects should not use it:
 
 ```bash
 composer require --dev rasuvaeff/property-testing
 ```
 
-No plugin registration is needed: the `#[Property]` attribute self-registers
-with Testo through the framework's interceptor discovery.
-
-## Usage
-
-Mark a test method with `#[Property]` and point it at a generators method that
-maps each parameter name to a `Gen` factory.
-The runner generates random arguments, runs the property `runs` times, and on
-the first failure shrinks the counterexample to a minimal one.
-
-```php
-use Rasuvaeff\PropertyTesting\Assume;
-use Rasuvaeff\PropertyTesting\Gen;
-use Rasuvaeff\PropertyTesting\Property;
-use Testo\Assert;
-use Testo\Test;
-
-#[Test]
-final class RetryPolicyPropertyTest
-{
-    #[Property(runs: 500, generators: 'delayGenerators')]
-    public function delayNeverExceedsCap(int $maxAttempts, int $baseSeconds, int $cap, int $attempts): void
-    {
-        Assume::that($cap >= $baseSeconds);
-
-        $policy = WebhookRetryPolicy::exponential($maxAttempts, $baseSeconds, $cap);
-
-        Assert::true($policy->nextDelaySeconds($attempts) <= $cap);
-    }
-
-    /** @return array<string, \Rasuvaeff\PropertyTesting\ArbitraryInterface> */
-    public static function delayGenerators(): array
-    {
-        return [
-            'maxAttempts' => Gen::intBetween(1, 50),
-            'baseSeconds' => Gen::intBetween(1, 300),
-            'cap' => Gen::intBetween(1, 86400),
-            'attempts' => Gen::intBetween(1, 100),
-        ];
-    }
-}
-```
-
-On failure, the counterexample is rendered into the test output:
-
-```
-Property falsified after 246 successful run(s); seed=7382910
-  Original: maxAttempts=17, baseSeconds=91, cap=847, attempts=23
-  Shrunk:   maxAttempts=1, baseSeconds=848, cap=847, attempts=1 (12 shrink step(s), 41 trial(s))
-  Changed:  maxAttempts=17 -> 1, baseSeconds=91 -> 848, attempts=23 -> 1
-```
-
-The `Changed:` line diffs the original against the shrunk counterexample —
-arguments the shrinker left untouched (here `cap`) are omitted, so the inputs
-that actually drive the failure stand out. `trial(s)` counts every candidate
-the shrinker ran (accepted and rejected); `shrink step(s)` counts only the
-accepted ones.
-
-Reproduce the exact run by passing the reported seed back to the attribute:
-
-```php
-#[Property(runs: 500, seed: 7382910, generators: 'delayGenerators')]
-```
-
-### Why generators are in a separate method
-
-PHP attribute arguments must be constant expressions, so `#[Given('x', Gen::int())]`
-is not expressible. Instead name a method that returns
-`array<string, ArbitraryInterface>` keyed by parameter name. When the `generators`
-argument is omitted the runner falls back to a method named `<testMethod>Generators`.
-
-Declare generators (and examples) methods `public static` — or `public` if the
-body needs `$this`. Their only call site is this package's reflection, so
-static analysis sees them as unused: Rector's dead-code set deletes private
-ones (`RemoveUnusedPrivateMethodRector`). Public methods are safe, and Testo
-never treats a non-void-returning method as a test.
-
-### Generators
-
-| Factory | Produces | Shrinks |
-|---|---|---|
-| `Gen::int()` | `IntArbitrary`, `PHP_INT_MIN..PHP_INT_MAX` | toward `0` |
-| `Gen::intBetween($min, $max)` | `IntArbitrary`, `[$min, $max]` | toward `0`, clamped to range |
-| `Gen::intPositive()` | `IntArbitrary`, `1..PHP_INT_MAX` | toward `1` |
-| `Gen::float()` | `FloatArbitrary`, `[0.0, 1.0)` | toward `0.0` |
-| `Gen::floatBetween($min, $max)` | `FloatArbitrary`, `[$min, $max]` | toward `0.0`, clamped to range |
-| `Gen::bool()` | `BoolArbitrary`, `true` / `false` | `true` -> `false` |
-| `Gen::string()` | `StringArbitrary`, Unicode, length 0..100 | toward `''`, then by length, then each character toward `a` |
-| `Gen::stringAscii()` | `StringArbitrary`, printable ASCII, length 0..100 | toward `''`, then by length, then each character toward `a` |
-| `Gen::stringOf($min, $max)` | `StringArbitrary`, Unicode, bounded length | toward `''`, then by length, then each character toward `a` |
-| `Gen::stringFrom($alphabet, $min, $max)` | `CharsetStringArbitrary`, characters from a fixed alphabet (multibyte OK) | toward `''`, then by length, then each character toward the first alphabet character |
-| `Gen::bytes($min, $max)` | `BytesArbitrary`, raw byte strings (bytes 0..255) | toward `''`, then by length, then each byte toward `"\x00"` |
-| `Gen::arrayOf($element, $min, $max)` | `ArrayArbitrary`, lists of `$element`, size 0..100 by default | toward `[]`, then by length, then each element |
-| `Gen::nonEmptyArrayOf($element, $max)` | `ArrayArbitrary`, non-empty lists | by length (never below 1), then each element |
-| `Gen::uniqueArrayOf($element, $min, $max)` | `UniqueArrayArbitrary`, lists of pairwise-distinct elements | like `arrayOf`, but element candidates colliding with another element are skipped |
-| `Gen::dictOf($key, $value, $min, $max)` | `DictionaryArbitrary`, maps with distinct keys from `$key` (int/string) and values from `$value`, size 0..100 by default | toward `[]`, then by size, then each value (keys fixed) |
-| `Gen::record($shape)` | `RecordArbitrary`, fixed-shape map `['field' => $arb, ...]` | each field via its arbitrary, key set fixed |
-| `Gen::elements($array)` | `OneOfArbitrary`, one value from an array (array form of `oneOf`) | toward earlier-listed distinct values |
-| `Gen::enum(SomeEnum::class)` | `OneOfArbitrary` over the enum's cases | toward earlier-declared cases (declare simpler cases first) |
-| `Gen::constant($value)` | `ConstantArbitrary`, always `$value` | does not shrink |
-| `Gen::char()` | `StringArbitrary`, a single printable ASCII character | toward `a` |
-| `Gen::uuid()` | `UuidArbitrary`, RFC 4122 v4 UUID strings | does not shrink |
-| `Gen::datetime($min, $max)` | `DateTimeArbitrary`, UTC `DateTimeImmutable`, timestamp in `[$min, $max]` | toward the Unix epoch, clamped |
-| `Gen::floatSpecial()` | `OneOfArbitrary` over `NAN`, `±INF`, `-0.0` and the float representation edges | toward earlier-listed specials |
-| `Gen::intRange($min, $max)` | `FlatMappedArbitrary`, ordered pairs `[lo, hi]` with `lo <= hi` | both bounds shrink, order always holds |
-| `Gen::recursive($leaf, $wrap, $maxDepth)` | bounded recursive structures: `$wrap` lifts the previous level's arbitrary | within the branch that generated the value |
-| `Gen::oneOf(...$values)` | `OneOfArbitrary`, one of the given values | toward earlier-listed distinct values (put simpler values first) |
-| `Gen::nullable($inner)` | `NullableArbitrary`, `null` or an `$inner` value | prefers `null`, then the inner tree |
-| `Gen::map($inner, $fn)` | `MappedArbitrary`, `$inner` transformed by `$fn` | through the inner tree, re-applying `$fn` |
-| `Gen::flatMap($inner, $fn)` | `FlatMappedArbitrary`, dependent generator returned by `$fn($innerValue)` | source value first (dependent value regenerated), then the dependent tree |
-| `Gen::filter($inner, $predicate)` | `FilteredArbitrary`, `$inner` values satisfying `$predicate` (throws `GenerationExhausted` after 100 rejected draws — never yields an out-of-domain value) | inner tree, pruning candidates that fail the predicate |
-| `Gen::tuple(...$elements)` | `TupleArbitrary`, fixed-arity tuple, one value per element | each position via its element, arity fixed |
-| `Gen::frequency($pairs)` | `FrequencyArbitrary`, weighted choice over `[weight, arbitrary]` pairs | within the branch that generated the value |
-| `Gen::ipv4()` | IPv4 dotted-quad strings | each octet toward `0` |
-| `Gen::email()` | `local@label.tld` addresses | toward the shortest local/label and first TLD |
-| `Gen::url()` | `http(s)://host.tld[/path]` URLs | toward `http://a.com` |
-| `Gen::json($maxDepth)` | a JSON-encodable value (null/bool/int/float/string/list/object) | within the generated structure |
-| `Gen::jsonString($maxDepth)` | the `json_encode` text of `Gen::json()` | through the value's tree |
-| `Gen::regex($pattern)` / `Gen::stringMatching($pattern)` | strings matching a regex subset (compiled to combinators) | shorter/simpler matches (via the compiled trees) |
-
-Numeric generators (`int*`, `float*`) are **boundary-biased**: roughly one draw in
-five returns an in-range edge value (`0`, `±1`, `min`, `max` for ints; `0.0` or
-`min` for floats), where bugs cluster, instead of a uniform one. Shrinking is
-unaffected.
-
-Sized generators guarantee their **minimum**: `uniqueArrayOf`/`dictOf` (distinct
-elements/keys) and `commands` (applicable steps) may fall short of the *drawn*
-size when the value space runs out, but never fall below `$min` — an unreachable
-minimum throws `GenerationExhausted` rather than hand the property a too-small
-value.
-
-### Dependent generators (`flatMap`)
-
-When one input's domain depends on another — a list plus a valid index into it,
-a size plus a payload of that size — `Gen::flatMap()` feeds each generated value
-into a closure that returns the arbitrary for the final value. Unlike an
-`Assume::that()` guard, no runs are discarded, and both levels shrink: the
-source value shrinks (the dependent value is regenerated deterministically from
-the run's seed), then the dependent value shrinks with the source held fixed.
-
-```php
-/** @return array<string, ArbitraryInterface> */
-public static function sliceGenerators(): array
-{
-    return ['pair' => Gen::flatMap(
-        Gen::nonEmptyArrayOf(Gen::int()),
-        static fn(array $items): ArbitraryInterface => Gen::tuple(
-            Gen::constant($items),
-            Gen::intBetween(0, count($items) - 1), // always a valid index
-        ),
-    )];
-}
-```
-
-### In-body draws (`Gen::draw`)
-
-When several dependent values make nested `flatMap` awkward, draw them inside
-the property body with `Gen::draw()`. The domain may depend on anything already
-in scope — parameters, previous draws, intermediate results:
-
-```php
-#[Property(runs: 200)]
-public function sliceIsContainedInTheList(array $xs): void
-{
-    $from = Gen::draw(Gen::intBetween(0, count($xs)));
-    $to = Gen::draw(Gen::intBetween($from, count($xs))); // depends on $from
-
-    foreach (array_slice($xs, $from, $to - $from) as $item) {
-        Assert::true(in_array($item, $xs, true));
-    }
-}
-```
-
-Drawn values shrink together with the parameters. The runner records every
-draw on a replay tape; when the property fails, it shrinks each recorded draw
-through its own tree and re-runs the body with the tape replayed by position.
-A shrunk parameter can change the body's control flow: draws past the tape's
-end are generated anew, and draws the smaller run no longer reaches are
-dropped. Counterexamples report draws as `draw#1`, `draw#2`, ... next to the
-named parameters (and `PROPERTY_VERBOSE` logs them per run).
-
-Two things to know:
-
-- A replayed draw is served by position and is **not** re-validated against
-  the (possibly narrower) arbitrary of the new control flow — the same model
-  as fast-check's `gen()`. Assert what the body actually requires rather than
-  relying on the draw's range after shrinking.
-- Because the tape can regrow during shrinking, the finite-tree termination
-  argument no longer applies on its own; with draws present, accepted shrink
-  steps are capped (1000 by default, `maxShrinks` still wins when set).
-
-`Gen::draw()` is only valid while the runner executes a property body;
-anywhere else it throws. Prefer `flatMap` for a single dependent value — it
-keeps the whole domain visible in the generators method.
-
-### `Assume::that()`
-
-Discards the current attempt when a precondition does not hold. `runs` is the
-number of successful checks, so discarded attempts are replaced. Prefer
-`Assume::that()` over `Gen::filter()` when the rejection rate is low; when more
-than 90% of attempts are discarded the runner warns that the generators are
-likely misconfigured.
-
-```php
-Assume::that($cap >= $baseSeconds);
-```
-
-Retries are bounded by `maxDiscards` (default: `runs * 10`). Exceeding the budget
-fails with `GaveUpException`, whose public fields report required and successful
-runs, discarded attempts, total attempts and the budget. Override it when a
-legitimate domain is sparse:
-
-```php
-#[Property(runs: 200, maxDiscards: 5_000)]
-```
-
-Construct valid inputs (`Gen::flatMap()` / `Gen::draw()`) instead of raising the
-budget when the relationship can be encoded directly.
-
-### Bounding shrink work
-
-By default shrinking runs until no smaller candidate still fails, re-running the
-property once per accepted step. On expensive properties or very large inputs you
-can cap the number of accepted shrink steps with `maxShrinks`:
-
-```php
-#[Property(runs: 200, maxShrinks: 25)]
-```
-
-`maxShrinks: null` (the default) means no cap. `maxShrinks: 0` disables shrinking
-entirely and reports the original counterexample unchanged. The cap counts
-*accepted* shrink steps, not test executions.
-
-### Deadlines and time budgets
-
-Pathological inputs (catastrophic regex, deep recursion, unbounded backoff)
-show up as time, not as assertion failures. Two opt-in wall-clock caps turn
-them into reported failures:
-
-```php
-#[Property(runs: 200, timeoutMs: 100, budgetMs: 5_000)]
-```
-
-- `timeoutMs` — deadline for a **single run** (random or explicit example). A
-  body that takes longer fails the property with a `DeadlineExceededException`
-  naming the offending input and the measured time. The input is reported
-  as-is, not shrunk (shrink acceptance would have to re-measure wall time, and
-  timing noise makes that descent non-deterministic). The run is measured
-  after it returns — a body that never returns cannot be interrupted in
-  synchronous PHP.
-- `budgetMs` — budget for the **whole random phase**. When it runs out before
-  `runs` successful checks complete, the property fails with a
-  `TimeBudgetExceededException` exposing the completed/required counts, so a
-  slow property cannot silently check less than it claims.
-
-Both default to `null` (disabled). An assertion failure in a slow run wins
-over the deadline — the falsified counterexample is the actionable signal.
-
-### Writing your own arbitrary
-
-`Gen` covers common cases, but any value space is reachable by implementing
-[`ArbitraryInterface`](src/ArbitraryInterface.php) directly: `generate(Random)`
-returns a [`Shrinkable`](src/Shrinkable.php) — the drawn value plus a lazy tree
-of smaller candidates, most aggressive first, each carrying its own subtree.
-Draw randomness only through the injected `Random` (`int()`, `float()`,
-`bytes()`) so seeded runs stay reproducible.
-
-```php
-use Rasuvaeff\PropertyTesting\ArbitraryInterface;
-use Rasuvaeff\PropertyTesting\Random;
-use Rasuvaeff\PropertyTesting\Shrinkable;
-
-/**
- * Even integers in [0, $max], shrinking toward 0 in even steps.
- */
-final readonly class EvenArbitrary implements ArbitraryInterface
-{
-    public function __construct(private int $max = 1000) {}
-
-    #[\Override]
-    public function generate(Random $random): Shrinkable
-    {
-        return $this->tree($random->int(0, intdiv($this->max, 2)) * 2);
-    }
-
-    private function tree(int $value): Shrinkable
-    {
-        return Shrinkable::of($value, function () use ($value): \Generator {
-            if ($value === 0) {
-                return;
-            }
-
-            yield $this->tree(0);
-
-            $half = intdiv($value, 4) * 2; // stay even
-
-            if ($half !== 0 && $half !== $value) {
-                yield $this->tree($half);
-            }
-        });
-    }
-}
-```
-
-A custom arbitrary is used like any built-in: return it from the generators
-method keyed by parameter name. `Shrinkable::leaf($value)` builds a terminal
-node (no candidates); `Shrinkable::of($value, $closure)` attaches lazily
-computed candidates; `Shrinkable::map($fn)` transforms a whole tree. Keep every
-branch of the tree finite and never yield a candidate equal to its parent —
-that is what guarantees shrinking terminates.
-
-### Environment overrides
-
-Two environment variables tune runs without touching the attributes — useful in
-CI:
-
-| Variable | Effect |
-|---|---|
-| `PROPERTY_RUNS` | Positive integer that overrides every property's run count (dial runs up in CI). |
-| `PROPERTY_SEED` | Integer seed used for any property whose attribute omits `seed` (replay a whole suite). An explicit attribute `seed` still wins. |
-| `PROPERTY_VERBOSE` | Any value except `''`/`0` logs every run's generated arguments and, on failure, every accepted shrink step (`shrink step 3: x=63 -> 51`) — see exactly what a replayed seed feeds the property and how the shrinker descends. |
-| `PROPERTY_DB` | Directory path enabling the regression corpus (below). Unset means the feature is off and nothing is written. |
-
-### Regression corpus
-
-Set `PROPERTY_DB` to a directory and every falsified property records its failure
-there. On the next run the recorded failures are replayed **first** (unless the
-attribute pins its own `seed`): one that still fails is reported immediately for
-fast feedback, one that no longer fails — or that the property now discards via
-`Assume::that()` — is pruned. A property accumulates several past failures, so
-fixing the newest one does not lose the older ones.
-
-A failure is recorded in one of two ways:
-
-| Entry | When | Replay | Reported as |
-|---|---|---|---|
-| Values | Every minimised argument is representable as data: `null`, scalars, arrays, enum cases, byte strings | One run with the exact recorded input | `RegressionViolationException` |
-| Seed | Anything else — objects, closures, or in-body `Gen::draw()` values in the counterexample | The whole random phase, re-run with that seed | `PropertyViolationException` |
-
-Values entries are preferred: they cost a single run, and they keep working when
-the generation sequence shifts, because they carry the input rather than a
-recipe for regenerating it. Seed entries are the fallback and are dropped when
-the package's generation sequence changes (they would otherwise replay a
-different input under the guise of a regression). A values entry is also dropped
-when the property's signature no longer matches the recorded argument names — a
-renamed or added parameter makes the stored input a different input.
-
-Storage is one small JSON file per property (`<sha1(id)>.json`, at most 8 values
-entries and 2 seed entries, oldest evicted first); add the directory to
-`.gitignore`.
-
-### Explicit examples
-
-Fixed inputs pin a found bug as a permanent case that runs on every invocation,
-alongside the random ones. Declare a `<testMethod>Examples` method (or name one
-via `#[Property(examples: 'method')]`) returning positional argument tuples; each
-runs **before** the random inputs and is reported verbatim (not shrunk — it is
-already the minimal case you pinned) via `ExampleViolationException`.
-
-```php
-#[Test]
-#[Property(generators: 'ints')]
-public function additionCommutes(int $a, int $b): void
-{
-    Assert::same($a + $b, $b + $a);
-}
-
-/** @return list<array{int, int}> */
-public static function additionCommutesExamples(): array
-{
-    return [[0, 0], [PHP_INT_MAX, 1]]; // regressions that must always run
-}
-```
-
-### Checking the distribution
-
-A property can pass vacuously if its generators never reach the interesting
-inputs. `Classify` records labels per run; after a fully passing property the
-runner prints the share of runs that hit each label.
-
-```php
-#[Property(runs: 500)]
-public function holds(int $n): void
-{
-    Classify::when($n === 0, 'zero');
-    Classify::label($n % 2 === 0 ? 'even' : 'odd');
-    // ... assertions ...
-}
-// Property "holds" distribution: odd 51% (255/500), even 49% (245/500), zero 1% (3/500)
-```
-
-A label recorded several times within one run still counts once for that run.
-
-### Enforcing the distribution
-
-`Classify::cover()` upgrades the printed hint to a hard requirement: the label
-must occur in at least the given percentage of passing runs, or the property
-**fails** with a `CoverageViolationException` — even though every run passed.
-Use it to make vacuous passes impossible in CI.
-
-```php
-#[Property(runs: 500)]
-public function holds(int $n): void
-{
-    Classify::cover($n % 2 === 0, 'even', 30.0); // fail if < 30% of runs are even
-    // ... assertions ...
-}
-```
-
-Discarded attempts (`Assume::that()`) are excluded from the denominator and
-replaced until all requested successful runs complete. Exceeding `maxDiscards`
-fails with `GaveUpException` (see `Assume::that()`).
-
-### Sampling a generator
-
-`Gen::sample()` eagerly generates values from any arbitrary for a fixed seed — a
-quick way to eyeball what a generator produces (it returns values, not an
-arbitrary).
-
-```php
-Gen::sample(Gen::intBetween(1, 6), count: 5, seed: 42); // [3, 1, 6, 6, 2]
-```
-
-`Gen::sampleShrinks()` does the same for the shrink tree: it generates one
-value and lists its first direct shrink candidates — the fastest way to check
-that a custom arbitrary shrinks the way you intended.
-
-```php
-Gen::sampleShrinks(Gen::intBetween(0, 100), seed: 1);
-// ['value' => 87, 'shrinks' => [0, 44, 66, 77, 82, 85, 86]]
-```
-
-### Exporting a counterexample
-
-`CounterExample::toArray()` and `toJson()` expose a normalized representation
-for reporters and CI artifacts, including nested DTO state and recursion
-markers. To pin a shrunk scalar/array/enum case as a regression example:
-
-```php
-$code = $violation->getCounterExample()->toExamplesCode('holdsExamples');
-```
-
-The generated method yields arguments in parameter order. Unsupported runtime
-objects throw `LogicException` instead of producing code that cannot run.
-
-### Recipes
-
-Dependent values without discards — build, don't filter:
-
-```php
-// A size and a payload of exactly that size.
-Gen::flatMap(Gen::intBetween(1, 32), static fn(int $size): ArbitraryInterface
-    => Gen::tuple(Gen::constant($size), Gen::bytes($size, $size)));
-
-// An ordered interval: Gen::intRange(0, 1440) yields [lo, hi] with lo <= hi.
-
-// Domain strings from an alphabet instead of filtering Unicode.
-Gen::stringFrom('abcdefghijklmnopqrstuvwxyz0123456789-', 1, 63); // hostname label
-```
-
-Bounded recursive data:
-
-```php
-use Rasuvaeff\PropertyTesting\Arbitrary\ArrayArbitrary;
-
-// JSON-ish scalars nested in small arrays, at most 3 levels deep.
-Gen::recursive(
-    Gen::oneOf(null, true, false, 0, 1, 'a'),
-    static fn(ArbitraryInterface $inner): ArbitraryInterface => new ArrayArbitrary($inner, 0, 3),
-    maxDepth: 3,
-);
-```
-
-Keep the branch fan-out small (bounded array sizes): breadth multiplies at
-every level of nesting.
-
-### Stateful / model-based testing
-
-Some bugs only surface across a *sequence* of operations — a counter that
-overflows after N increments, a cache that returns stale data, a stack that
-loses ordering. Model-based testing generates random sequences of commands,
-runs each against the real system while mirroring it in a simplified model, and
-on failure **shrinks the sequence** to the shortest one that still breaks.
-
-Implement [`Command`](src/StateMachine/Command.php) — four pure-ish
-responsibilities plus a label:
-
-| Method | Purpose |
-|---|---|
-| `preCondition(mixed $model): bool` | May this command run in the current model state? Gates generation and, on replay, whether the command runs or is skipped. |
-| `nextState(mixed $model): mixed` | The model's expected next state (pure; returns a new model, never mutates). |
-| `run(mixed $model, mixed $system): mixed` | Execute against the system under test; return the observed result. |
-| `postCondition(mixed $model, mixed $result): bool` | Check the result against the pre-state model. Return `false` (or throw) to falsify. |
-| `__toString(): string` | Label used in the counterexample trace. |
-
-`Gen::commands($initialModel, $commandGenerators)` builds valid sequences (each
-step appends a command whose precondition holds, then advances the model), and
-`StateMachine::check()` drives the generated sequence against a fresh system:
-
-```php
-use Rasuvaeff\PropertyTesting\Gen;
-use Rasuvaeff\PropertyTesting\Property;
-use Rasuvaeff\PropertyTesting\StateMachine\CommandSequence;
-use Rasuvaeff\PropertyTesting\StateMachine\StateMachine;
-use Testo\Test;
-
-#[Test]
-final class StackModelTest
-{
-    #[Property(runs: 200)]
-    public function stackBehavesLikeItsModel(CommandSequence $sequence): void
-    {
-        StateMachine::check($sequence, static fn(): Stack => new Stack());
-    }
-
-    /** @return array<string, \Rasuvaeff\PropertyTesting\ArbitraryInterface> */
-    public static function stackBehavesLikeItsModelGenerators(): array
-    {
-        return ['sequence' => Gen::commands([], [
-            Gen::map(Gen::intBetween(0, 99), static fn(int $v): Command => new Push($v)),
-            Gen::constant(new Pop()),
-        ])];
-    }
-}
-```
-
-Shrinking removes whole blocks of commands (down to a single one, so a failing
-step in the middle is isolated) and then simplifies each command's parameters
-through its own tree. Because the runner re-checks each precondition and skips
-any a dropped step invalidated, every shrunk sequence stays sound. The
-counterexample renders as a readable trace, and a failed postcondition throws a
-[`PostconditionViolation`](src/StateMachine/PostconditionViolation.php) naming
-the step:
-
-```
-Property falsified after 7 successful run(s); seed=42
-  Original: sequence=[Push(3), Pop(), Push(5), Push(1), Pop(), Pop()]
-  Shrunk:   sequence=[Push(0), Push(1), Pop()] (9 shrink step(s))
-  Failure:  Postcondition failed at step 3 for command Pop(); sequence: [Push(0), Push(1), Pop()]
-```
-
-See [`examples/state_machine.php`](examples/state_machine.php) for the full stack
-example.
+## Examples
+
+[examples/](examples/) still contains the runnable 2.x scripts (`basic.php`,
+`property_test.php`, `generators.php`, `state_machine.php`); none of them needs
+a server.
 
 ## Security
 
 This package executes test methods via reflection (to read the `#[Property]`
 attribute and invoke the generators method) and through Testo's pipeline. The
-fallback Testo interceptor is `PropertyInterceptor`. It
-performs no I/O, SQL, shell, or network operations itself. Random values are
-generated with PHP's MT19937 engine seeded by the reported seed; do not rely on
-them for cryptographic purposes.
+fallback Testo interceptor is `PropertyInterceptor`. It performs no I/O, SQL,
+shell, or network operations itself. Random values are generated with PHP's
+MT19937 engine seeded by the reported seed; do not rely on them for
+cryptographic purposes.
 
-## Examples
-
-See [examples/](examples/) for runnable scripts.
-
-| Script | Shows | Needs server? |
-|---|---|---|
-| `basic.php` | a property that holds, one that is falsified, and tree-based shrinking | No |
-| `property_test.php` | canonical `#[Property]` usage as a real Testo test case | No |
-| `generators.php` | `sample`, boundary bias, `uuid`, `datetime`, `dictOf`, `record`, `flatMap` | No |
-| `state_machine.php` | stateful / model-based testing: `Command`, `Gen::commands()`, `StateMachine::check()` | No |
+Security fixes are the only changes this line still receives; they are
+published as patch releases here and, where the same code exists in the new
+family, in the corresponding package.
 
 ## Development
 
@@ -610,25 +116,9 @@ No PHP/Composer on the host. Run commands in Docker via the `composer:2` image:
 ```bash
 docker run --rm -v "$PWD":/app -w /app composer:2 composer install
 docker run --rm -v "$PWD":/app -w /app composer:2 composer build
-docker run --rm -v "$PWD":/app -w /app composer:2 composer cs:fix
-docker run --rm -v "$PWD":/app -w /app composer:2 composer test
-docker run --rm -v "$PWD":/app -w /app composer:2 composer release-check
 ```
 
-Or with Make:
-
-```bash
-make install
-make build
-make cs-fix
-make test
-make test-coverage
-make mutation
-make release-check
-```
-
-`make test-coverage` and `make mutation` bootstrap `pcov` inside the
-`composer:2` container because the base image has no coverage driver.
+Or with Make: `make install`, `make build`, `make cs-fix`, `make test`.
 
 ## License
 

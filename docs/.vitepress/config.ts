@@ -133,6 +133,10 @@ export default defineConfig({
     description:
         'Property-based testing for PHP 8.3+, a Testo plugin: generate hundreds of random inputs, find the one that falsifies your property, and shrink it to a minimal counterexample.',
     base: '/property-testing/',
+    // sources/ holds the frozen 2.8.1 README snapshot the aggregator reads
+    // (see scripts/aggregate.mjs). It is input, not a page: its links are
+    // relative to the repository root, which VitePress would report as dead.
+    srcExclude: ['sources/**'],
     cleanUrls: true,
     lastUpdated: true,
     sitemap: { hostname: SITE_URL },

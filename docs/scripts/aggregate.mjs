@@ -98,8 +98,16 @@ function aggregate(lang, readmePath) {
     }
 }
 
-aggregate('en', 'README.md')
-aggregate('ru', 'README.ru.md')
+// The guide pages are aggregated from a FROZEN SNAPSHOT of the 2.8.1 READMEs
+// (docs/sources/), not from the repository's live README.md. Since the split
+// the live README is a deprecation pointer at the successor packages: feeding
+// it here would throw on the heading-count check below, and even with an
+// updated section-map it would replace every guide page on the site with three
+// paragraphs of migration advice. This site documents the frozen 2.x line, and
+// its source is pinned to the last release that line will ever have. Do not
+// repoint these at ../README.md; the successor packages get their own site.
+aggregate('en', 'docs/sources/README.md')
+aggregate('ru', 'docs/sources/README.ru.md')
 
 // ROADMAP.md, UPGRADE.md and llms.txt have no README.ru.md-style RU sibling —
 // they're single English source files. Import them whole (not split by
