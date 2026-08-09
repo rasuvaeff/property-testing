@@ -2,6 +2,22 @@
 
 Guidance for AI agents working on this package. Read before changing code.
 
+## This package is frozen
+
+`2.8.1` is the last functional release. The package is marked `abandoned` in
+composer.json with the replacement `rasuvaeff/property-testing-testo`, and the
+only changes accepted here are **security fixes** (plus the documentation that
+points at the successors). There will be no 3.0.
+
+New features, refactors and API work belong to the split family:
+`rasuvaeff/property-testing-core` (engine), `rasuvaeff/property-testing-testo`
+(this same `#[Property]` surface, drop-in) and
+`rasuvaeff/property-testing-phpunit`. All FQCNs, method conventions, env
+variables and the on-disk corpus format are identical there, so anything the
+sections below describe is also true of the successors — but fix it *there*.
+The programme that produced the split is
+`../property-testing-evolution-plan.md`.
+
 ## What this is
 
 This package provides property-based testing for the Testo testing framework.

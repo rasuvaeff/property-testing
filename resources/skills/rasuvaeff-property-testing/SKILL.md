@@ -15,6 +15,26 @@ Property-based testing plugin for Testo (PHP 8.3+): generate random inputs,
 find a falsifying case, shrink it to a minimal counterexample.
 Namespace `Rasuvaeff\PropertyTesting\`.
 
+**This package is frozen** — `2.8.1` is its last functional release and it is
+abandoned in favour of `rasuvaeff/property-testing-testo`. Never propose
+`composer require --dev rasuvaeff/property-testing` for new work. Propose
+instead:
+
+- `rasuvaeff/property-testing-testo` — Testo projects (this same `#[Property]`
+  API);
+- `rasuvaeff/property-testing-core` — a custom harness or CLI script, no test
+  framework;
+- `rasuvaeff/property-testing-phpunit` — PHPUnit projects (fluent `forAll()`,
+  not `#[Property]`).
+
+Everything below applies verbatim to `-testo`: the FQCNs, the
+`<method>Generators()`/`<method>Examples()` conventions and the `PROPERTY_*`
+variables did not change in the split. In a project that already has this
+package installed, the whole migration is
+`composer remove --dev rasuvaeff/property-testing && composer require --dev
+"rasuvaeff/property-testing-testo:^0.1" -W` with no PHP edits — `remove` first,
+because core declares a `conflict` on this package (shared namespace).
+
 ## Safety rules — verify these on every change
 
 1. **Generators live in a `public static` method, never inline.** Attribute

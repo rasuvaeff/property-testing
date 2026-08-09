@@ -3,6 +3,7 @@
     "description": "Property-based testing plugin for Testo",
     "license": "BSD-3-Clause",
     "type": "library",
+    "abandoned": "rasuvaeff/property-testing-testo",
     "keywords": [
         "property-testing",
         "quickcheck",
