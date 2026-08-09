@@ -9,7 +9,20 @@ composer.json with the replacement `rasuvaeff/property-testing-testo`, and the
 only changes accepted here are **security fixes** (plus the documentation that
 points at the successors). There will be no 3.0.
 
-The documentation site is frozen with it. `docs/scripts/aggregate.mjs` builds
+**The documentation site now redirects to the family site** —
+`https://rasuvaeff.github.io/property-testing-core/`, per page, via a
+`meta http-equiv="refresh"` emitted from `transformHead` in
+`docs/.vitepress/config.ts` (`successorUrl()` holds the mapping). Pages with
+no counterpart go to the migration page, never to a 404; every `api/**` page
+goes to the family API index, because a class-by-class map would rot the
+first time a class moves and this site never rebuilds. Do not deploy a change
+here without checking that every target still exists: build both sites and
+compare `docs/.vitepress/dist/**/*.html`'s refresh targets against
+`property-testing-core/docs/src/.vitepress/dist`. The build below still runs
+because the pages must keep rendering — a redirect that lands on a broken
+page is worse than no redirect.
+
+The site's content is frozen with the package. `docs/scripts/aggregate.mjs` builds
 the guide pages from **`docs/sources/README.md`** — a snapshot of the 2.8.1
 README — not from the repository's live `README.md`, which is now a deprecation
 pointer. Repointing it at `../README.md` fails the build outright (the
