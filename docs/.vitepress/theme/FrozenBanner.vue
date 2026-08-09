@@ -38,20 +38,19 @@ onUnmounted(() => {
 <template>
   <div ref="banner" class="frozen-banner" role="note">
     <template v-if="isRussian">
-      <strong>Пакет заморожен на 2.8.1.</strong>
-      Новая работа —
-      <a href="https://github.com/rasuvaeff/property-testing-core">property-testing-core</a>,
-      <a href="https://github.com/rasuvaeff/property-testing-testo">-testo</a>,
-      <a href="https://github.com/rasuvaeff/property-testing-phpunit">-phpunit</a>.
-      <a href="https://github.com/rasuvaeff/property-testing-core/blob/master/MIGRATION.md">Миграция</a>
+      <strong>Эта документация переехала.</strong>
+      Пакет заморожен на 2.8.1; актуальная документация — на сайте семейства
+      <a href="https://rasuvaeff.github.io/property-testing-core/">property-testing</a>.
+      Если переадресация не сработала, откройте
+      <a href="https://rasuvaeff.github.io/property-testing-core/guide/migrating-from-2x">страницу миграции</a>.
     </template>
     <template v-else>
-      <strong>This package is frozen at 2.8.1.</strong>
-      New work happens in
-      <a href="https://github.com/rasuvaeff/property-testing-core">property-testing-core</a>,
-      <a href="https://github.com/rasuvaeff/property-testing-testo">-testo</a>,
-      <a href="https://github.com/rasuvaeff/property-testing-phpunit">-phpunit</a>.
-      <a href="https://github.com/rasuvaeff/property-testing-core/blob/master/MIGRATION.md">Migration guide</a>
+      <strong>These docs have moved.</strong>
+      The package is frozen at 2.8.1; the current documentation lives on the
+      family site,
+      <a href="https://rasuvaeff.github.io/property-testing-core/">property-testing</a>.
+      If the redirect did not fire, open the
+      <a href="https://rasuvaeff.github.io/property-testing-core/guide/migrating-from-2x">migration guide</a>.
     </template>
   </div>
 </template>

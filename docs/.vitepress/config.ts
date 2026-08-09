@@ -128,6 +128,68 @@ const ruSidebar = [
 
 const SITE_URL = 'https://rasuvaeff.github.io/property-testing/'
 
+// This site redirects to the family site (property-testing-evolution-plan.md,
+// §I.0, §I.5.8). The package is frozen at 2.8.1 and abandoned; every page
+// here describes behaviour that is identical in the successor packages, so
+// keeping a second copy alive only splits the search results.
+//
+// Per page, not one blanket redirect to the family home: a reader arriving
+// from a search result for "PROPERTY_SEED" must land on the page about
+// PROPERTY_SEED, not on a home page that makes them search again.
+const FAMILY_SITE = 'https://rasuvaeff.github.io/property-testing-core/'
+const MIGRATION_PAGE = 'guide/migrating-from-2x'
+
+// 2.x pages whose content the family site keeps somewhere else, plus the
+// three that have no successor at all (they go to the migration page — the
+// plan's rule is "never a 404, and never a page that pretends to answer").
+const RELOCATED: Record<string, string> = {
+    'cookbook/first-property': 'guide/intro/getting-started',
+    'cookbook/reproducing-with-seed': 'guide/controlling-runs/env-overrides',
+    'cookbook/ci-recipes': 'guide/regression-corpus',
+    'cookbook/writing-a-state-machine': 'guide/state-machine/concepts',
+    'migrating-from-1x': MIGRATION_PAGE,
+    llms: MIGRATION_PAGE,
+    roadmap: MIGRATION_PAGE,
+}
+
+function successorUrl(relativePath: string): string {
+    const withoutExtension = relativePath.replace(/\.md$/, '')
+    // A section index keeps its trailing slash on the way out: the successor
+    // is a directory index too, and asking GitHub Pages for the extensionless
+    // form relies on its implicit directory redirect.
+    const isSectionIndex = /(^|\/)index$/.test(withoutExtension)
+    const page = withoutExtension.replace(/(^|\/)index$/, '$1').replace(/\/$/, '')
+
+    // The family site is EN-only by decision (§I.0). A Russian URL therefore
+    // resolves to the English page on the same topic rather than to the
+    // migration page: the same content in the other language beats no content.
+    const enPage = page.replace(/^ru(\/|$)/, '')
+
+    // '' is the home page; '404' is VitePress's not-found page, which GitHub
+    // Pages serves for every unknown path under this site — so an old URL
+    // that never existed here still ends up somewhere useful instead of on a
+    // dead end. Neither maps into /guide/.
+    if (enPage === '' || enPage === '404') {
+        return FAMILY_SITE
+    }
+
+    // Every reference page goes to the family API index, not to the matching
+    // class page. The family layout nests pages by sub-namespace, so a map
+    // would be needed — and this site never rebuilds, so that map would rot
+    // into 404s the first time a class moves. The index is a linked table:
+    // one extra click that cannot go stale.
+    if (enPage === 'api' || enPage.startsWith('api/')) {
+        return `${FAMILY_SITE}api/`
+    }
+
+    const relocated = RELOCATED[enPage]
+    if (relocated !== undefined) {
+        return FAMILY_SITE + relocated
+    }
+
+    return `${FAMILY_SITE}guide/${enPage}${isSectionIndex ? '/' : ''}`
+}
+
 export default defineConfig({
     title: 'Testo Property Testing',
     description:
@@ -147,22 +209,28 @@ export default defineConfig({
         ['meta', { property: 'og:site_name', content: 'Testo Property Testing' }],
         ['meta', { name: 'twitter:card', content: 'summary' }],
     ],
-    // Per-page canonical + Open Graph/Twitter title & description — VitePress's
-    // static `head` array above can't vary per page, and every page otherwise
-    // shares one generic <meta description>, which is worse for search than a
-    // page-specific one (set via each page's own `description` frontmatter).
-    // `pageData.relativePath` already carries the 'ru/' prefix for Russian
-    // pages and no prefix for English ones (English is the unprefixed root
-    // locale), so no locale-specific branching is needed here.
+    // Per-page redirect to the successor site, plus the Open Graph/Twitter
+    // title & description VitePress's static `head` array above cannot vary
+    // per page. Canonical and og:url point at the SUCCESSOR, not at this
+    // page: this site is a forwarding address now, and a self-canonical
+    // would ask search engines to keep indexing the copy being retired.
+    // `pageData.relativePath` carries the 'ru/' prefix for Russian pages and
+    // none for English ones (English is the unprefixed root locale), which
+    // is what successorUrl() reads.
     transformHead: ({ pageData, title, description }) => {
-        const clean = pageData.relativePath.replace(/\.md$/, '').replace(/(^|\/)index$/, '$1')
-        const url = SITE_URL + clean
+        const successor = successorUrl(pageData.relativePath)
 
         return [
-            ['link', { rel: 'canonical', href: url }],
+            // The redirect itself. A meta refresh rather than a rule on the
+            // host, because GitHub Pages serves static files and has no
+            // redirect configuration; search engines treat a 0-second refresh
+            // as a permanent move, and the canonical below says the same
+            // thing to the ones that do not.
+            ['meta', { 'http-equiv': 'refresh', content: `0; url=${successor}` }],
+            ['link', { rel: 'canonical', href: successor }],
             ['meta', { property: 'og:title', content: title }],
             ['meta', { property: 'og:description', content: description }],
-            ['meta', { property: 'og:url', content: url }],
+            ['meta', { property: 'og:url', content: successor }],
             ['meta', { name: 'twitter:title', content: title }],
             ['meta', { name: 'twitter:description', content: description }],
         ]
