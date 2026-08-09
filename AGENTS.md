@@ -22,6 +22,15 @@ compare `docs/.vitepress/dist/**/*.html`'s refresh targets against
 because the pages must keep rendering — a redirect that lands on a broken
 page is worse than no redirect.
 
+`npm run docs:build` leaves `docs/api/classes/**` dirty: the committed pages
+were rendered by an older `generate-api.mjs` than the one in the tree, so
+regenerating them from the committed snapshot produces a real diff. Do not
+commit it. Nothing reads those files — every page redirects now, and CI
+re-reflects the snapshot and re-renders the pages before deploying anyway —
+so the diff is 84 files of review surface for a frozen package that accepts
+only security fixes. `git checkout -- docs/api/classes docs/ru/api/classes`
+after building.
+
 The site's content is frozen with the package. `docs/scripts/aggregate.mjs` builds
 the guide pages from **`docs/sources/README.md`** — a snapshot of the 2.8.1
 README — not from the repository's live `README.md`, which is now a deprecation

@@ -1,6 +1,6 @@
 ---
 title: "NullableArbitrary"
-description: "Wraps another arbitrary and additionally yields `null` with roughly even odds."
+description: "NullableArbitrary — class в справочнике API property-testing."
 ---
 
 <!-- АВТОГЕНЕРАЦИЯ: docs/scripts/generate-api.mjs, проход рефлексии по src/ (docs/scripts/reflect-api.php) — не редактировать вручную. -->
@@ -11,12 +11,6 @@ description: "Wraps another arbitrary and additionally yields `null` with roughl
 
 **Класс** — [Исходник](https://github.com/rasuvaeff/property-testing/blob/master/src/Arbitrary/NullableArbitrary.php)
 
-*Текст ниже — на английском, из PHPDoc в исходном коде.*
-
-Wraps another arbitrary and additionally yields `null` with roughly even odds.
-
-Shrinking prefers `null` over descending into the inner value's tree.
-
 ## Методы
 
 ### generate()
@@ -24,4 +18,6 @@ Shrinking prefers `null` over descending into the inner value's tree.
 ```php
 generate(Random $random): Shrinkable
 ```
+
+- `$random` — undefined
 

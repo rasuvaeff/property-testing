@@ -1,6 +1,6 @@
 ---
 title: "Gen"
-description: "Facade with static factories for the built-in ArbitraryInterfaces."
+description: "Gen — class в справочнике API property-testing."
 ---
 
 <!-- АВТОГЕНЕРАЦИЯ: docs/scripts/generate-api.mjs, проход рефлексии по src/ (docs/scripts/reflect-api.php) — не редактировать вручную. -->
@@ -11,16 +11,6 @@ description: "Facade with static factories for the built-in ArbitraryInterfaces.
 
 **Класс** — [Исходник](https://github.com/rasuvaeff/property-testing/blob/master/src/Gen.php)
 
-*Текст ниже — на английском, из PHPDoc в исходном коде.*
-
-Facade with static factories for the built-in ArbitraryInterfaces.
-
-Each factory returns a ready-to-use arbitrary; values are never generated
-directly through Gen — that happens inside the property runner, which threads
-the seedable Random through every generator so runs are reproducible.
-The one exception is sample(), a debugging aid that eagerly generates
-values from a given arbitrary.
-
 ## Методы
 
 ### int()
@@ -29,13 +19,14 @@ values from a given arbitrary.
 static int(): Arbitrary\IntArbitrary
 ```
 
-Integers spanning PHP_INT_MIN..PHP_INT_MAX.
-
 ### intBetween()
 
 ```php
 static intBetween(int $min, int $max): Arbitrary\IntArbitrary
 ```
+
+- `$min` — undefined
+- `$max` — undefined
 
 ### intPositive()
 
@@ -43,21 +34,20 @@ static intBetween(int $min, int $max): Arbitrary\IntArbitrary
 static intPositive(): Arbitrary\IntArbitrary
 ```
 
-Positive integers (1..PHP_INT_MAX).
-
 ### float()
 
 ```php
 static float(): Arbitrary\FloatArbitrary
 ```
 
-Floats in the half-open range [0.0, 1.0).
-
 ### floatBetween()
 
 ```php
 static floatBetween(float $min, float $max): Arbitrary\FloatArbitrary
 ```
+
+- `$min` — undefined
+- `$max` — undefined
 
 ### bool()
 
@@ -71,15 +61,11 @@ static bool(): Arbitrary\BoolArbitrary
 static string(): Arbitrary\StringArbitrary
 ```
 
-Unicode strings of length 0..100.
-
 ### stringAscii()
 
 ```php
 static stringAscii(): Arbitrary\StringArbitrary
 ```
-
-Printable ASCII strings of length 0..100.
 
 ### stringOf()
 
@@ -87,13 +73,14 @@ Printable ASCII strings of length 0..100.
 static stringOf(int $minLength, int $maxLength): Arbitrary\StringArbitrary
 ```
 
+- `$minLength` — undefined
+- `$maxLength` — undefined
+
 ### char()
 
 ```php
 static char(): Arbitrary\StringArbitrary
 ```
-
-A single printable ASCII character.
 
 ### stringFrom()
 
@@ -105,9 +92,9 @@ static stringFrom(
 ): Arbitrary\CharsetStringArbitrary
 ```
 
-Strings whose characters come from a fixed alphabet (split per Unicode
-codepoint). Shrinks by length toward '', then each character toward the
-first alphabet character — list simpler characters first.
+- `$alphabet` — undefined
+- `$minLength` — undefined
+- `$maxLength` — undefined
 
 ### bytes()
 
@@ -115,8 +102,8 @@ first alphabet character — list simpler characters first.
 static bytes(int $minLength, int $maxLength): Arbitrary\BytesArbitrary
 ```
 
-Raw byte strings (every byte 0..255). Shrinks by length toward '', then
-each byte toward "\x00".
+- `$minLength` — undefined
+- `$maxLength` — undefined
 
 ### arrayOf()
 
@@ -128,7 +115,9 @@ static arrayOf(
 ): Arbitrary\ArrayArbitrary
 ```
 
-Lists whose elements are drawn from $element.
+- `$element` — undefined
+- `$minSize` — undefined
+- `$maxSize` — undefined
 
 ### nonEmptyArrayOf()
 
@@ -139,7 +128,8 @@ static nonEmptyArrayOf(
 ): Arbitrary\ArrayArbitrary
 ```
 
-Non-empty lists whose elements are drawn from $element.
+- `$element` — undefined
+- `$maxSize` — undefined
 
 ### uniqueArrayOf()
 
@@ -151,11 +141,9 @@ static uniqueArrayOf(
 ): Arbitrary\UniqueArrayArbitrary
 ```
 
-Lists of pairwise-distinct elements (strict comparison) drawn from
-$element. Element shrinking keeps the list distinct; the result may be
-smaller than the drawn size when the element space runs out of fresh
-values, but never below $minSize — an unreachable minimum throws
-GenerationExhausted.
+- `$element` — undefined
+- `$minSize` — undefined
+- `$maxSize` — undefined
 
 ### dictOf()
 
@@ -168,10 +156,10 @@ static dictOf(
 ): Arbitrary\DictionaryArbitrary
 ```
 
-Associative arrays (maps) with keys from $key and values from $value.
-Keys must be int or string; only distinct keys are kept, so the result
-may be smaller than the drawn size when the key space runs out, but never
-below $minSize — an unreachable minimum throws GenerationExhausted.
+- `$key` — undefined
+- `$value` — undefined
+- `$minSize` — undefined
+- `$maxSize` — undefined
 
 ### record()
 
@@ -179,10 +167,7 @@ below $minSize — an unreachable minimum throws GenerationExhausted.
 static record(array $shape): Arbitrary\RecordArbitrary
 ```
 
-Fixed-shape associative array: each field is generated from its own
-arbitrary, keyed by field name. The property receives a single string-keyed
-array; shrinking reduces each field through its arbitrary while keeping the
-key set fixed.
+- `$shape` — undefined
 
 ### oneOf()
 
@@ -190,7 +175,7 @@ key set fixed.
 static oneOf(mixed $values): Arbitrary\OneOfArbitrary
 ```
 
-Picks one of the given values at random.
+- `$values` — undefined
 
 ### elements()
 
@@ -198,7 +183,7 @@ Picks one of the given values at random.
 static elements(array $values): Arbitrary\OneOfArbitrary
 ```
 
-Picks one value at random from an array (the array form of oneOf()).
+- `$values` — undefined
 
 ### constant()
 
@@ -206,7 +191,7 @@ Picks one value at random from an array (the array form of oneOf()).
 static constant(mixed $value): Arbitrary\ConstantArbitrary
 ```
 
-Always produces $value; does not shrink.
+- `$value` — undefined
 
 ### enum()
 
@@ -214,8 +199,7 @@ Always produces $value; does not shrink.
 static enum(string $enum): Arbitrary\OneOfArbitrary
 ```
 
-One case of a PHP enum, in declaration order. Shrinks toward
-earlier-declared cases, so declare simpler cases first.
+- `$enum` — undefined
 
 ### floatSpecial()
 
@@ -223,19 +207,14 @@ earlier-declared cases, so declare simpler cases first.
 static floatSpecial(): Arbitrary\OneOfArbitrary
 ```
 
-Special float values (NaN, ±INF, -0.0 and the representation edges) where
-float bugs cluster — an opt-in complement to float(), which stays
-inside its finite range. Shrinks toward earlier-listed specials.
-
 ### intRange()
 
 ```php
 static intRange(int $min, int $max): Arbitrary\FlatMappedArbitrary
 ```
 
-Ordered integer pairs `[lo, hi]` with $min <= lo <= hi <= $max — the
-"range/interval" input without an Assume::that() discard. Built on
-flatMap(), so both bounds shrink while `lo <= hi` always holds.
+- `$min` — undefined
+- `$max` — undefined
 
 ### recursive()
 
@@ -247,11 +226,9 @@ static recursive(
 ): ArbitraryInterface
 ```
 
-Recursive structures with a bounded depth: $wrap receives the arbitrary
-for the previous level and returns the next one (e.g. wrap a value in an
-array). At every level generation picks the leaf or the wrapped branch
-with equal odds, so nesting is possible but not forced. Keep the branch
-fan-out small (bounded array sizes) — breadth multiplies per level.
+- `$leaf` — undefined
+- `$wrap` — undefined
+- `$maxDepth` — undefined
 
 ### nullable()
 
@@ -259,7 +236,7 @@ fan-out small (bounded array sizes) — breadth multiplies per level.
 static nullable(ArbitraryInterface $inner): Arbitrary\NullableArbitrary
 ```
 
-Yields null or a value from $inner with roughly even odds.
+- `$inner` — undefined
 
 ### map()
 
@@ -267,9 +244,8 @@ Yields null or a value from $inner with roughly even odds.
 static map(ArbitraryInterface $inner, Closure $map): Arbitrary\MappedArbitrary
 ```
 
-Transforms each value produced by $inner through a pure function.
-Shrinking happens in the source domain and the function is re-applied,
-so mapped values shrink through the inner arbitrary's tree.
+- `$inner` — undefined
+- `$map` — undefined
 
 ### flatMap()
 
@@ -280,11 +256,8 @@ static flatMap(
 ): Arbitrary\FlatMappedArbitrary
 ```
 
-Dependent generators (aka `bind`): feeds each value produced by $inner
-into $flatMap, which returns the arbitrary generating the final value.
-Use it when one input's domain depends on another (e.g. an array plus a
-valid index into it) instead of discarding invalid combinations with
-Assume::that().
+- `$inner` — undefined
+- `$flatMap` — undefined
 
 ### filter()
 
@@ -295,7 +268,8 @@ static filter(
 ): Arbitrary\FilteredArbitrary
 ```
 
-Generates values from $inner, retrying until $predicate holds.
+- `$inner` — undefined
+- `$predicate` — undefined
 
 ### draw()
 
@@ -303,30 +277,7 @@ Generates values from $inner, retrying until $predicate holds.
 static draw(ArbitraryInterface $arbitrary): mixed
 ```
 
-In-body dependent draw: generates one value from $arbitrary inside the
-property body — for when several dependent values make nested
-flatMap() awkward. The domain may depend on anything already in
-scope, including previously drawn values:
-
-```php
-#[Property(runs: 200)]
-public function sliceIsContained(array $xs): void
-{
-    $from = Gen::draw(Gen::intBetween(0, count($xs)));
-    $to = Gen::draw(Gen::intBetween($from, count($xs)));
-    // ... assertions on array_slice($xs, $from, $to - $from) ...
-}
-```
-
-Drawn values shrink together with the parameters: the runner records
-every draw on a replay tape, shrinks each recorded draw through its own
-tree, and re-runs the body with the tape replayed by position. A run
-that draws past the tape's end (control flow changed under a smaller
-prefix) generates the extra values anew. Counterexamples report draws
-as `draw#1`, `draw#2`, ... alongside the named parameters.
-
-Only valid while the property runner executes the body; anywhere else
-it throws.
+- `$arbitrary` — undefined
 
 ### tuple()
 
@@ -334,9 +285,7 @@ it throws.
 static tuple(ArbitraryInterface $elements): Arbitrary\TupleArbitrary
 ```
 
-Fixed-arity tuple: one value per element arbitrary, in order. The property
-receives the tuple as a single array argument; shrinking reduces each
-position through its own arbitrary while keeping the arity fixed.
+- `$elements` — undefined
 
 ### frequency()
 
@@ -344,17 +293,13 @@ position through its own arbitrary while keeping the arity fixed.
 static frequency(iterable $pairs): Arbitrary\FrequencyArbitrary
 ```
 
-Weighted choice among `[weight, arbitrary]` pairs: a branch is picked with
-probability proportional to its weight, then produces the value. Shrinking
-stays within the branch that generated the value.
+- `$pairs` — undefined
 
 ### uuid()
 
 ```php
 static uuid(): Arbitrary\UuidArbitrary
 ```
-
-Canonical RFC 4122 version 4 UUID strings. Does not shrink.
 
 ### datetime()
 
@@ -365,9 +310,8 @@ static datetime(
 ): Arbitrary\DateTimeArbitrary
 ```
 
-UTC DateTimeImmutable values with a timestamp in the inclusive range
-`[$min, $max]` (defaults: 1970-01-01 .. 2100-01-01). Shrinks toward the
-Unix epoch, clamped to the range.
+- `$min` — undefined
+- `$max` — undefined
 
 ### ipv4()
 
@@ -375,18 +319,11 @@ Unix epoch, clamped to the range.
 static ipv4(): Arbitrary\MappedArbitrary
 ```
 
-IPv4 dotted-quad address strings (`"0.0.0.0"`..`"255.255.255.255"`). Each
-octet shrinks toward 0 through its own integer tree.
-
 ### email()
 
 ```php
 static email(): Arbitrary\MappedArbitrary
 ```
-
-Syntactically valid `local@label.tld` email addresses over a lowercase
-alphanumeric alphabet and a small TLD set. Shrinks toward the shortest
-local part / label and the first TLD.
 
 ### url()
 
@@ -394,18 +331,13 @@ local part / label and the first TLD.
 static url(): Arbitrary\MappedArbitrary
 ```
 
-HTTP/HTTPS URLs `scheme://host.tld[/segment...]` over a lowercase
-alphanumeric alphabet. Shrinks toward `http://a.com` (no path).
-
 ### json()
 
 ```php
 static json(int $maxDepth): ArbitraryInterface
 ```
 
-A JSON-encodable value — null, bool, int, float, string, or nested
-lists/objects thereof — bounded to $maxDepth levels of nesting. Produces
-the decoded PHP value; use jsonString() for the encoded text.
+- `$maxDepth` — undefined
 
 ### jsonString()
 
@@ -413,8 +345,7 @@ the decoded PHP value; use jsonString() for the encoded text.
 static jsonString(int $maxDepth): Arbitrary\MappedArbitrary
 ```
 
-The JSON text of json() (`json_encode` of each generated value),
-for exercising JSON parsers and decoders.
+- `$maxDepth` — undefined
 
 ### regex()
 
@@ -422,18 +353,8 @@ for exercising JSON parsers and decoders.
 static regex(string $pattern, int $maxRepeat): ArbitraryInterface
 ```
 
-Strings matching a regular-expression subset. The pattern is compiled to
-ordinary combinators, so matches shrink toward shorter/simpler strings.
-
-Supported: literals, `.`, character classes `[...]` (ranges, negation,
-`\d\w\s` and their negations), the escapes `\d\w\s\D\W\S\t\n\r` plus
-`\`-escaped metacharacters, quantifiers `* + ? {n} {n,} {n,m}`,
-alternation `|`, and groups `(...)` / `(?:...)`. A single leading `^` and
-trailing `$` are accepted as no-ops. Anchors elsewhere, backreferences,
-lookaround, named/inline groups, and flags throw an
-\InvalidArgumentException naming the construct.
-
-- `$maxRepeat` — Upper bound generation uses for unbounded quantifiers (`*`, `+`, `{n,}`).
+- `$pattern` — undefined
+- `$maxRepeat` — undefined
 
 ### stringMatching()
 
@@ -441,7 +362,8 @@ lookaround, named/inline groups, and flags throw an
 static stringMatching(string $pattern, int $maxRepeat): ArbitraryInterface
 ```
 
-Alias of regex() for parity with fast-check/Hypothesis naming.
+- `$pattern` — undefined
+- `$maxRepeat` — undefined
 
 ### commands()
 
@@ -454,19 +376,10 @@ static commands(
 ): Arbitrary\CommandSequenceArbitrary
 ```
 
-A valid \Rasuvaeff\PropertyTesting\StateMachine\Command sequence for
-stateful / model-based testing. Starting from $initialModel, each step draws
-a command generator and appends its command when the command's precondition
-holds in the running model, advancing the model — so the sequence is valid
-by construction. Shrinking drops individual steps and simplifies each command
-through its own tree. A sequence shorter than $minLength (no applicable
-command reached it) throws GenerationExhausted.
-
-Feed the generated \Rasuvaeff\PropertyTesting\StateMachine\CommandSequence
-to \Rasuvaeff\PropertyTesting\StateMachine\StateMachine::check() in the
-property body, passing a factory that builds a fresh system under test.
-
-- `$commandGenerators` — Each must produce a \Rasuvaeff\PropertyTesting\StateMachine\Command.
+- `$initialModel` — undefined
+- `$commandGenerators` — undefined
+- `$minLength` — undefined
+- `$maxLength` — undefined
 
 ### sample()
 
@@ -478,9 +391,9 @@ static sample(
 ): array
 ```
 
-Eagerly generate $count values from $arbitrary using a fixed $seed. A
-debugging aid for inspecting a generator's output and distribution; unlike
-the other factories it returns values, not an arbitrary.
+- `$arbitrary` — undefined
+- `$count` — undefined
+- `$seed` — undefined
 
 ### sampleShrinks()
 
@@ -492,8 +405,7 @@ static sampleShrinks(
 ): array
 ```
 
-Eagerly generate one value from $arbitrary for a fixed $seed and collect
-its first direct shrink candidates. A debugging aid for authors of custom
-ArbitraryInterfaces: eyeball what the shrink tree offers before
-wiring the arbitrary into a property.
+- `$arbitrary` — undefined
+- `$seed` — undefined
+- `$limit` — undefined
 
