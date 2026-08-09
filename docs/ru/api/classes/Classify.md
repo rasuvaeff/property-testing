@@ -1,6 +1,6 @@
 ---
 title: "Classify"
-description: "Records distribution labels for the current property run so the runner can report how often each case occurred."
+description: "Classify — class в справочнике API property-testing."
 ---
 
 <!-- АВТОГЕНЕРАЦИЯ: docs/scripts/generate-api.mjs, проход рефлексии по src/ (docs/scripts/reflect-api.php) — не редактировать вручную. -->
@@ -11,32 +11,6 @@ description: "Records distribution labels for the current property run so the ru
 
 **Класс** — [Исходник](https://github.com/rasuvaeff/property-testing/blob/master/src/Classify.php)
 
-*Текст ниже — на английском, из PHPDoc в исходном коде.*
-
-Records distribution labels for the current property run so the runner can
-report how often each case occurred. Use it to confirm a property is not
-passing vacuously — that the generators actually exercise the interesting
-inputs.
-
-```php
-#[Property(runs: 500)]
-public function holds(int $n): void
-{
-    Classify::when($n === 0, 'zero');
-    Classify::when($n < 0, 'negative');
-    Classify::label($n % 2 === 0 ? 'even' : 'odd');
-    // ... assertions ...
-}
-```
-
-After a fully passing property the runner prints the share of runs that hit
-each label. A label recorded several times within one run still counts once
-for that run.
-
-State is per-run and process-local: the runner clears it before each run via
-beginRun() and drains it via flushRun(). Property runs are
-sequential, so the static buffer is never shared concurrently.
-
 ## Методы
 
 ### label()
@@ -45,7 +19,7 @@ sequential, so the static buffer is never shared concurrently.
 static label(string $label): void
 ```
 
-Record $label for the current run.
+- `$label` — undefined
 
 ### when()
 
@@ -53,7 +27,8 @@ Record $label for the current run.
 static when(bool $condition, string $label): void
 ```
 
-Record $label for the current run only when $condition holds.
+- `$condition` — undefined
+- `$label` — undefined
 
 ### cover()
 
@@ -65,15 +40,9 @@ static cover(
 ): void
 ```
 
-Like when(), but additionally REQUIRES the label to occur in at
-least $minPercent of the property's passing runs. When the requirement is
-not met the property fails with a CoverageViolationException even
-though every run passed — turning "the distribution looks wrong" from a
-printed hint into a CI failure.
-
-```php
-Classify::cover($n % 2 === 0, 'even', 30.0);
-```
+- `$condition` — undefined
+- `$label` — undefined
+- `$minPercent` — undefined
 
 ### beginRun()
 
@@ -81,23 +50,15 @@ Classify::cover($n % 2 === 0, 'even', 30.0);
 static beginRun(): void
 ```
 
-Clear the labels buffered for the current run.
-
 ### flushRun()
 
 ```php
 static flushRun(): array
 ```
 
-Return the labels recorded during the current run and clear the buffer.
-
 ### flushRequirements()
 
 ```php
 static flushRequirements(): array
 ```
-
-Return the coverage requirements registered during the property and clear
-them. The runner drains this once after the run loop (and defensively
-before it, in case a previous property aborted mid-flight).
 

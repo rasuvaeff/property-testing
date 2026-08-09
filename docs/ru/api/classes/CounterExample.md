@@ -1,6 +1,6 @@
 ---
 title: "CounterExample"
-description: "Minimal failing input for a property, captured at falsification time."
+description: "CounterExample — class в справочнике API property-testing."
 ---
 
 <!-- АВТОГЕНЕРАЦИЯ: docs/scripts/generate-api.mjs, проход рефлексии по src/ (docs/scripts/reflect-api.php) — не редактировать вручную. -->
@@ -10,13 +10,6 @@ description: "Minimal failing input for a property, captured at falsification ti
 `Rasuvaeff\PropertyTesting\CounterExample`
 
 **Класс** — [Исходник](https://github.com/rasuvaeff/property-testing/blob/master/src/CounterExample.php)
-
-*Текст ниже — на английском, из PHPDoc в исходном коде.*
-
-Minimal failing input for a property, captured at falsification time.
-
-Carries both the original (randomly generated) counterexample and the
-shrunk (minimised) one, plus the seed needed to reproduce the run.
 
 ## Свойства
 
@@ -39,17 +32,19 @@ shrunk (minimised) one, plus the seed needed to reproduce the run.
 toArray(): array
 ```
 
-Machine-readable representation suitable for reporters and serialization.
-
 ### toJson()
 
 ```php
 toJson(bool $pretty): string
 ```
 
+- `$pretty` — undefined
+
 ### toExamplesCode()
 
 ```php
 toExamplesCode(string $methodName): string
 ```
+
+- `$methodName` — undefined
 

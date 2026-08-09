@@ -1,6 +1,6 @@
 ---
 title: "BoolArbitrary"
-description: "Generates booleans."
+description: "BoolArbitrary — class в справочнике API property-testing."
 ---
 
 <!-- АВТОГЕНЕРАЦИЯ: docs/scripts/generate-api.mjs, проход рефлексии по src/ (docs/scripts/reflect-api.php) — не редактировать вручную. -->
@@ -11,11 +11,6 @@ description: "Generates booleans."
 
 **Класс** — [Исходник](https://github.com/rasuvaeff/property-testing/blob/master/src/Arbitrary/BoolArbitrary.php)
 
-*Текст ниже — на английском, из PHPDoc в исходном коде.*
-
-Generates booleans. false is the "smaller" boolean: true shrinks to false,
-false is terminal.
-
 ## Методы
 
 ### generate()
@@ -23,4 +18,6 @@ false is terminal.
 ```php
 generate(Random $random): Shrinkable
 ```
+
+- `$random` — undefined
 
