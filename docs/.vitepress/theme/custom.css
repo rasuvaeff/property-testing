@@ -8,6 +8,17 @@
  * light/dark token-color pairing (forcing a dark code background here
  * would leave light-mode-optimized token colors on it — unreadable).
  */
+/*
+ * Height reserved for the frozen-package banner in the `layout-top` slot.
+ * The banner measures itself and republishes this on mount (it wraps to two
+ * lines on narrow screens); this value is the single-line height and exists
+ * only so the server-rendered first paint does not put the nav on top of the
+ * banner before hydration.
+ */
+:root {
+    --vp-layout-top-height: 37px;
+}
+
 :root:not(.dark) {
     --vp-c-bg: #f4f6f9;
     --vp-c-bg-alt: #eef1f5;
